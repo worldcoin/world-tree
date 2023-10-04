@@ -1,0 +1,19 @@
+[package]
+name = "state_bridge"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.188"
+serde_json = "1.0.107"
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
+    "depth_20",
+] }
+thiserror = "1.0.49"
+tracing = "0.1.37"
+chrono = { version = "0.4.31", features = ["serde"] } # TODO: maybe remove this
+tokio = {version = "1.32.0", features = ["sync"]}
+take_mut = "0.2.2"
+ethers = "2.0.10"
