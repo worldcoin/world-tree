@@ -46,7 +46,8 @@ impl<M: Middleware + PubsubClient> StateBridgeService<M> {
         self.handles.push(self.canonical_root.spawn().await);
 
         for bridge in self.state_bridges.values() {
-            self.handles.push(bridge.spawn().await);
+            self.handles
+                .push(bridge.spawn(self.canonical_root.root_tx.subscribe()).await);
         }
 
         Ok(())

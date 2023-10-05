@@ -20,7 +20,6 @@ use crate::{
 
 pub struct StateBridge<M: Middleware + PubsubClient + 'static> {
     pub latest_root: Hash,
-    pub root_rx: Option<tokio::sync::broadcast::Receiver<Hash>>,
     //TODO: document this, it is using the same naming conventions as the tree_state crate.
     //TODO: Canonical is mainnet, derived is any chain that we are bridging to that has a derived state from the canonical tree.
     //TODO: We might want to update this naming convention in the state bridge
@@ -29,25 +28,18 @@ pub struct StateBridge<M: Middleware + PubsubClient + 'static> {
 }
 
 impl<M: Middleware + PubsubClient> StateBridge<M> {
-    pub fn new(
-        canonical_middleware: Arc<M>,
-        derived_middleware: Arc<M>,
-        root_rx: tokio::sync::broadcast::Receiver<Hash>,
-    ) -> Self {
+    pub fn new(canonical_middleware: Arc<M>, derived_middleware: Arc<M>) -> Self {
         Self {
             latest_root: Hash::ZERO,
-            root_rx: Some(root_rx),
             canonical_middleware,
             derived_middleware,
         }
     }
 
-    pub async fn spawn(&mut self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
-        let mut root_rx = self
-            .root_rx
-            .take()
-            .expect("TODO: Propagate error indicating bridge arleady spawned");
-
+    pub async fn spawn(
+        &self,
+        mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
+    ) -> JoinHandle<Result<(), StateBridgeError<M>>> {
         tokio::spawn(async move {
             let mut latest_root = Hash::ZERO;
             loop {
