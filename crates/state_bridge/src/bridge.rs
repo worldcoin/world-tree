@@ -12,12 +12,10 @@ use semaphore::{
     poseidon_tree::{PoseidonHash, Proof},
 };
 
-use crate::root::Hash;
+use crate::{error::StateBridgeError, root::Hash};
 
 pub struct RootStateBridge<M: Middleware + PubsubClient> {
     pub latest_root: Hash,
-    pub block_number: u64, //TODO: update to use a different type
-    pub canonical_tree_address: H160,
     pub root_rx: tokio::sync::broadcast::Receiver<Hash>,
     //TODO: document this, it is using the same naming conventions as the tree_state crate.
     //TODO: Canonical is mainnet, derived is any chain that we are bridging to that has a derived state from the canonical tree.
@@ -27,13 +25,22 @@ pub struct RootStateBridge<M: Middleware + PubsubClient> {
 }
 
 impl<M: Middleware + PubsubClient> RootStateBridge<M> {
-    //TODO: new func
+    pub fn new(
+        canonical_middleware: Arc<M>,
+        derived_middleware: Arc<M>,
+        root_rx: tokio::sync::broadcast::Receiver<Hash>,
+    ) -> Self {
+        Self {
+            latest_root: Hash::ZERO,
+            root_rx,
+            canonical_middleware,
+            derived_middleware,
+        }
+    }
 
-    pub fn spawn() -> Self {
-        //TODO: the idea is that we will spawn a task that runs a loop to check if there is either a new root from the root tx or if the timer has elapsed to bridge a new root
-        //TODO: if either condition is met and the root is different than the latest root on the l2, then bridge a new root.
-        //TODO: we will probably also need to keep track of historical roots bridged in the case that the sleep time or new root from the tx is shorter than the time to propagate the root to the l2
-        //TODO: as is the case for Polygon if the sleep time is < 40 min ish
+    pub async fn spawn(&self) -> Result<(), StateBridgeError<M>> {
+        //TODO: spawn a task that continuously listens to the root_rx channel
+
         todo!()
     }
 }

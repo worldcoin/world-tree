@@ -1653,6 +1653,7 @@ dependencies = [
  "const-hex",
  "enr",
  "ethers-core 2.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-channel",
  "futures-core",
  "futures-timer",
  "futures-util",
@@ -1674,6 +1675,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "winapi",
  "ws_stream_wasm",
 ]
 
@@ -4185,6 +4187,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "ethers",
+ "ruint",
  "semaphore",
  "serde",
  "serde_json",
@@ -4484,8 +4487,10 @@ checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "rustls",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls",
  "tungstenite",
  "webpki-roots",
@@ -4664,6 +4669,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
+ "native-tls",
  "rand",
  "rustls",
  "sha1",
