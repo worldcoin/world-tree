@@ -43,7 +43,7 @@ impl<M: Middleware + PubsubClient> StateBridge<M> {
         tokio::spawn(async move {
             let mut latest_root = Hash::ZERO;
             loop {
-                // Drain the updates and get the latest
+                // Process all of the updates and get the latest root
                 while let Ok(root) = root_rx.try_recv() {
                     latest_root = root;
                 }
