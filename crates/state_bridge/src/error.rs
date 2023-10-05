@@ -4,6 +4,8 @@ use ethers::types::{H160, U256};
 use thiserror::Error;
 use tokio::task::JoinError;
 
+use crate::root::Hash;
+
 #[derive(Error, Debug)]
 pub enum StateBridgeError<M>
 where
@@ -19,4 +21,8 @@ where
     ABICodecError(#[from] AbiError),
     #[error("Eth ABI error")]
     EthABIError(#[from] ethers::abi::Error),
+    #[error("Could not send root through channel")]
+    RootSendError(#[from] tokio::sync::broadcast::error::SendError<Hash>),
+    #[error("Could not send root through channel")]
+    RecvError(#[from] tokio::sync::broadcast::error::RecvError),
 }
