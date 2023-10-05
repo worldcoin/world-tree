@@ -28,7 +28,6 @@ abigen!(
 );
 
 pub struct WorldTreeRoot<M: Middleware + PubsubClient + 'static> {
-    pub root: Hash,
     pub world_id_identity_manager: IWorldIdIdentityManager<M>,
     pub middleware: Arc<M>,
     pub root_tx: tokio::sync::broadcast::Sender<Hash>,
@@ -44,10 +43,7 @@ impl<M: Middleware + PubsubClient> WorldTreeRoot<M> {
         let world_id_identity_manager =
             IWorldIdIdentityManager::new(world_tree_address, middleware.clone());
 
-        let latest_root: U256 = world_id_identity_manager.latest_root().await?;
-
         Ok(Self {
-            root: ruint::Uint::from_limbs(latest_root.0),
             world_id_identity_manager,
             middleware,
             root_tx,

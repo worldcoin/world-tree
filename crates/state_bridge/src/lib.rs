@@ -22,7 +22,7 @@ use tokio::task::JoinHandle;
 
 pub struct StateBridgeService<M: Middleware + PubsubClient + 'static> {
     pub canonical_root: WorldTreeRoot<M>,
-    pub state_bridges: HashMap<usize, StateBridge<M>>,
+    pub state_bridges: Vec<StateBridge<M>>,
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
@@ -33,19 +33,19 @@ impl<M: Middleware + PubsubClient> StateBridgeService<M> {
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
             canonical_root: WorldTreeRoot::new(world_tree_address, middleware).await?,
-            state_bridges: HashMap::new(),
+            state_bridges: vec![],
             handles: vec![],
         })
     }
 
-    pub fn add_state_bridge(&mut self, chain_id: usize, state_bridge: StateBridge<M>) {
-        self.state_bridges.insert(chain_id, state_bridge);
+    pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {
+        self.state_bridges.push(state_bridge);
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
         self.handles.push(self.canonical_root.spawn().await);
 
-        for bridge in self.state_bridges.values() {
+        for bridge in self.state_bridges.iter() {
             self.handles
                 .push(bridge.spawn(self.canonical_root.root_tx.subscribe()).await);
         }

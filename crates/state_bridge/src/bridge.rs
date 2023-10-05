@@ -18,8 +18,8 @@ use crate::{
     root::{self, Hash},
 };
 
+#[derive(Eq, Hash, PartialEq)]
 pub struct StateBridge<M: Middleware + PubsubClient + 'static> {
-    pub latest_root: Hash,
     //TODO: document this, it is using the same naming conventions as the tree_state crate.
     //TODO: Canonical is mainnet, derived is any chain that we are bridging to that has a derived state from the canonical tree.
     //TODO: We might want to update this naming convention in the state bridge
@@ -30,7 +30,6 @@ pub struct StateBridge<M: Middleware + PubsubClient + 'static> {
 impl<M: Middleware + PubsubClient> StateBridge<M> {
     pub fn new(canonical_middleware: Arc<M>, derived_middleware: Arc<M>) -> Self {
         Self {
-            latest_root: Hash::ZERO,
             canonical_middleware,
             derived_middleware,
         }
