@@ -26,7 +26,11 @@ pub struct StateBridgeService<M: Middleware + PubsubClient + 'static> {
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
-impl<M: Middleware + PubsubClient> StateBridgeService<M> {
+impl<M> StateBridgeService<M>
+where
+    M: Middleware + PubsubClient,
+    <M as Middleware>::Provider: PubsubClient,
+{
     pub async fn new(
         world_tree_address: H160,
         middleware: Arc<M>,

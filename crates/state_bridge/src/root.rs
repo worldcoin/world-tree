@@ -3,10 +3,13 @@ use std::{
     sync::Arc,
 };
 
+use ethers::middleware::Middleware;
 use ethers::{
-    providers::{Middleware, MiddlewareError, PubsubClient},
+    contract::Contract,
+    providers::{MiddlewareError, PubsubClient, StreamExt},
     types::{Filter, H160, U256},
 };
+use ruint::Uint;
 use semaphore::{
     merkle_tree::Hasher,
     poseidon_tree::{PoseidonHash, Proof},
@@ -29,11 +32,14 @@ abigen!(
 
 pub struct WorldTreeRoot<M: Middleware + PubsubClient + 'static> {
     pub world_id_identity_manager: IWorldIdIdentityManager<M>,
-    pub middleware: Arc<M>,
     pub root_tx: tokio::sync::broadcast::Sender<Hash>,
 }
 
-impl<M: Middleware + PubsubClient> WorldTreeRoot<M> {
+impl<M> WorldTreeRoot<M>
+where
+    M: Middleware + PubsubClient,
+    <M as Middleware>::Provider: PubsubClient,
+{
     pub async fn new(
         world_tree_address: H160,
         middleware: Arc<M>,
@@ -45,18 +51,27 @@ impl<M: Middleware + PubsubClient> WorldTreeRoot<M> {
 
         Ok(Self {
             world_id_identity_manager,
-            middleware,
             root_tx,
         })
     }
 
     pub async fn spawn(&self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
+        let address = self.world_id_identity_manager.address();
+        let root_tx = self.root_tx.clone();
+        let middleware = self.world_id_identity_manager.inner().clone();
+
         tokio::spawn(async move {
-            //TODO: create a filter to subscribe to the TreeChanged event from the WorldIdIdentityManager contract
+            // create a filter to subscribe to the TreeChanged event from the WorldIdIdentityManager contract
+            let event_filter =
+                Contract::event_of_type::<TreeChangedFilter>(middleware).address(address.into());
 
-            //TODO: Listen to a stream of events, when a new event is received, update the root and block number
+            // listen to a stream of events, when a new event is received, update the root and block number
+            let mut stream = event_filter.subscribe_with_meta().await?;
 
-            //TODO: send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
+            while let Some(Ok((log, _))) = stream.next().await {
+                // send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
+                root_tx.send(Uint::from_limbs(log.post_root.0));
+            }
 
             Ok(())
         })
