@@ -13,7 +13,7 @@ use ethers::{
     providers::{Middleware, PubsubClient},
     types::{spoof::State, H160, U256},
 };
-use root::WorldTreeRoot;
+use root::{IWorldIdIdentityManager, WorldTreeRoot};
 use semaphore::{
     merkle_tree::Hasher,
     poseidon_tree::{PoseidonHash, Proof},
@@ -35,8 +35,10 @@ where
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
+        let world_tree = IWorldIdIdentityManager::new(world_tree_address, middleware);
+
         Ok(Self {
-            canonical_root: WorldTreeRoot::new(world_tree_address, middleware).await?,
+            canonical_root: WorldTreeRoot::new(world_tree).await?,
             state_bridges: vec![],
             handles: vec![],
         })

@@ -41,6 +41,17 @@ where
     <M as Middleware>::Provider: PubsubClient,
 {
     pub async fn new(
+        world_id_identity_manager: IWorldIdIdentityManager<M>,
+    ) -> Result<Self, StateBridgeError<M>> {
+        let (root_tx, _) = tokio::sync::broadcast::channel::<Hash>(1000);
+
+        Ok(Self {
+            world_id_identity_manager,
+            root_tx,
+        })
+    }
+
+    pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
@@ -63,9 +74,9 @@ where
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
             let mut event_stream = filter.stream().await?.with_meta();
 
-            // listen to a stream of events, when a new event is received, update the root and block number
+            // Listen to a stream of events, when a new event is received, update the root and block number
             while let Some(Ok((log, _))) = event_stream.next().await {
-                // send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
+                // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
                 root_tx.send(Uint::from_limbs(log.post_root.0))?;
             }
 
