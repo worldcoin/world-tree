@@ -56,21 +56,17 @@ where
     }
 
     pub async fn spawn(&self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
-        let address = self.world_id_identity_manager.address();
         let root_tx = self.root_tx.clone();
-        let middleware = self.world_id_identity_manager.inner().clone();
+        let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         tokio::spawn(async move {
-            // create a filter to subscribe to the TreeChanged event from the WorldIdIdentityManager contract
-            let event_filter =
-                Contract::event_of_type::<TreeChangedFilter>(middleware).address(address.into());
+            let filter = world_id_identity_manager.event::<TreeChangedFilter>();
+            let mut event_stream = filter.stream().await?.with_meta();
 
             // listen to a stream of events, when a new event is received, update the root and block number
-            let mut stream = event_filter.subscribe_with_meta().await?;
-
-            while let Some(Ok((log, _))) = stream.next().await {
+            while let Some(Ok((log, _))) = event_stream.next().await {
                 // send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
-                root_tx.send(Uint::from_limbs(log.post_root.0));
+                root_tx.send(Uint::from_limbs(log.post_root.0))?;
             }
 
             Ok(())
