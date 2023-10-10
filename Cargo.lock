@@ -85,6 +85,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.75"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
+
+[[package]]
 name = "ark-bn254"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1468,7 +1474,7 @@ dependencies = [
  "ethers-middleware",
  "ethers-providers",
  "ethers-signers",
- "ethers-solc",
+ "ethers-solc 2.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1709,6 +1715,37 @@ dependencies = [
  "dirs",
  "dunce",
  "ethers-core 2.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glob",
+ "home",
+ "md-5",
+ "num_cpus",
+ "once_cell",
+ "path-slash",
+ "rayon",
+ "regex",
+ "semver 1.0.19",
+ "serde",
+ "serde_json",
+ "solang-parser",
+ "svm-rs",
+ "thiserror",
+ "tiny-keccak",
+ "tokio",
+ "tracing",
+ "walkdir",
+ "yansi",
+]
+
+[[package]]
+name = "ethers-solc"
+version = "2.0.10"
+source = "git+https://github.com/gakonst/ethers-rs#1d4a11231dc3c2b3c231b42e4864100c1f09ca64"
+dependencies = [
+ "cfg-if",
+ "const-hex",
+ "dirs",
+ "dunce",
+ "ethers-core 2.0.10 (git+https://github.com/gakonst/ethers-rs)",
  "glob",
  "home",
  "md-5",
@@ -4185,8 +4222,10 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state_bridge"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "ethers",
+ "ethers-solc 2.0.10 (git+https://github.com/gakonst/ethers-rs)",
  "eyre",
  "ruint",
  "semaphore",

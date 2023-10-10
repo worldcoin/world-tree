@@ -10,6 +10,7 @@ use std::{
 use bridge::StateBridge;
 use error::StateBridgeError;
 use ethers::{
+    core::utils::Anvil,
     providers::{Middleware, PubsubClient},
     types::{spoof::State, H160, U256},
 };
@@ -31,7 +32,15 @@ where
     M: Middleware + PubsubClient,
     <M as Middleware>::Provider: PubsubClient,
 {
-    pub async fn new(
+    pub async fn new(world_tree: IWorldIdIdentityManager<M>) -> Result<Self, StateBridgeError<M>> {
+        Ok(Self {
+            canonical_root: WorldTreeRoot::new(world_tree).await?,
+            state_bridges: vec![],
+            handles: vec![],
+        })
+    }
+
+    pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
@@ -58,4 +67,15 @@ where
 
         Ok(())
     }
+}
+
+#[test]
+fn test_state_bridge_service() {
+    let port = 8545u16;
+
+    let mnemonic = std::env::var("MNEMONIC").expect("MNEMONIC environment variable not defined.");
+
+    let anvil = Anvil::new().port(port).mnemonic(mnemonic).spawn();
+
+    drop(anvil);
 }
