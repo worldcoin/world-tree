@@ -4642,6 +4642,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "ethers",
+ "eyre",
  "semaphore",
  "serde",
  "serde_json",

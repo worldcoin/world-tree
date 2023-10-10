@@ -8,10 +8,8 @@ use super::{
 /// Additional data held by any derived tree version. Includes the list of
 /// updates performed since previous version.
 
-//TODO: do we need this, can we update in a way where the diff is only fed to the derived tree from the canonical tree
-pub struct DerivedMetadata {
-    pub identity_rx: tokio::sync::broadcast::Receiver<Hash>,
-}
+//TODO: do we need this atm?
+pub struct DerivedMetadata {}
 
 impl TreeMetadata for Derived {
     type Metadata = DerivedMetadata;

@@ -1,4 +1,7 @@
-use ethers::{providers::Middleware, types::U256};
+use ethers::{
+    providers::Middleware,
+    types::{Filter, H256, U256},
+};
 use semaphore::{
     lazy_merkle_tree::{self, Canonical},
     poseidon_tree::Proof,
@@ -9,16 +12,55 @@ use super::{
     Hash, TreeData, TreeItem, TreeMetadata, TreeReader, TreeVersion, TreeWriter, WorldTree,
 };
 
+use crate::abi::{IWorldIdIdentityManager, TreeChangedFilter};
+use crate::{abi::TREE_CHANGE_EVENT_SIGNATURE, error::TreeAvailabilityError};
+
 impl<M: Middleware> WorldTree<TreeData<Canonical>, M> {
     pub async fn spawn(&self) {}
 
-    pub async fn sync(&self) {}
+    pub async fn sync(&self) -> Result<(), TreeAvailabilityError<M>> {
+        let current_block = self
+            .middleware
+            .get_block_number()
+            .await
+            .map_err(TreeAvailabilityError::MiddlewareError)?;
+
+        // Initialize a new filter to get all of the tree changed events
+        let filter = Filter::new()
+            .topic0(TREE_CHANGE_EVENT_SIGNATURE)
+            .address(self.address)
+            .from_block(self.last_synced_block)
+            .to_block(current_block.as_u64());
+
+        let logs = self
+            .middleware
+            .get_logs(&filter)
+            .await
+            .map_err(TreeAvailabilityError::MiddlewareError)?;
+
+        for log in logs {
+            if let Some(tx_hash) = log.transaction_hash {
+                let Some(transaction) = self
+                    .middleware
+                    .get_transaction(tx_hash)
+                    .await
+                    .map_err(TreeAvailabilityError::MiddlewareError)? else{
+
+                        todo!("Return an error here")
+                    };
+
+                //TODO: decode the tx data
+
+                //TODO: for each batch of changes, add the changes to the tree history and update the tree
+            }
+        }
+
+        Ok(())
+    }
 }
 
-pub struct CanonicalMetadata {
-    pub identity_tx: tokio::sync::broadcast::Sender<Hash>,
-    pub last_synced_block: u64, //TODO: probably update this type
-}
+//TODO: do we still need this?
+pub struct CanonicalMetadata {}
 
 impl TreeMetadata for Canonical {
     type Metadata = CanonicalMetadata;

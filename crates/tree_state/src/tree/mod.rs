@@ -3,6 +3,7 @@ pub mod canonical;
 pub mod derived;
 
 use std::cmp::min;
+use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
@@ -26,16 +27,25 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 /// cloning it only gives a new handle on the underlying shared memory.
 pub struct WorldTree<T: TreeReader + TreeWriter, M: Middleware> {
     pub address: H160,
-    pub tree_data: Arc<RwLock<T>>,
+    pub tree: Arc<RwLock<T>>,
+    pub last_synced_block: u64,
+    pub tree_history: VecDeque<TreeData<Derived>>, //TODO: will probably need some arc rwlock
     pub middleware: Arc<M>,
 }
 
 impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
-    pub fn new(address: H160, tree_data: Arc<RwLock<T>>, middleware: Arc<M>) -> Self {
+    pub fn new(
+        address: H160,
+        tree: Arc<RwLock<T>>,
+        last_synced_block: u64,
+        middleware: Arc<M>,
+    ) -> Self {
         Self {
             address,
-            tree_data: tree_data,
+            tree,
             middleware,
+            tree_history: VecDeque::new(),
+            last_synced_block,
         }
     }
 }
