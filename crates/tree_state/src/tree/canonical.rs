@@ -6,20 +6,17 @@ use semaphore::{
     lazy_merkle_tree::{self, Canonical},
     poseidon_tree::Proof,
 };
+use tokio::task::JoinHandle;
 use tracing::info;
 
-use super::{
-    Hash, TreeData, TreeItem, TreeMetadata, TreeReader, TreeVersion, TreeWriter, WorldTree,
-};
+use super::{Hash, TreeData, TreeItem, TreeReader, TreeVersion, TreeWriter, WorldTree};
 
 use crate::abi::{IWorldIdIdentityManager, TreeChangedFilter};
 use crate::{abi::TREE_CHANGE_EVENT_SIGNATURE, error::TreeAvailabilityError};
 
-impl<M: Middleware> WorldTree<TreeData<Canonical>, M> {
-    pub async fn spawn(&self) {}
-
+impl<M: Middleware + 'static> WorldTree<TreeData<Canonical>, M> {
     pub async fn sync(&self) -> Result<(), TreeAvailabilityError<M>> {
-        let current_block = self
+        let to_block = self
             .middleware
             .get_block_number()
             .await
@@ -30,7 +27,7 @@ impl<M: Middleware> WorldTree<TreeData<Canonical>, M> {
             .topic0(TREE_CHANGE_EVENT_SIGNATURE)
             .address(self.address)
             .from_block(self.last_synced_block)
-            .to_block(current_block.as_u64());
+            .to_block(to_block);
 
         let logs = self
             .middleware
@@ -57,13 +54,22 @@ impl<M: Middleware> WorldTree<TreeData<Canonical>, M> {
 
         Ok(())
     }
-}
 
-//TODO: do we still need this?
-pub struct CanonicalMetadata {}
+    pub async fn spawn(
+        &self,
+        //TODO: simplify this error
+    ) -> Result<JoinHandle<Result<(), TreeAvailabilityError<M>>>, TreeAvailabilityError<M>> {
+        // Sync the tree to the current block
+        self.sync().await?;
 
-impl TreeMetadata for Canonical {
-    type Metadata = CanonicalMetadata;
+        let middleware = self.middleware.clone();
+        let world_tree_address = self.address.clone();
+        let mut last_synced_block = self.last_synced_block;
+
+        let thread = tokio::spawn(async move { Ok(()) });
+
+        Ok(thread)
+    }
 }
 
 impl TreeVersion for Canonical {}

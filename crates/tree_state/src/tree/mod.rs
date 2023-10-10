@@ -29,7 +29,7 @@ pub struct WorldTree<T: TreeReader + TreeWriter, M: Middleware> {
     pub address: H160,
     pub tree: Arc<RwLock<T>>,
     pub last_synced_block: u64,
-    pub tree_history: VecDeque<TreeData<Derived>>, //TODO: will probably need some arc rwlock
+    pub tree_history: Arc<VecDeque<TreeData<Derived>>>, //TODO: will probably need some arc rwlock
     pub middleware: Arc<M>,
 }
 
@@ -44,7 +44,7 @@ impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
             address,
             tree,
             middleware,
-            tree_history: VecDeque::new(),
+            tree_history: Arc::new(VecDeque::new()),
             last_synced_block,
         }
     }
@@ -83,7 +83,7 @@ pub trait TreeWriter {
     fn update(&mut self, item: TreeItem) -> Hash;
 }
 
-impl<T: TreeVersion + TreeMetadata> TreeReader for TreeData<T> {
+impl<T: TreeVersion> TreeReader for TreeData<T> {
     /// Returns the current tree root.
     fn get_root(&self) -> Hash {
         self.tree.root()
@@ -128,25 +128,24 @@ impl<T: TreeVersion + TreeMetadata> TreeReader for TreeData<T> {
 
 /// The marker trait for linear ordering of tree versions. It also defines the
 /// marker for underlying tree storage.
-pub trait TreeVersion {}
+pub trait TreeVersion
+where
+    Self: lazy_merkle_tree::VersionMarker,
+{
+}
 
 /// Underlying data structure for a tree version. It holds the tree itself, the
 /// next leaf (only used in the latest tree), a pointer to the next version (if
 /// exists) and the metadata specified by the version marker.
 ///
-pub struct TreeData<T: TreeVersion + TreeMetadata> {
+pub struct TreeData<T: TreeVersion> {
     pub tree: PoseidonTree<T>,
     pub next_leaf: usize,
-    pub metadata: T::Metadata,
 }
 
-impl<T: TreeVersion + TreeMetadata> TreeData<T> {
-    pub fn new(tree: PoseidonTree<T>, next_leaf: usize, metadata: T::Metadata) -> Self {
-        Self {
-            tree,
-            next_leaf,
-            metadata,
-        }
+impl<T: TreeVersion> TreeData<T> {
+    pub fn new(tree: PoseidonTree<T>, next_leaf: usize) -> Self {
+        Self { tree, next_leaf }
     }
 }
 
@@ -171,12 +170,4 @@ pub struct InclusionProof {
     pub root: Field,
     pub proof: Proof,
     pub message: Option<String>,
-}
-
-/// Trait used to associate a version marker with its metadata type.
-pub trait TreeMetadata
-where
-    Self: lazy_merkle_tree::VersionMarker,
-{
-    type Metadata;
 }

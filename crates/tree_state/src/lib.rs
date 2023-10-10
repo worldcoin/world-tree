@@ -19,11 +19,11 @@ use ethers::{
 };
 
 use semaphore::lazy_merkle_tree::{Canonical, Derived};
-use tokio::sync::RwLock;
-use tree::{canonical::CanonicalMetadata, Hash, PoseidonTree, TreeData, WorldTree};
+use tokio::{sync::RwLock, task::JoinHandle};
+use tree::{Hash, PoseidonTree, TreeData, WorldTree};
 
-pub struct TreeAvailabilityService<M: Middleware> {
-    pub world_tree: Arc<WorldTree<TreeData<Canonical>, M>>,
+pub struct TreeAvailabilityService<M: Middleware + 'static> {
+    pub world_tree: WorldTree<TreeData<Canonical>, M>,
     //TODO: add a field for join handles
 }
 
@@ -42,31 +42,18 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         );
 
         Self {
-            world_tree: Arc::new(WorldTree::new(
+            world_tree: WorldTree::new(
                 world_tree_address,
-                Arc::new(RwLock::new(TreeData::new(tree, 0, CanonicalMetadata {}))),
+                Arc::new(RwLock::new(TreeData::new(tree, 0))),
                 world_tree_creation_block,
                 middleware,
-            )),
+            ),
+            // handles: vec![],
         }
     }
 
-    pub async fn spawn(&self) -> Result<(), TreeAvailabilityError<M>> {
-        // Create a new stream to listen for tree changed events
-        let world_id_identity_manager = IWorldIdIdentityManager::new(
-            self.world_tree.address,
-            self.world_tree.middleware.clone(),
-        );
-
-        let filter = world_id_identity_manager.event::<TreeChangedFilter>();
-        let mut event_stream = filter.stream().await?.with_meta();
-
-        // Sync the tree to the current block
-        self.world_tree.sync().await?;
-
-        //TODO: spawn
-
-        Ok(())
+    pub async fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+        self.world_tree.spawn().await
     }
 }
 
@@ -91,7 +78,7 @@ mod tests {
         let tree_availability_service =
             TreeAvailabilityService::new(30, 10, world_tree_address, 0, middleware);
 
-        tree_availability_service.spawn().await?;
+        let handle = tree_availability_service.spawn().await;
 
         Ok(())
     }

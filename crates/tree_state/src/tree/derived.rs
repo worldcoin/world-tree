@@ -1,19 +1,10 @@
 use semaphore::lazy_merkle_tree::{self, Derived};
 use serde_json::map::IterMut;
 
-use super::{
-    Hash, PoseidonTree, TreeData, TreeItem, TreeMetadata, TreeReader, TreeVersion, TreeWriter,
-};
+use super::{Hash, PoseidonTree, TreeData, TreeItem, TreeReader, TreeVersion, TreeWriter};
 
 /// Additional data held by any derived tree version. Includes the list of
 /// updates performed since previous version.
-
-//TODO: do we need this atm?
-pub struct DerivedMetadata {}
-
-impl TreeMetadata for Derived {
-    type Metadata = DerivedMetadata;
-}
 
 impl TreeVersion for Derived {}
 
