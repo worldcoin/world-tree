@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use ethers::{
     providers::Middleware,
-    types::{Filter, H256, U256},
+    types::{Filter, H160, H256, U256},
 };
 use semaphore::{
     lazy_merkle_tree::{self, Canonical},
@@ -13,64 +15,6 @@ use super::{Hash, TreeData, TreeItem, TreeReader, TreeVersion, TreeWriter, World
 
 use crate::abi::{IWorldIdIdentityManager, TreeChangedFilter};
 use crate::{abi::TREE_CHANGE_EVENT_SIGNATURE, error::TreeAvailabilityError};
-
-impl<M: Middleware + 'static> WorldTree<TreeData<Canonical>, M> {
-    pub async fn sync(&self) -> Result<(), TreeAvailabilityError<M>> {
-        let to_block = self
-            .middleware
-            .get_block_number()
-            .await
-            .map_err(TreeAvailabilityError::MiddlewareError)?;
-
-        // Initialize a new filter to get all of the tree changed events
-        let filter = Filter::new()
-            .topic0(TREE_CHANGE_EVENT_SIGNATURE)
-            .address(self.address)
-            .from_block(self.last_synced_block)
-            .to_block(to_block);
-
-        let logs = self
-            .middleware
-            .get_logs(&filter)
-            .await
-            .map_err(TreeAvailabilityError::MiddlewareError)?;
-
-        for log in logs {
-            if let Some(tx_hash) = log.transaction_hash {
-                let Some(transaction) = self
-                    .middleware
-                    .get_transaction(tx_hash)
-                    .await
-                    .map_err(TreeAvailabilityError::MiddlewareError)? else{
-
-                        todo!("Return an error here")
-                    };
-
-                //TODO: decode the tx data
-
-                //TODO: for each batch of changes, add the changes to the tree history and update the tree
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn spawn(
-        &self,
-        //TODO: simplify this error
-    ) -> Result<JoinHandle<Result<(), TreeAvailabilityError<M>>>, TreeAvailabilityError<M>> {
-        // Sync the tree to the current block
-        self.sync().await?;
-
-        let middleware = self.middleware.clone();
-        let world_tree_address = self.address.clone();
-        let mut last_synced_block = self.last_synced_block;
-
-        let thread = tokio::spawn(async move { Ok(()) });
-
-        Ok(thread)
-    }
-}
 
 impl TreeVersion for Canonical {}
 

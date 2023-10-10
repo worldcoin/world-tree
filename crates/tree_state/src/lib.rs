@@ -23,8 +23,7 @@ use tokio::{sync::RwLock, task::JoinHandle};
 use tree::{Hash, PoseidonTree, TreeData, WorldTree};
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
-    pub world_tree: WorldTree<TreeData<Canonical>, M>,
-    //TODO: add a field for join handles
+    pub world_tree: Arc<WorldTree<TreeData<Canonical>, M>>,
 }
 
 impl<M: Middleware> TreeAvailabilityService<M> {
@@ -42,18 +41,18 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         );
 
         Self {
-            world_tree: WorldTree::new(
+            world_tree: Arc::new(WorldTree::new(
                 world_tree_address,
                 Arc::new(RwLock::new(TreeData::new(tree, 0))),
                 world_tree_creation_block,
                 middleware,
-            ),
-            // handles: vec![],
+            )),
         }
     }
 
     pub async fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        self.world_tree.spawn().await
+        let world_tree = self.world_tree.clone();
+        tokio::spawn(async move { world_tree.sync().await })
     }
 }
 
@@ -61,7 +60,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
 #[cfg(test)]
 mod tests {
-    use ethers::providers::{Provider, PubsubClient, Ws};
+    use ethers::providers::{Provider, Ws};
     use ethers::types::H160;
     use std::{str::FromStr, sync::Arc};
 

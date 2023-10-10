@@ -7,7 +7,7 @@ use tokio::task::JoinError;
 #[derive(Error, Debug)]
 pub enum TreeAvailabilityError<M>
 where
-    M: Middleware,
+    M: Middleware + 'static,
 {
     #[error("Middleware error")]
     MiddlewareError(<M as Middleware>::Error),
