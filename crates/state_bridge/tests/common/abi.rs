@@ -12,19 +12,19 @@ abigen!(
     BridgedWorldID,
     r#"[
         event RootAdded(uint256 root, uint128 timestamp)
-        event RootHistoryExpirySet(uint256 newExpiry)
         function latestRoot() public view virtual returns (uint256)
         function receiveRoot(uint256 newRoot) external
-        function setRootHistoryExpiry(uint256 expiryTime) public
     ]"#,
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
 abigen!(
-    StateBridge,
+    MockStateBridge,
     r#"[
         event RootPropagated(uint256 root)
         function propagateRoot() external
+        function worldID() external view returns (address)
+        function mockBridgedWorldID() external view returns (address)
     ]"#,
     event_derives(serde::Deserialize, serde::Serialize)
 );

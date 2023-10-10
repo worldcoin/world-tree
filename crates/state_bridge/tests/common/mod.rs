@@ -34,6 +34,10 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::str::FromStr;
 use std::sync::Arc;
 
+use eyre::Error;
+use state_bridge::bridge::IStateBridge;
+
+use self::chain_mock::{spawn_mock_chain, MockChain};
 use self::prelude::*;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -42,4 +46,14 @@ struct CompiledContract {
     bytecode: Bytecode,
 }
 
-pub async fn test_relay_root() {}
+pub async fn test_relay_root() -> eyre::Result<()> {
+    let MockChain {
+        anvil,
+        private_key,
+        state_bridge,
+    } = spawn_mock_chain().await?;
+
+    let world_id_address = state_bridge.method::<_, ()>("worldID", ());
+
+    Ok(())
+}

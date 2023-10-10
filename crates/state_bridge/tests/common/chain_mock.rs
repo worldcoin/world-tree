@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use ethers::abi::{AbiDecode, AbiEncode};
 use ethers::contract::Contract;
-use ethers::core::k256::ecdsa::SigningKey;
+use ethers::core::{k256::ecdsa::SigningKey, types::Bytes};
 use ethers::prelude::{
     ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, SignerMiddleware,
     Wallet,
@@ -26,7 +26,7 @@ pub struct MockChain {
     pub state_bridge: SpecializedContract,
 }
 
-pub async fn spawn_mock_chain() -> anyhow::Result<MockChain> {
+pub async fn spawn_mock_chain() -> eyre::Result<MockChain> {
     let chain = Anvil::new().block_time(2u64).spawn();
 
     let private_key = H256::from_slice(&chain.keys()[0].to_bytes());
@@ -39,13 +39,12 @@ pub async fn spawn_mock_chain() -> anyhow::Result<MockChain> {
 
     let wallet = LocalWallet::from(chain.keys()[0].clone()).with_chain_id(chain_id);
 
-    let root = H256::from_str("0x111").expect("couldn't read from str");
-
     let client = SignerMiddleware::new(provider, wallet.clone());
     let client = NonceManagerMiddleware::new(client, wallet.address());
     let client = Arc::new(client);
 
-    let state_bridge_factory = load_and_build_contract("./sol/MockStateBridge.json", client)?;
+    let state_bridge_factory =
+        load_and_build_contract("./sol/MockStateBridge.json", client.clone())?;
 
     let state_bridge = state_bridge_factory
         .deploy(())?
@@ -68,25 +67,20 @@ type SpecializedFactory = ContractFactory<SpecializedClient>;
 fn load_and_build_contract(
     path: impl Into<String>,
     client: SharableClient,
-) -> anyhow::Result<SpecializedFactory> {
+) -> eyre::Result<SpecializedFactory> {
     let path_string = path.into();
     let contract_file = File::open(&path_string)
         .unwrap_or_else(|_| panic!("Failed to open `{pth}`", pth = &path_string));
 
-    let contract_json: CompiledContract = serde_json::from_reader(BufReader::new(contract_file))
-        .unwrap_or_else(|_| {
+    let bytecode: Bytes =
+        serde_json::from_reader(BufReader::new(contract_file)).unwrap_or_else(|_| {
             panic!(
                 "Could not parse the compiled contract at {pth}",
                 pth = &path_string
             )
         });
-    let contract_bytecode = contract_json.bytecode.object.as_bytes().unwrap_or_else(|| {
-        panic!(
-            "Could not parse the bytecode for the contract at {pth}",
-            pth = &path_string
-        )
-    });
-    let contract_factory =
-        ContractFactory::new(contract_json.abi, contract_bytecode.clone(), client);
+
+    let contract_factory = ContractFactory::new(Default::default(), bytecode, client);
+
     Ok(contract_factory)
 }
