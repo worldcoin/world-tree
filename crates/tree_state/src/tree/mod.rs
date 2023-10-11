@@ -5,9 +5,9 @@ use std::cmp::min;
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use tokio::sync::RwLock;
 
 use chrono::Utc;
+use ethers::contract::EthEvent;
 use ethers::providers::Middleware;
 use ethers::types::{Filter, H160};
 use semaphore::lazy_merkle_tree::{Canonical, Derived, LazyMerkleTree};
@@ -16,10 +16,11 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::{lazy_merkle_tree, Field};
 use serde::Serialize;
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
-use crate::abi::TREE_CHANGE_EVENT_SIGNATURE;
+use crate::abi::TreeChangedFilter;
 use crate::error::TreeAvailabilityError;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
@@ -32,7 +33,7 @@ pub struct WorldTree<T: TreeReader + TreeWriter, M: Middleware> {
     pub address: H160,
     pub tree: Arc<RwLock<T>>,
     pub last_synced_block: u64,
-    pub tree_history: Arc<RwLock<VecDeque<TreeData<Derived>>>>,
+    pub tree_history: Arc<RwLock<VecDeque<PoseidonTree<Derived>>>>,
     pub middleware: Arc<M>,
 }
 
@@ -60,9 +61,11 @@ impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
+        let topic = TreeChangedFilter::signature();
+
         // Initialize a new filter to get all of the tree changed events
         let filter = Filter::new()
-            .topic0(TREE_CHANGE_EVENT_SIGNATURE)
+            .topic0(topic)
             .address(self.address)
             .from_block(self.last_synced_block)
             .to_block(current_block.as_u64());

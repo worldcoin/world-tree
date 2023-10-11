@@ -1,20 +1,15 @@
 use std::sync::Arc;
 
-use ethers::{
-    providers::Middleware,
-    types::{Filter, H160, H256, U256},
-};
-use semaphore::{
-    lazy_merkle_tree::{self, Canonical},
-    poseidon_tree::Proof,
-};
+use ethers::providers::Middleware;
+use ethers::types::{Filter, H160, H256, U256};
+use semaphore::lazy_merkle_tree::{self, Canonical};
+use semaphore::poseidon_tree::Proof;
 use tokio::task::JoinHandle;
 use tracing::info;
 
 use super::{Hash, TreeData, TreeItem, TreeReader, TreeVersion, TreeWriter, WorldTree};
-
 use crate::abi::{IWorldIdIdentityManager, TreeChangedFilter};
-use crate::{abi::TREE_CHANGE_EVENT_SIGNATURE, error::TreeAvailabilityError};
+use crate::error::TreeAvailabilityError;
 
 impl TreeVersion for Canonical {}
 

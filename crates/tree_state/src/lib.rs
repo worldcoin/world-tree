@@ -2,24 +2,14 @@ pub mod abi;
 pub mod error;
 pub mod tree;
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use abi::{IWorldIdIdentityManager, TreeChangedFilter};
 use error::TreeAvailabilityError;
-use ethers::{
-    contract::EthCall,
-    types::{BlockNumber, U64},
-};
-use ethers::{
-    providers::{Middleware, PubsubClient, StreamExt},
-    types::{H160, U256},
-};
-
-use semaphore::lazy_merkle_tree::{Canonical, Derived};
-use tokio::{sync::RwLock, task::JoinHandle};
+use ethers::providers::Middleware;
+use ethers::types::H160;
+use semaphore::lazy_merkle_tree::Canonical;
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, TreeData, WorldTree};
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
@@ -65,9 +55,11 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
     use ethers::providers::{Provider, Ws};
     use ethers::types::H160;
-    use std::{str::FromStr, sync::Arc};
 
     use crate::TreeAvailabilityService;
 
@@ -82,7 +74,7 @@ mod tests {
         let tree_availability_service =
             TreeAvailabilityService::new(30, 10, world_tree_address, 0, middleware);
 
-        let handle = tree_availability_service.spawn().await;
+        let _handle = tree_availability_service.spawn().await;
 
         Ok(())
     }
