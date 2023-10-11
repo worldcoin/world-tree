@@ -86,7 +86,7 @@ impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
 
                 //TODO: decode the tx data depending on if it is an insertion or deletion, we can use the same functionality from the sequencer
 
-                //TODO: for each batch of changes, add the changes to the tree history and update the tree ho
+                //TODO: for each batch of changes, add the changes to the tree history and update the tree state
             }
         }
 
