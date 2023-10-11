@@ -52,7 +52,11 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
     pub async fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let world_tree = self.world_tree.clone();
-        tokio::spawn(async move { world_tree.sync().await })
+        tokio::spawn(async move {
+            world_tree.sync_to_head().await?;
+            world_tree.listen_for_updates().await?;
+            Ok(())
+        })
     }
 }
 

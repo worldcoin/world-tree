@@ -33,7 +33,7 @@ pub struct WorldTree<T: TreeReader + TreeWriter, M: Middleware> {
     pub address: H160,
     pub tree: Arc<RwLock<T>>,
     pub last_synced_block: u64,
-    pub tree_history: Arc<RwLock<VecDeque<TreeData<Derived>>>>, //TODO: will probably need some arc rwlock
+    pub tree_history: Arc<RwLock<VecDeque<TreeData<Derived>>>>,
     pub middleware: Arc<M>,
 }
 
@@ -51,12 +51,6 @@ impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
             tree_history: Arc::new(RwLock::new(VecDeque::new())),
             last_synced_block,
         }
-    }
-
-    pub async fn sync(&self) -> Result<(), TreeAvailabilityError<M>> {
-        self.sync_to_head().await?;
-        self.listen_for_updates().await?;
-        Ok(())
     }
 
     // Sync the state of the tree to to the chain head
@@ -91,7 +85,7 @@ impl<T: TreeReader + TreeWriter, M: Middleware> WorldTree<T, M> {
                     todo!("Return an error here")
                 };
 
-                //TODO: decode the tx data
+                //TODO: decode the tx data depending on if it is an insertion or deletion, we can use the same functionality from the sequencer
 
                 //TODO: for each batch of changes, add the changes to the tree history and update the tree ho
             }
