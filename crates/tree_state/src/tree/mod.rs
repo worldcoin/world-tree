@@ -1,4 +1,3 @@
-pub mod builder;
 pub mod canonical;
 pub mod derived;
 
