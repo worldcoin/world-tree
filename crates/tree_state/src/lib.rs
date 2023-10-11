@@ -1,6 +1,8 @@
 pub mod abi;
+pub mod block_scanner;
 pub mod error;
 pub mod tree;
+pub mod tree_updater;
 
 use std::sync::Arc;
 
@@ -8,12 +10,14 @@ use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
-use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tree::{Hash, PoseidonTree, TreeData, WorldTree};
+use tree::{Hash, PoseidonTree, WorldTree};
+use tree_updater::TreeUpdater;
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
-    pub world_tree: Arc<WorldTree<TreeData<Canonical>, M>>,
+    pub world_tree: Arc<WorldTree>,
+    pub tree_updater: TreeUpdater<M>,
+    pub middleware: Arc<M>,
 }
 
 impl<M: Middleware> TreeAvailabilityService<M> {
@@ -30,24 +34,24 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             &Hash::ZERO,
         );
 
+        let world_tree = Arc::new(WorldTree::new(tree));
+
+        let tree_updater = TreeUpdater::new(
+            middleware.clone(),
+            world_tree_creation_block,
+            world_tree_address,
+        );
+
         Self {
-            world_tree: Arc::new(WorldTree::new(
-                world_tree_address,
-                Arc::new(RwLock::new(TreeData::new(tree, 0))),
-                world_tree_creation_block,
-                middleware,
-            )),
+            world_tree,
+            tree_updater,
+            middleware,
         }
     }
 
     pub async fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let world_tree = self.world_tree.clone();
-        tokio::spawn(async move {
-            world_tree.sync_to_head().await?;
-            world_tree.listen_for_updates().await?;
-
-            Ok(())
-        })
+        tokio::spawn(async move { Ok(()) })
     }
 }
 
