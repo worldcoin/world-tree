@@ -55,6 +55,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         tokio::spawn(async move {
             world_tree.sync_to_head().await?;
             world_tree.listen_for_updates().await?;
+
             Ok(())
         })
     }
