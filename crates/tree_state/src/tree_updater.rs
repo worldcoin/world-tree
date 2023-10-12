@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
+use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
 use ethers::providers::Middleware;
-use ethers::types::H160;
+use ethers::types::{H160, U256};
 
-use crate::abi::TreeChangedFilter;
+use crate::abi::{
+    DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
+};
 use crate::block_scanner::BlockScanner;
 use crate::error::TreeAvailabilityError;
+use crate::index_packing::unpack_indices;
+use crate::tree::{Hash, WorldTree};
 
 // TODO: Change to a configurable parameter
 const SCANNING_WINDOW_SIZE: u64 = 100;
@@ -37,7 +42,10 @@ impl<M: Middleware> TreeUpdater<M> {
     }
 
     // Sync the state of the tree to to the chain head
-    pub async fn sync_to_head(&self) -> Result<(), TreeAvailabilityError<M>> {
+    pub async fn sync_to_head(
+        &self,
+        world_tree: &WorldTree,
+    ) -> Result<(), TreeAvailabilityError<M>> {
         let topic = TreeChangedFilter::signature();
 
         let logs = self
@@ -51,18 +59,40 @@ impl<M: Middleware> TreeUpdater<M> {
 
         for log in logs {
             if let Some(tx_hash) = log.transaction_hash {
-                let Some(transaction) = self
+                let transaction = self
                     .middleware
                     .get_transaction(tx_hash)
                     .await
-                    .map_err(TreeAvailabilityError::MiddlewareError)? else{
+                    .map_err(TreeAvailabilityError::MiddlewareError)?
+                    .ok_or(TreeAvailabilityError::MissingTransaction)?;
 
-                        todo!("Return an error here")
-                    };
+                if let Ok(delete_identities_call) =
+                    DeleteIdentitiesCall::decode(transaction.input.as_ref())
+                {
+                    let indices = unpack_indices(
+                        delete_identities_call.packed_deletion_indices.as_ref(),
+                    );
+                    let indices: Vec<_> =
+                        indices.into_iter().map(|x| x as usize).collect();
 
-                //TODO: decode the tx data depending on if it is an insertion or deletion, we can use the same functionality from the sequencer
+                    world_tree.delete_many(&indices).await;
+                } else if let Ok(register_identities_call) =
+                    RegisterIdentitiesCall::decode(transaction.input.as_ref())
+                {
+                    let start_index = register_identities_call.start_index;
+                    let identities =
+                        register_identities_call.identity_commitments;
+                    let identities: Vec<_> = identities
+                        .into_iter()
+                        .map(|u256: U256| Hash::from_limbs(u256.0))
+                        .collect();
 
-                //TODO: for each batch of changes, add the changes to the tree history and update the tree state
+                    world_tree
+                        .insert_many_at(start_index as usize, &identities)
+                        .await;
+                } else {
+                    return Err(TreeAvailabilityError::UnrecognizedTransaction);
+                }
             }
         }
 
