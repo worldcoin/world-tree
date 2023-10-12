@@ -16,6 +16,8 @@ use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 use tree_updater::TreeUpdater;
 
+const TREE_HISTORY_SIZE: usize = 1000;
+
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
     pub world_tree: Arc<WorldTree>,
     pub tree_updater: Arc<TreeUpdater<M>>,
@@ -36,7 +38,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             &Hash::ZERO,
         );
 
-        let world_tree = Arc::new(WorldTree::new(tree));
+        let world_tree = Arc::new(WorldTree::new(tree, TREE_HISTORY_SIZE));
 
         let tree_updater = Arc::new(TreeUpdater::new(
             middleware.clone(),
