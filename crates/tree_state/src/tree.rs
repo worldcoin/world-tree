@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ops::DerefMut;
 
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
@@ -24,7 +25,12 @@ pub struct WorldTree {
     //       that is equal to the root of the last update
     //       and contains a list of updates
     //       that way we can remove from the history entires associated with actual on-chain roots
-    tree_history: RwLock<VecDeque<PoseidonTree<Derived>>>,
+    tree_history: RwLock<VecDeque<(TreeUpdate, PoseidonTree<Derived>)>>,
+}
+
+struct TreeUpdate {
+    index: usize,
+    value: Hash,
 }
 
 impl WorldTree {
@@ -52,16 +58,25 @@ impl WorldTree {
             let tree = self.tree.read().await;
             tree.update(start_index, first_identity)
         } else {
-            let last_history_entry = history.back().unwrap();
+            let (_, last_history_entry) = history.back().unwrap();
 
             last_history_entry.update(start_index, first_identity)
         };
 
-        history.push_back(next.clone());
+        let first_update = TreeUpdate {
+            index: start_index,
+            value: first_identity.clone(),
+        };
+        history.push_back((first_update, next.clone()));
 
         for (i, identity) in identities.iter().enumerate().skip(1) {
+            let update = TreeUpdate {
+                index: start_index + i,
+                value: identity.clone(),
+            };
+
             next = next.update(start_index + i, identity);
-            history.push_back(next.clone());
+            history.push_back((update, next.clone()));
         }
     }
 
@@ -76,20 +91,55 @@ impl WorldTree {
             let tree = self.tree.read().await;
             tree.update(*first_idx, &Hash::ZERO)
         } else {
-            let last_history_entry = history.back().unwrap();
+            let (_, last_history_entry) = history.back().unwrap();
 
             last_history_entry.update(*first_idx, &Hash::ZERO)
         };
 
-        history.push_back(next.clone());
+        let first_update = TreeUpdate {
+            index: *first_idx,
+            value: Hash::ZERO,
+        };
+        history.push_back((first_update, next.clone()));
 
         for idx in delete_indices.iter().skip(1) {
+            let update = TreeUpdate {
+                index: *idx,
+                value: Hash::ZERO,
+            };
+
             next = next.update(*idx, &Hash::ZERO);
-            history.push_back(next.clone());
+            history.push_back((update, next.clone()));
         }
     }
 
-    pub async fn gc(&self) {}
+    pub async fn gc(&self) {
+        let mut tree_history = self.tree_history.write().await;
+        let mut tree = self.tree.write().await;
+
+        while tree_history.len() > self.tree_history_size {
+            let (update, _updated_tree) = tree_history.pop_front().unwrap();
+
+            take_mut::take(tree.deref_mut(), |tree| {
+                tree.update_with_mutation(update.index, &update.value)
+            });
+        }
+
+        let mut history_drain = tree_history.drain(..);
+        let (first_update, _) = history_drain.next().unwrap();
+
+        let mut next = tree.update(first_update.index, &first_update.value);
+
+        let mut new_history = VecDeque::new();
+        new_history.push_back((first_update, next.clone()));
+
+        for (update, _) in history_drain {
+            next = next.update(update.index, &update.value);
+            new_history.push_back((update, next.clone()));
+        }
+
+        *tree_history = new_history;
+    }
 
     /// Fetches the inclusion proof of the provided identity at the given root hash
     ///
@@ -107,7 +157,7 @@ impl WorldTree {
             return Self::fetch_proof_for_tree(&tree, identity);
         }
 
-        for entry in tree_history.iter() {
+        for (_, entry) in tree_history.iter() {
             if entry.root() == root {
                 return Self::fetch_proof_for_tree(entry, identity);
             }
