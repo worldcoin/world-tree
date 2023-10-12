@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use ethers::providers::Middleware;
 use ethers::types::{
     Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray,
@@ -5,7 +7,7 @@ use ethers::types::{
 
 pub struct BlockScanner<M> {
     middleware: M,
-    current_block: u64,
+    current_block: AtomicU64,
     window_size: u64,
 }
 
@@ -20,23 +22,25 @@ where
     ) -> Self {
         Self {
             middleware,
-            current_block,
+            current_block: AtomicU64::new(current_block),
             window_size,
         }
     }
 
     pub async fn next(
-        &mut self,
+        &self,
         address: Option<ValueOrArray<Address>>,
         topics: [Option<Topic>; 4],
     ) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
 
-        if self.current_block >= latest_block {
+        let current_block = self.current_block.load(Ordering::SeqCst);
+
+        if current_block >= latest_block {
             return Ok(Vec::new());
         }
 
-        let from_block = self.current_block;
+        let from_block = current_block;
         let to_block = latest_block.min(from_block + self.window_size);
 
         let next_current_block = to_block + 1;
@@ -56,7 +60,8 @@ where
             })
             .await?;
 
-        self.current_block = next_current_block;
+        self.current_block
+            .store(next_current_block, Ordering::SeqCst);
 
         Ok(logs)
     }

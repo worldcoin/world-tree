@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ethers::contract::EthEvent;
 use ethers::providers::Middleware;
-use ethers::types::{Filter, H160};
+use ethers::types::H160;
 
 use crate::abi::TreeChangedFilter;
 use crate::block_scanner::BlockScanner;
@@ -38,24 +38,14 @@ impl<M: Middleware> TreeUpdater<M> {
 
     // Sync the state of the tree to to the chain head
     pub async fn sync_to_head(&self) -> Result<(), TreeAvailabilityError<M>> {
-        let current_block = self
-            .middleware
-            .get_block_number()
-            .await
-            .map_err(TreeAvailabilityError::MiddlewareError)?;
-
         let topic = TreeChangedFilter::signature();
 
-        // Initialize a new filter to get all of the tree changed events
-        let filter = Filter::new()
-            .topic0(topic)
-            .address(self.address)
-            .from_block(self.last_synced_block)
-            .to_block(current_block.as_u64());
-
         let logs = self
-            .middleware
-            .get_logs(&filter)
+            .block_scanner
+            .next(
+                Some(self.address.into()),
+                [Some(topic.into()), None, None, None],
+            )
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
