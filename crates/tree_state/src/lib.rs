@@ -16,6 +16,7 @@ use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 use tree_updater::TreeUpdater;
 
+// TODO: Change to a configurable parameter
 const TREE_HISTORY_SIZE: usize = 1000;
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {

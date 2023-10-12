@@ -113,6 +113,12 @@ impl WorldTree {
         }
     }
 
+    /// Garbage collects the tree history
+    ///
+    /// Leaves up to `self.tree_history_size` entries in `self.tree_history`
+    /// The deleted entries are applied to the canonical tree
+    ///
+    /// This method also recalculates the updates on top of the canonical tree
     pub async fn gc(&self) {
         let mut tree_history = self.tree_history.write().await;
         let mut tree = self.tree.write().await;
@@ -329,7 +335,20 @@ mod tests {
         }
 
         world_tree.insert_many_at(0, &identities).await;
+
+        assert_eq!(
+            world_tree.tree_history.read().await.len(),
+            NUM_IDENTITIES,
+            "We should have {NUM_IDENTITIES} before GC"
+        );
+
         world_tree.gc().await;
+
+        assert_eq!(
+            world_tree.tree_history.read().await.len(),
+            5,
+            "We should have 5 entries in tree history after GC"
+        );
 
         let root = ref_tree.root();
 
