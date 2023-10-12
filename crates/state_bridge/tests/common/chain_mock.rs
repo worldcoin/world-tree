@@ -20,7 +20,7 @@ use state_bridge::{
 };
 use tracing::{info, instrument};
 
-use super::abi::MockStateBridge;
+use super::abi::{MockStateBridge, MockWorldID};
 
 pub type SpecializedContract = Contract<SpecializedClient>;
 type TestMiddleware = NonceManagerMiddleware<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
@@ -29,7 +29,7 @@ pub struct MockChain<M: Middleware> {
     pub anvil: AnvilInstance,
     pub private_key: H256,
     pub state_bridge: MockStateBridge<M>,
-    pub mock_world_id: IWorldIdIdentityManager<M>,
+    pub mock_world_id: MockWorldID<M>,
     pub mock_bridged_world_id: BridgedWorldID<M>,
     pub middleware: Arc<TestMiddleware>,
 }
@@ -74,7 +74,7 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
         .await
         .expect("couldn't get world id address");
 
-    let mock_world_id = IWorldIdIdentityManager::new(world_id_mock_address, client.clone());
+    let mock_world_id = MockWorldID::new(world_id_mock_address, client.clone());
 
     Ok(MockChain {
         anvil: chain,
@@ -99,13 +99,22 @@ fn load_and_build_contract(
     let contract_file = File::open(&path_string)
         .unwrap_or_else(|_| panic!("Failed to open `{pth}`", pth = &path_string));
 
-    let bytecode: Bytes =
+    let contract_artifact: serde_json::Value =
         serde_json::from_reader(BufReader::new(contract_file)).unwrap_or_else(|_| {
             panic!(
                 "Could not parse the compiled contract at {pth}",
                 pth = &path_string
             )
         });
+
+    let bytecode_hex_encoded = contract_artifact["bytecode"].as_object().unwrap()["object"]
+        .as_str()
+        .unwrap();
+
+    let bytecode_hex_encoded = bytecode_hex_encoded.trim_start_matches("0x");
+
+    let bytes = hex::decode(bytecode_hex_encoded).unwrap();
+    let bytecode = Bytes::from(bytes);
 
     let contract_factory = ContractFactory::new(Default::default(), bytecode, client);
 

@@ -35,6 +35,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use state_bridge::bridge::{IStateBridge, StateBridge};
+use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 
 use self::chain_mock::{spawn_mock_chain, MockChain};
@@ -61,7 +62,9 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     let relaying_period = std::time::Duration::from_secs(5);
 
-    let mut state_bridge_service = StateBridgeService::new(mock_world_id)
+    let world_id = IWorldIdIdentityManager::new(mock_world_id.address(), middleware.clone());
+
+    let mut state_bridge_service = StateBridgeService::new(world_id)
         .await
         .expect("couldn't create StateBridgeService");
 
@@ -69,6 +72,22 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         .spawn()
         .await
         .expect("failed to spawn a state bridge service");
+
+    let latest_root = U256::from_str("0x12312321321").expect("couldn't parse hexstring");
+
+    mock_world_id
+        .insert_root(latest_root)
+        .await
+        .expect("couldn't insert roots");
+
+    // in a loop:
+    for _i in 0..20 {
+        if latest_root != mock_bridged_world_id.latest_root().await? {
+            tokio::time::sleep(relaying_period / 10).await;
+        } else {
+            return Ok(());
+        }
+    }
 
     Ok(())
 }

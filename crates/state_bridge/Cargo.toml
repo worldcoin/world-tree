@@ -21,3 +21,4 @@ ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
 ruint = "1.10.1"
 eyre = "0.6.8"
 anyhow = "1.0.75"
+hex = "0.4.3"
