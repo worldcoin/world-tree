@@ -3,11 +3,7 @@ use std::sync::Arc;
 use ruint::Uint;
 use tokio::time::Duration;
 
-use ethers::{
-    middleware::contract::abigen,
-    providers::{Middleware, PubsubClient},
-    types::H160,
-};
+use ethers::{middleware::contract::abigen, providers::Middleware, types::H160};
 use tokio::task::JoinHandle;
 
 use crate::{
@@ -25,18 +21,21 @@ abigen!(
 abigen!(
     BridgedWorldID,
     r#"[
-        function latestRoot() external returns (uint256)
         event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
-    ]"#;
+        event RootAdded(uint256 root, uint128 timestamp)
+        function latestRoot() public view virtual returns (uint256)
+        function receiveRoot(uint256 newRoot) external
+    ]"#,
+    event_derives(serde::Deserialize, serde::Serialize)
 );
 
-pub struct StateBridge<M: Middleware + PubsubClient + 'static> {
+pub struct StateBridge<M: Middleware + 'static> {
     pub state_bridge: IStateBridge<M>,
     pub bridged_world_id: BridgedWorldID<M>,
     pub relaying_period: Duration,
 }
 
-impl<M: Middleware + PubsubClient> StateBridge<M> {
+impl<M: Middleware> StateBridge<M> {
     pub fn new(
         state_bridge: IStateBridge<M>,
         bridged_world_id: BridgedWorldID<M>,

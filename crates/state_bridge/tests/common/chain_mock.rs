@@ -14,19 +14,27 @@ use ethers::prelude::{
 use ethers::providers::Middleware;
 use ethers::types::{H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
+use state_bridge::{
+    bridge::{BridgedWorldID, IStateBridge},
+    root::IWorldIdIdentityManager,
+};
 use tracing::{info, instrument};
 
-use super::{abi as ContractAbi, CompiledContract};
+use super::abi::MockStateBridge;
 
 pub type SpecializedContract = Contract<SpecializedClient>;
+type TestMiddleware = NonceManagerMiddleware<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
-pub struct MockChain {
+pub struct MockChain<M: Middleware> {
     pub anvil: AnvilInstance,
     pub private_key: H256,
-    pub state_bridge: SpecializedContract,
+    pub state_bridge: MockStateBridge<M>,
+    pub mock_world_id: IWorldIdIdentityManager<M>,
+    pub mock_bridged_world_id: BridgedWorldID<M>,
+    pub middleware: Arc<TestMiddleware>,
 }
 
-pub async fn spawn_mock_chain() -> eyre::Result<MockChain> {
+pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let chain = Anvil::new().block_time(2u64).spawn();
 
     let private_key = H256::from_slice(&chain.keys()[0].to_bytes());
@@ -52,10 +60,29 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain> {
         .send()
         .await?;
 
+    let state_bridge = MockStateBridge::new(state_bridge.address(), client.clone());
+
+    let bridged_world_id_address = state_bridge
+        .mock_bridged_world_id()
+        .await
+        .expect("couldn't get bridged world id address");
+
+    let mock_bridged_world_id = BridgedWorldID::new(bridged_world_id_address, client.clone());
+
+    let world_id_mock_address = state_bridge
+        .world_id()
+        .await
+        .expect("couldn't get world id address");
+
+    let mock_world_id = IWorldIdIdentityManager::new(world_id_mock_address, client.clone());
+
     Ok(MockChain {
         anvil: chain,
         private_key,
         state_bridge,
+        mock_bridged_world_id,
+        mock_world_id,
+        middleware: client,
     })
 }
 

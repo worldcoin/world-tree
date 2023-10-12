@@ -34,8 +34,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use eyre::Error;
-use state_bridge::bridge::IStateBridge;
+use state_bridge::bridge::{IStateBridge, StateBridge};
+use state_bridge::StateBridgeService;
 
 use self::chain_mock::{spawn_mock_chain, MockChain};
 use self::prelude::*;
@@ -46,14 +46,29 @@ struct CompiledContract {
     bytecode: Bytecode,
 }
 
+#[tokio::test]
 pub async fn test_relay_root() -> eyre::Result<()> {
     let MockChain {
         anvil,
         private_key,
         state_bridge,
+        mock_bridged_world_id,
+        mock_world_id,
+        middleware,
     } = spawn_mock_chain().await?;
 
-    let world_id_address = state_bridge.method::<_, ()>("worldID", ());
+    let state_bridge = IStateBridge::new(state_bridge.address(), middleware.clone());
+
+    let relaying_period = std::time::Duration::from_secs(5);
+
+    let mut state_bridge_service = StateBridgeService::new(mock_world_id)
+        .await
+        .expect("couldn't create StateBridgeService");
+
+    state_bridge_service
+        .spawn()
+        .await
+        .expect("failed to spawn a state bridge service");
 
     Ok(())
 }

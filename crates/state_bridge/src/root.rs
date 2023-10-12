@@ -6,7 +6,7 @@ use std::{
 use ethers::middleware::Middleware;
 use ethers::{
     contract::Contract,
-    providers::{MiddlewareError, PubsubClient, StreamExt},
+    providers::{MiddlewareError, StreamExt},
     types::{Filter, H160, U256},
 };
 use ruint::Uint;
@@ -30,15 +30,14 @@ abigen!(
     ]"#;
 );
 
-pub struct WorldTreeRoot<M: Middleware + PubsubClient + 'static> {
+pub struct WorldTreeRoot<M: Middleware + 'static> {
     pub world_id_identity_manager: IWorldIdIdentityManager<M>,
     pub root_tx: tokio::sync::broadcast::Sender<Hash>,
 }
 
 impl<M> WorldTreeRoot<M>
 where
-    M: Middleware + PubsubClient,
-    <M as Middleware>::Provider: PubsubClient,
+    M: Middleware,
 {
     pub async fn new(
         world_id_identity_manager: IWorldIdIdentityManager<M>,

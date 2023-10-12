@@ -11,7 +11,7 @@ use bridge::StateBridge;
 use error::StateBridgeError;
 use ethers::{
     core::utils::Anvil,
-    providers::{Middleware, PubsubClient},
+    providers::Middleware,
     types::{spoof::State, H160, U256},
 };
 use root::{IWorldIdIdentityManager, WorldTreeRoot};
@@ -21,7 +21,7 @@ use semaphore::{
 };
 use tokio::task::JoinHandle;
 
-pub struct StateBridgeService<M: Middleware + PubsubClient + 'static> {
+pub struct StateBridgeService<M: Middleware + 'static> {
     pub canonical_root: WorldTreeRoot<M>,
     pub state_bridges: Vec<StateBridge<M>>,
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
@@ -29,8 +29,7 @@ pub struct StateBridgeService<M: Middleware + PubsubClient + 'static> {
 
 impl<M> StateBridgeService<M>
 where
-    M: Middleware + PubsubClient,
-    <M as Middleware>::Provider: PubsubClient,
+    M: Middleware,
 {
     pub async fn new(world_tree: IWorldIdIdentityManager<M>) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
@@ -67,15 +66,4 @@ where
 
         Ok(())
     }
-}
-
-#[test]
-fn test_state_bridge_service() {
-    let port = 8545u16;
-
-    let mnemonic = std::env::var("MNEMONIC").expect("MNEMONIC environment variable not defined.");
-
-    let anvil = Anvil::new().port(port).mnemonic(mnemonic).spawn();
-
-    drop(anvil);
 }
