@@ -5,17 +5,31 @@ use ethers::providers::Middleware;
 use ethers::types::{Filter, H160};
 
 use crate::abi::TreeChangedFilter;
+use crate::block_scanner::BlockScanner;
 use crate::error::TreeAvailabilityError;
+
+// TODO: Change to a configurable parameter
+const SCANNING_WINDOW_SIZE: u64 = 100;
 
 pub struct TreeUpdater<M: Middleware> {
     pub middleware: Arc<M>,
     pub last_synced_block: u64,
     pub address: H160,
+    block_scanner: BlockScanner<Arc<M>>,
 }
 
 impl<M: Middleware> TreeUpdater<M> {
-    pub fn new(middleware: Arc<M>, last_synced_block: u64, address: H160) -> Self {
+    pub fn new(
+        middleware: Arc<M>,
+        last_synced_block: u64,
+        address: H160,
+    ) -> Self {
         Self {
+            block_scanner: BlockScanner::new(
+                middleware.clone(),
+                SCANNING_WINDOW_SIZE,
+                last_synced_block,
+            ),
             middleware,
             last_synced_block,
             address,

@@ -12,7 +12,6 @@ pub struct BlockScanner<M> {
 impl<M> BlockScanner<M>
 where
     M: Middleware,
-    <M as Middleware>::Error: 'static,
 {
     pub const fn new(
         middleware: M,

@@ -206,4 +206,51 @@ mod tests {
             assert_eq!(ref_tree.proof(i), proof_from_world_tree);
         }
     }
+
+    #[tokio::test]
+    async fn deletion_of_identities() {
+        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+            DEPTH,
+            DEPTH,
+            &Hash::ZERO,
+        );
+
+        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+            DEPTH,
+            DEPTH,
+            &Hash::ZERO,
+        );
+
+        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+
+        let world_tree = WorldTree::new(poseidon_tree);
+
+        for (idx, identity) in identities.iter().enumerate() {
+            ref_tree = ref_tree.update_with_mutation(idx, identity);
+        }
+
+        world_tree.insert_many_at(0, &identities).await;
+
+        let deleted_identity_idxs = &[3, 7];
+        let non_deleted_identity_idxs: Vec<_> = (0..NUM_IDENTITIES)
+            .filter(|idx| !deleted_identity_idxs.contains(idx))
+            .collect();
+
+        for idx in deleted_identity_idxs {
+            ref_tree = ref_tree.update_with_mutation(*idx, &Hash::ZERO);
+        }
+
+        world_tree.delete_many(deleted_identity_idxs).await;
+
+        let root = ref_tree.root();
+
+        for i in non_deleted_identity_idxs {
+            let proof_from_world_tree = world_tree
+                .inclusion_proof_at(identities[i], root)
+                .await
+                .unwrap();
+
+            assert_eq!(ref_tree.proof(i), proof_from_world_tree);
+        }
+    }
 }
