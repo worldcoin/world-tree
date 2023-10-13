@@ -1,28 +1,20 @@
-use ethers::{providers::Middleware, types::U256};
+use std::sync::Arc;
+
+use ethers::{
+    providers::Middleware,
+    types::{Filter, H160, H256, U256},
+};
 use semaphore::{
     lazy_merkle_tree::{self, Canonical},
     poseidon_tree::Proof,
 };
+use tokio::task::JoinHandle;
 use tracing::info;
 
-use super::{
-    Hash, TreeData, TreeItem, TreeMetadata, TreeReader, TreeVersion, TreeWriter, WorldTree,
-};
+use super::{Hash, TreeData, TreeItem, TreeReader, TreeVersion, TreeWriter, WorldTree};
 
-impl<M: Middleware> WorldTree<TreeData<Canonical>, M> {
-    pub async fn spawn(&self) {}
-
-    pub async fn sync(&self) {}
-}
-
-pub struct CanonicalMetadata {
-    pub identity_tx: tokio::sync::broadcast::Sender<Hash>,
-    pub last_synced_block: u64, //TODO: probably update this type
-}
-
-impl TreeMetadata for Canonical {
-    type Metadata = CanonicalMetadata;
-}
+use crate::abi::{IWorldIdIdentityManager, TreeChangedFilter};
+use crate::{abi::TREE_CHANGE_EVENT_SIGNATURE, error::TreeAvailabilityError};
 
 impl TreeVersion for Canonical {}
 

@@ -1,0 +1,13 @@
+use ethers::{middleware::contract::abigen, types::H256};
+
+//TODO: update event sig for tree changed
+pub const TREE_CHANGE_EVENT_SIGNATURE: H256 = H256::zero();
+
+abigen!(
+    IWorldIdIdentityManager,
+    r#"[
+        event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
+        function registerIdentities(uint256[8] calldata insertionProof, uint256 preRoot, uint32 startIndex, uint256[] calldata identityCommitments, uint256 postRoot) external
+        function deleteIdentities(uint256[8] calldata deletionProof, uint32 batchSize, bytes calldata packedDeletionIndices, uint256 preRoot, uint256 postRoot) external
+        ]"#;
+);
