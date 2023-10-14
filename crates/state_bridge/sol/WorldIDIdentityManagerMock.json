@@ -4,12 +4,50 @@
       "inputs": [
         {
           "internalType": "uint256",
-          "name": "newRoot",
+          "name": "initRoot",
           "type": "uint256"
         }
       ],
       "stateMutability": "nonpayable",
       "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "preRoot",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "enum WorldIDIdentityManagerMock.TreeChange",
+          "name": "kind",
+          "type": "uint8"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "postRoot",
+          "type": "uint256"
+        }
+      ],
+      "name": "TreeChanged",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "postRoot",
+          "type": "uint256"
+        }
+      ],
+      "name": "insertRoot",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
     },
     {
       "inputs": [],
@@ -26,19 +64,20 @@
     }
   ],
   "bytecode": {
-    "object": "0x608060405234801561001057600080fd5b506040516100ad3803806100ad83398101604081905261002f91610037565b600055610050565b60006020828403121561004957600080fd5b5051919050565b604f8061005e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063d7b0fef114602d575b600080fd5b60005460405190815260200160405180910390f3fea164736f6c634300080f000a",
-    "sourceMap": "381:268:115:-:0;;;485:67;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;524:11;:21;381:268;;14:184:153;84:6;137:2;125:9;116:7;112:23;108:32;105:52;;;153:1;150;143:12;105:52;-1:-1:-1;176:16:153;;14:184;-1:-1:-1;14:184:153:o;:::-;381:268:115;;;;;;",
+    "object": "0x608060405234801561001057600080fd5b5060405161011938038061011983398101604081905261002f91610037565b600055610050565b60006020828403121561004957600080fd5b5051919050565b60bb8061005e6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c8063c46d227a146037578063d7b0fef1146048575b600080fd5b604660423660046096565b605d565b005b60005460405190815260200160405180910390f35b6000805482825590829060405183907f25f6d5cc356ee0b49cf708c13c68197947f5740a878a298765e4b18e4afdaf0490600090a45050565b60006020828403121560a757600080fd5b503591905056fea164736f6c634300080f000a",
+    "sourceMap": "381:1053:156:-:0;;;1071:69;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;1111:11;:22;381:1053;;14:184:194;84:6;137:2;125:9;116:7;112:23;108:32;105:52;;;153:1;150;143:12;105:52;-1:-1:-1;176:16:194;;14:184;-1:-1:-1;14:184:194:o;:::-;381:1053:156;;;;;;",
     "linkReferences": {}
   },
   "deployedBytecode": {
-    "object": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063d7b0fef114602d575b600080fd5b60005460405190815260200160405180910390f3fea164736f6c634300080f000a",
-    "sourceMap": "381:268:115:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;558:89;603:7;629:11;558:89;;160:25:153;;;148:2;133:18;558:89:115;;;;;;",
+    "object": "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063c46d227a146037578063d7b0fef1146048575b600080fd5b604660423660046096565b605d565b005b60005460405190815260200160405180910390f35b6000805482825590829060405183907f25f6d5cc356ee0b49cf708c13c68197947f5740a878a298765e4b18e4afdaf0490600090a45050565b60006020828403121560a757600080fd5b503591905056fea164736f6c634300080f000a",
+    "sourceMap": "381:1053:156:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1146:191;;;;;;:::i;:::-;;:::i;:::-;;1343:89;1388:7;1414:11;1343:89;;345:25:194;;;333:2;318:18;1343:89:156;;;;;;;1146:191;1201:15;1219:11;;1240:22;;;1219:11;1254:8;;1278:52;;1290:7;;1278:52;;;;;1191:146;1146:191;:::o;14:180:194:-;73:6;126:2;114:9;105:7;101:23;97:32;94:52;;;142:1;139;132:12;94:52;-1:-1:-1;165:23:194;;14:180;-1:-1:-1;14:180:194:o",
     "linkReferences": {}
   },
   "methodIdentifiers": {
+    "insertRoot(uint256)": "c46d227a",
     "latestRoot()": "d7b0fef1"
   },
-  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.15+commit.e14f2714\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"newRoot\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"latestRoot\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"Worldcoin\",\"details\":\"deployed through make mock and make local-mock\",\"kind\":\"dev\",\"methods\":{},\"title\":\"WorldID Identity Manager Mock\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{\"latestRoot()\":{\"notice\":\"returns the latest root\"}},\"notice\":\"Mock of the WorldID Identity Manager contract (world-id-contracts) to test functionality on a local chain\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/mock/WorldIDIdentityManagerMock.sol\":\"WorldIDIdentityManagerMock\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":10000},\"remappings\":[\":@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/\",\":@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/\",\":@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/\",\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@prb/test/=lib/prb-test/src/\",\":@rari-capital/solmate/=lib/solmate/\",\":ds-test/=lib/forge-std/lib/ds-test/src/\",\":forge-std/=lib/forge-std/src/\",\":fx-portal/contracts/=lib/contracts/contracts/\",\":openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/\",\":prb-test/=lib/prb-test/src/\",\":solmate/=lib/solmate/\",\":src/=src/\"]},\"sources\":{\"src/interfaces/IWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd\",\"dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1\"]},\"src/mock/WorldIDIdentityManagerMock.sol\":{\"keccak256\":\"0x213cd829f224b8e138bd1e74b504d9f65878bad87aa107a07f93f5678cfd1764\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://5ed372bf645b1cabd841ad19f139a4d23d9d1cc43b508a505fb2e74ae7765deb\",\"dweb:/ipfs/QmUS5HmeiV1MW6WnLwaQChVYGUSTWF22e4pbYw49UzRiM9\"]}},\"version\":1}",
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.15+commit.e14f2714\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"initRoot\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"preRoot\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"enum WorldIDIdentityManagerMock.TreeChange\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"TreeChanged\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"insertRoot\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"latestRoot\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"Worldcoin\",\"details\":\"deployed through make mock and make local-mock\",\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"params\":{\"kind\":\"Either \\\"insertion\\\" or \\\"update\\\", the kind of alteration that was made to the        tree.\",\"postRoot\":\"The value of the tree's root after the update.\",\"preRoot\":\"The value of the tree's root before the update.\"}}},\"kind\":\"dev\",\"methods\":{},\"title\":\"WorldID Identity Manager Mock\",\"version\":1},\"userdoc\":{\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"notice\":\"Emitted when the current root of the tree is updated.\"}},\"kind\":\"user\",\"methods\":{\"latestRoot()\":{\"notice\":\"returns the latest root\"}},\"notice\":\"Mock of the WorldID Identity Manager contract (world-id-contracts) to test functionality on a local chain\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/mock/WorldIDIdentityManagerMock.sol\":\"WorldIDIdentityManagerMock\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":10000},\"remappings\":[\":@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/\",\":@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/\",\":@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/\",\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@prb/test/=lib/prb-test/src/\",\":@rari-capital/solmate/=lib/solmate/\",\":ds-test/=lib/solmate/lib/ds-test/src/\",\":forge-std/=lib/forge-std/src/\",\":fx-portal/contracts/=lib/contracts/contracts/\",\":openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/\",\":prb-test/=lib/prb-test/src/\",\":solmate/=lib/solmate/\",\":src/=src/\"]},\"sources\":{\"src/interfaces/IWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd\",\"dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1\"]},\"src/mock/WorldIDIdentityManagerMock.sol\":{\"keccak256\":\"0xbc623ea97abf266b3acb9af8789d10dfde106aac026da8a67e4a598e00786939\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://705f38e90836dd00ed363a0ae908e96ad8a230450c6831a31f0c0973e166c600\",\"dweb:/ipfs/QmX1SJiBwmvPPidpZmmJL2twGq3f7i3gDLT5yvDb7TwhCf\"]}},\"version\":1}",
   "metadata": {
     "compiler": {
       "version": "0.8.15+commit.e14f2714"
@@ -50,12 +89,49 @@
           "inputs": [
             {
               "internalType": "uint256",
-              "name": "newRoot",
+              "name": "initRoot",
               "type": "uint256"
             }
           ],
           "stateMutability": "nonpayable",
           "type": "constructor"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "preRoot",
+              "type": "uint256",
+              "indexed": true
+            },
+            {
+              "internalType": "enum WorldIDIdentityManagerMock.TreeChange",
+              "name": "kind",
+              "type": "uint8",
+              "indexed": true
+            },
+            {
+              "internalType": "uint256",
+              "name": "postRoot",
+              "type": "uint256",
+              "indexed": true
+            }
+          ],
+          "type": "event",
+          "name": "TreeChanged",
+          "anonymous": false
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "postRoot",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "insertRoot"
         },
         {
           "inputs": [],
@@ -94,7 +170,7 @@
         "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
         "@prb/test/=lib/prb-test/src/",
         "@rari-capital/solmate/=lib/solmate/",
-        "ds-test/=lib/forge-std/lib/ds-test/src/",
+        "ds-test/=lib/solmate/lib/ds-test/src/",
         "forge-std/=lib/forge-std/src/",
         "fx-portal/contracts/=lib/contracts/contracts/",
         "openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/",
@@ -125,10 +201,10 @@
         "license": "MIT"
       },
       "src/mock/WorldIDIdentityManagerMock.sol": {
-        "keccak256": "0x213cd829f224b8e138bd1e74b504d9f65878bad87aa107a07f93f5678cfd1764",
+        "keccak256": "0xbc623ea97abf266b3acb9af8789d10dfde106aac026da8a67e4a598e00786939",
         "urls": [
-          "bzz-raw://5ed372bf645b1cabd841ad19f139a4d23d9d1cc43b508a505fb2e74ae7765deb",
-          "dweb:/ipfs/QmUS5HmeiV1MW6WnLwaQChVYGUSTWF22e4pbYw49UzRiM9"
+          "bzz-raw://705f38e90836dd00ed363a0ae908e96ad8a230450c6831a31f0c0973e166c600",
+          "dweb:/ipfs/QmX1SJiBwmvPPidpZmmJL2twGq3f7i3gDLT5yvDb7TwhCf"
         ],
         "license": "MIT"
       }
@@ -137,22 +213,22 @@
   },
   "ast": {
     "absolutePath": "src/mock/WorldIDIdentityManagerMock.sol",
-    "id": 53713,
+    "id": 54516,
     "exportedSymbols": {
       "IWorldIDIdentityManager": [
-        53408
+        54177
       ],
       "WorldIDIdentityManagerMock": [
-        53712
+        54515
       ]
     },
     "nodeType": "SourceUnit",
-    "src": "32:618:115",
+    "src": "32:1403:156",
     "nodes": [
       {
-        "id": 53686,
+        "id": 54455,
         "nodeType": "PragmaDirective",
-        "src": "32:24:115",
+        "src": "32:24:156",
         "nodes": [],
         "literals": [
           "solidity",
@@ -162,24 +238,24 @@
         ]
       },
       {
-        "id": 53688,
+        "id": 54457,
         "nodeType": "ImportDirective",
-        "src": "58:83:115",
+        "src": "58:83:156",
         "nodes": [],
         "absolutePath": "src/interfaces/IWorldIDIdentityManager.sol",
         "file": "src/interfaces/IWorldIDIdentityManager.sol",
         "nameLocation": "-1:-1:-1",
-        "scope": 53713,
-        "sourceUnit": 53409,
+        "scope": 54516,
+        "sourceUnit": 54178,
         "symbolAliases": [
           {
             "foreign": {
-              "id": 53687,
+              "id": 54456,
               "name": "IWorldIDIdentityManager",
               "nodeType": "Identifier",
               "overloadedDeclarations": [],
-              "referencedDeclaration": 53408,
-              "src": "66:23:115",
+              "referencedDeclaration": 54177,
+              "src": "66:23:156",
               "typeDescriptions": {}
             },
             "nameLocation": "-1:-1:-1"
@@ -188,20 +264,20 @@
         "unitAlias": ""
       },
       {
-        "id": 53712,
+        "id": 54515,
         "nodeType": "ContractDefinition",
-        "src": "381:268:115",
+        "src": "381:1053:156",
         "nodes": [
           {
-            "id": 53693,
+            "id": 54462,
             "nodeType": "VariableDeclaration",
-            "src": "450:28:115",
+            "src": "450:28:156",
             "nodes": [],
             "constant": false,
             "mutability": "mutable",
             "name": "_latestRoot",
-            "nameLocation": "467:11:115",
-            "scope": 53712,
+            "nameLocation": "467:11:156",
+            "scope": 54515,
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -209,10 +285,10 @@
               "typeString": "uint256"
             },
             "typeName": {
-              "id": 53692,
+              "id": 54461,
               "name": "uint256",
               "nodeType": "ElementaryTypeName",
-              "src": "450:7:115",
+              "src": "450:7:156",
               "typeDescriptions": {
                 "typeIdentifier": "t_uint256",
                 "typeString": "uint256"
@@ -221,30 +297,169 @@
             "visibility": "internal"
           },
           {
-            "id": 53703,
+            "id": 54465,
+            "nodeType": "EnumDefinition",
+            "src": "569:59:156",
+            "nodes": [],
+            "canonicalName": "WorldIDIdentityManagerMock.TreeChange",
+            "members": [
+              {
+                "id": 54463,
+                "name": "Insertion",
+                "nameLocation": "595:9:156",
+                "nodeType": "EnumValue",
+                "src": "595:9:156"
+              },
+              {
+                "id": 54464,
+                "name": "Deletion",
+                "nameLocation": "614:8:156",
+                "nodeType": "EnumValue",
+                "src": "614:8:156"
+              }
+            ],
+            "name": "TreeChange",
+            "nameLocation": "574:10:156"
+          },
+          {
+            "id": 54475,
+            "nodeType": "EventDefinition",
+            "src": "971:94:156",
+            "nodes": [],
+            "anonymous": false,
+            "documentation": {
+              "id": 54466,
+              "nodeType": "StructuredDocumentation",
+              "src": "634:332:156",
+              "text": "@notice Emitted when the current root of the tree is updated.\n @param preRoot The value of the tree's root before the update.\n @param kind Either \"insertion\" or \"update\", the kind of alteration that was made to the\n        tree.\n @param postRoot The value of the tree's root after the update."
+            },
+            "eventSelector": "25f6d5cc356ee0b49cf708c13c68197947f5740a878a298765e4b18e4afdaf04",
+            "name": "TreeChanged",
+            "nameLocation": "977:11:156",
+            "parameters": {
+              "id": 54474,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 54468,
+                  "indexed": true,
+                  "mutability": "mutable",
+                  "name": "preRoot",
+                  "nameLocation": "1005:7:156",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 54475,
+                  "src": "989:23:156",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 54467,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "989:7:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 54471,
+                  "indexed": true,
+                  "mutability": "mutable",
+                  "name": "kind",
+                  "nameLocation": "1033:4:156",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 54475,
+                  "src": "1014:23:156",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_enum$_TreeChange_$54465",
+                    "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                  },
+                  "typeName": {
+                    "id": 54470,
+                    "nodeType": "UserDefinedTypeName",
+                    "pathNode": {
+                      "id": 54469,
+                      "name": "TreeChange",
+                      "nodeType": "IdentifierPath",
+                      "referencedDeclaration": 54465,
+                      "src": "1014:10:156"
+                    },
+                    "referencedDeclaration": 54465,
+                    "src": "1014:10:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_enum$_TreeChange_$54465",
+                      "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 54473,
+                  "indexed": true,
+                  "mutability": "mutable",
+                  "name": "postRoot",
+                  "nameLocation": "1055:8:156",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 54475,
+                  "src": "1039:24:156",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 54472,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1039:7:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "988:76:156"
+            }
+          },
+          {
+            "id": 54485,
             "nodeType": "FunctionDefinition",
-            "src": "485:67:115",
+            "src": "1071:69:156",
             "nodes": [],
             "body": {
-              "id": 53702,
+              "id": 54484,
               "nodeType": "Block",
-              "src": "514:38:115",
+              "src": "1101:39:156",
               "nodes": [],
               "statements": [
                 {
                   "expression": {
-                    "id": 53700,
+                    "id": 54482,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
                     "lValueRequested": false,
                     "leftHandSide": {
-                      "id": 53698,
+                      "id": 54480,
                       "name": "_latestRoot",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 53693,
-                      "src": "524:11:115",
+                      "referencedDeclaration": 54462,
+                      "src": "1111:11:156",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
@@ -253,26 +468,26 @@
                     "nodeType": "Assignment",
                     "operator": "=",
                     "rightHandSide": {
-                      "id": 53699,
-                      "name": "newRoot",
+                      "id": 54481,
+                      "name": "initRoot",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 53695,
-                      "src": "538:7:115",
+                      "referencedDeclaration": 54477,
+                      "src": "1125:8:156",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
                       }
                     },
-                    "src": "524:21:115",
+                    "src": "1111:22:156",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     }
                   },
-                  "id": 53701,
+                  "id": 54483,
                   "nodeType": "ExpressionStatement",
-                  "src": "524:21:115"
+                  "src": "1111:22:156"
                 }
               ]
             },
@@ -282,18 +497,18 @@
             "name": "",
             "nameLocation": "-1:-1:-1",
             "parameters": {
-              "id": 53696,
+              "id": 54478,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 53695,
+                  "id": 54477,
                   "mutability": "mutable",
-                  "name": "newRoot",
-                  "nameLocation": "505:7:115",
+                  "name": "initRoot",
+                  "nameLocation": "1091:8:156",
                   "nodeType": "VariableDeclaration",
-                  "scope": 53703,
-                  "src": "497:15:115",
+                  "scope": 54485,
+                  "src": "1083:16:156",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -301,10 +516,10 @@
                     "typeString": "uint256"
                   },
                   "typeName": {
-                    "id": 53694,
+                    "id": 54476,
                     "name": "uint256",
                     "nodeType": "ElementaryTypeName",
-                    "src": "497:7:115",
+                    "src": "1083:7:156",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
@@ -313,78 +528,334 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "496:17:115"
+              "src": "1082:18:156"
             },
             "returnParameters": {
-              "id": 53697,
+              "id": 54479,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "514:0:115"
+              "src": "1101:0:156"
             },
-            "scope": 53712,
+            "scope": 54515,
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "public"
           },
           {
-            "id": 53711,
+            "id": 54506,
             "nodeType": "FunctionDefinition",
-            "src": "558:89:115",
+            "src": "1146:191:156",
             "nodes": [],
             "body": {
-              "id": 53710,
+              "id": 54505,
               "nodeType": "Block",
-              "src": "612:35:115",
+              "src": "1191:146:156",
               "nodes": [],
               "statements": [
                 {
-                  "expression": {
-                    "id": 53708,
+                  "assignments": [
+                    54491
+                  ],
+                  "declarations": [
+                    {
+                      "constant": false,
+                      "id": 54491,
+                      "mutability": "mutable",
+                      "name": "preRoot",
+                      "nameLocation": "1209:7:156",
+                      "nodeType": "VariableDeclaration",
+                      "scope": 54505,
+                      "src": "1201:15:156",
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      },
+                      "typeName": {
+                        "id": 54490,
+                        "name": "uint256",
+                        "nodeType": "ElementaryTypeName",
+                        "src": "1201:7:156",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      "visibility": "internal"
+                    }
+                  ],
+                  "id": 54493,
+                  "initialValue": {
+                    "id": 54492,
                     "name": "_latestRoot",
                     "nodeType": "Identifier",
                     "overloadedDeclarations": [],
-                    "referencedDeclaration": 53693,
-                    "src": "629:11:115",
+                    "referencedDeclaration": 54462,
+                    "src": "1219:11:156",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     }
                   },
-                  "functionReturnParameters": 53707,
-                  "id": 53709,
+                  "nodeType": "VariableDeclarationStatement",
+                  "src": "1201:29:156"
+                },
+                {
+                  "expression": {
+                    "id": 54496,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "id": 54494,
+                      "name": "_latestRoot",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 54462,
+                      "src": "1240:11:156",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "id": 54495,
+                      "name": "postRoot",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 54487,
+                      "src": "1254:8:156",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "src": "1240:22:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "id": 54497,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1240:22:156"
+                },
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "id": 54499,
+                        "name": "preRoot",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 54491,
+                        "src": "1290:7:156",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      {
+                        "expression": {
+                          "id": 54500,
+                          "name": "TreeChange",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 54465,
+                          "src": "1299:10:156",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_type$_t_enum$_TreeChange_$54465_$",
+                            "typeString": "type(enum WorldIDIdentityManagerMock.TreeChange)"
+                          }
+                        },
+                        "id": 54501,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": true,
+                        "lValueRequested": false,
+                        "memberName": "Insertion",
+                        "nodeType": "MemberAccess",
+                        "referencedDeclaration": 54463,
+                        "src": "1299:20:156",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_enum$_TreeChange_$54465",
+                          "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                        }
+                      },
+                      {
+                        "id": 54502,
+                        "name": "postRoot",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 54487,
+                        "src": "1321:8:156",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        {
+                          "typeIdentifier": "t_enum$_TreeChange_$54465",
+                          "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                        },
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "id": 54498,
+                      "name": "TreeChanged",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 54475,
+                      "src": "1278:11:156",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint256_$_t_enum$_TreeChange_$54465_$_t_uint256_$returns$__$",
+                        "typeString": "function (uint256,enum WorldIDIdentityManagerMock.TreeChange,uint256)"
+                      }
+                    },
+                    "id": 54503,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1278:52:156",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 54504,
+                  "nodeType": "EmitStatement",
+                  "src": "1273:57:156"
+                }
+              ]
+            },
+            "functionSelector": "c46d227a",
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "insertRoot",
+            "nameLocation": "1155:10:156",
+            "parameters": {
+              "id": 54488,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 54487,
+                  "mutability": "mutable",
+                  "name": "postRoot",
+                  "nameLocation": "1174:8:156",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 54506,
+                  "src": "1166:16:156",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 54486,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1166:7:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1165:18:156"
+            },
+            "returnParameters": {
+              "id": 54489,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1191:0:156"
+            },
+            "scope": 54515,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "id": 54514,
+            "nodeType": "FunctionDefinition",
+            "src": "1343:89:156",
+            "nodes": [],
+            "body": {
+              "id": 54513,
+              "nodeType": "Block",
+              "src": "1397:35:156",
+              "nodes": [],
+              "statements": [
+                {
+                  "expression": {
+                    "id": 54511,
+                    "name": "_latestRoot",
+                    "nodeType": "Identifier",
+                    "overloadedDeclarations": [],
+                    "referencedDeclaration": 54462,
+                    "src": "1414:11:156",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "functionReturnParameters": 54510,
+                  "id": 54512,
                   "nodeType": "Return",
-                  "src": "622:18:115"
+                  "src": "1407:18:156"
                 }
               ]
             },
             "baseFunctions": [
-              53407
+              54176
             ],
             "functionSelector": "d7b0fef1",
             "implemented": true,
             "kind": "function",
             "modifiers": [],
             "name": "latestRoot",
-            "nameLocation": "567:10:115",
+            "nameLocation": "1352:10:156",
             "parameters": {
-              "id": 53704,
+              "id": 54507,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "577:2:115"
+              "src": "1362:2:156"
             },
             "returnParameters": {
-              "id": 53707,
+              "id": 54510,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 53706,
+                  "id": 54509,
                   "mutability": "mutable",
                   "name": "",
                   "nameLocation": "-1:-1:-1",
                   "nodeType": "VariableDeclaration",
-                  "scope": 53711,
-                  "src": "603:7:115",
+                  "scope": 54514,
+                  "src": "1388:7:156",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -392,10 +863,10 @@
                     "typeString": "uint256"
                   },
                   "typeName": {
-                    "id": 53705,
+                    "id": 54508,
                     "name": "uint256",
                     "nodeType": "ElementaryTypeName",
-                    "src": "603:7:115",
+                    "src": "1388:7:156",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
@@ -404,9 +875,9 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "602:9:115"
+              "src": "1387:9:156"
             },
-            "scope": 53712,
+            "scope": 54515,
             "stateMutability": "view",
             "virtual": false,
             "visibility": "external"
@@ -416,38 +887,38 @@
         "baseContracts": [
           {
             "baseName": {
-              "id": 53690,
+              "id": 54459,
               "name": "IWorldIDIdentityManager",
               "nodeType": "IdentifierPath",
-              "referencedDeclaration": 53408,
-              "src": "420:23:115"
+              "referencedDeclaration": 54177,
+              "src": "420:23:156"
             },
-            "id": 53691,
+            "id": 54460,
             "nodeType": "InheritanceSpecifier",
-            "src": "420:23:115"
+            "src": "420:23:156"
           }
         ],
         "canonicalName": "WorldIDIdentityManagerMock",
         "contractDependencies": [],
         "contractKind": "contract",
         "documentation": {
-          "id": 53689,
+          "id": 54458,
           "nodeType": "StructuredDocumentation",
-          "src": "143:238:115",
+          "src": "143:238:156",
           "text": "@title WorldID Identity Manager Mock\n @author Worldcoin\n @notice  Mock of the WorldID Identity Manager contract (world-id-contracts) to test functionality on a local chain\n @dev deployed through make mock and make local-mock"
         },
         "fullyImplemented": true,
         "linearizedBaseContracts": [
-          53712,
-          53408
+          54515,
+          54177
         ],
         "name": "WorldIDIdentityManagerMock",
-        "nameLocation": "390:26:115",
-        "scope": 53713,
+        "nameLocation": "390:26:156",
+        "scope": 54516,
         "usedErrors": []
       }
     ],
     "license": "MIT"
   },
-  "id": 115
+  "id": 156
 }

@@ -12,8 +12,9 @@ use ethers::prelude::{
     Wallet,
 };
 use ethers::providers::Middleware;
-use ethers::types::{H256, U256};
+use ethers::types::{Uint8, H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
+use state_bridge::bridge::{self, bridged_world_id};
 use state_bridge::{
     bridge::{BridgedWorldID, IStateBridge},
     root::IWorldIdIdentityManager,
@@ -51,6 +52,28 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let client = NonceManagerMiddleware::new(client, wallet.address());
     let client = Arc::new(client);
 
+    let world_id_factory =
+        load_and_build_contract("./sol/WorldIDIdentityManagerMock.json", client.clone())?;
+
+    let world_id = world_id_factory
+        .deploy(U256::from_str("0x111").expect("couln't convert hex string to u256"))?
+        .confirmations(6usize)
+        .send()
+        .await?;
+
+    let world_id_mock_address = world_id.address();
+
+    let bridged_world_id_factory =
+        load_and_build_contract("./sol/MockBridgedWorldID.json", client.clone())?;
+
+    let bridged_world_id = bridged_world_id_factory
+        .deploy(Uint8::from(30))?
+        .confirmations(6usize)
+        .send()
+        .await?;
+
+    let bridged_world_id_address = bridged_world_id.address();
+
     let state_bridge_factory =
         load_and_build_contract("./sol/MockStateBridge.json", client.clone())?;
 
@@ -62,17 +85,7 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
 
     let state_bridge = MockStateBridge::new(state_bridge.address(), client.clone());
 
-    let bridged_world_id_address = state_bridge
-        .mock_bridged_world_id()
-        .await
-        .expect("couldn't get bridged world id address");
-
     let mock_bridged_world_id = BridgedWorldID::new(bridged_world_id_address, client.clone());
-
-    let world_id_mock_address = state_bridge
-        .world_id()
-        .await
-        .expect("couldn't get world id address");
 
     let mock_world_id = MockWorldID::new(world_id_mock_address, client.clone());
 

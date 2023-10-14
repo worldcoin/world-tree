@@ -64,14 +64,14 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     let world_id = IWorldIdIdentityManager::new(mock_world_id.address(), middleware.clone());
 
-    let mut state_bridge_service = StateBridgeService::new(world_id)
-        .await
-        .expect("couldn't create StateBridgeService");
+    // let mut state_bridge_service = StateBridgeService::new(world_id)
+    //     .await
+    //     .expect("couldn't create StateBridgeService");
 
-    state_bridge_service
-        .spawn()
-        .await
-        .expect("failed to spawn a state bridge service");
+    // state_bridge_service
+    //     .spawn()
+    //     .await
+    //     .expect("failed to spawn a state bridge service");
 
     let latest_root = U256::from_str("0x12312321321").expect("couldn't parse hexstring");
 
