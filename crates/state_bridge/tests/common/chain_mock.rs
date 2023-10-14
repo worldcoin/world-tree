@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::abi::{AbiDecode, AbiEncode};
+use ethers::abi::{AbiDecode, AbiEncode, Uint};
 use ethers::contract::Contract;
 use ethers::core::{k256::ecdsa::SigningKey, types::Bytes};
 use ethers::prelude::{
@@ -52,11 +52,13 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let client = NonceManagerMiddleware::new(client, wallet.address());
     let client = Arc::new(client);
 
+    let initial_root = U256::from_str("0x111").expect("couln't convert hex string to u256");
+
     let world_id_factory =
         load_and_build_contract("./sol/WorldIDIdentityManagerMock.json", client.clone())?;
 
     let world_id = world_id_factory
-        .deploy(U256::from_str("0x111").expect("couln't convert hex string to u256"))?
+        .deploy(initial_root)?
         .confirmations(6usize)
         .send()
         .await?;
@@ -66,8 +68,10 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let bridged_world_id_factory =
         load_and_build_contract("./sol/MockBridgedWorldID.json", client.clone())?;
 
+    let tree_depth = Uint8::from(30);
+
     let bridged_world_id = bridged_world_id_factory
-        .deploy(Uint8::from(30))?
+        .deploy(tree_depth)?
         .confirmations(6usize)
         .send()
         .await?;
@@ -78,7 +82,7 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
         load_and_build_contract("./sol/MockStateBridge.json", client.clone())?;
 
     let state_bridge = state_bridge_factory
-        .deploy(())?
+        .deploy((world_id_mock_address, bridged_world_id_address))?
         .confirmations(6usize)
         .send()
         .await?;
