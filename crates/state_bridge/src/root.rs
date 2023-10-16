@@ -70,13 +70,19 @@ where
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         tokio::spawn(async move {
+            dbg!("Spawning root service");
+
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
+
             let mut event_stream = filter.stream().await?.with_meta();
 
             // Listen to a stream of events, when a new event is received, update the root and block number
-            while let Some(Ok((log, _))) = event_stream.next().await {
+            while let Some(Ok((event, meta))) = event_stream.next().await {
+                dbg!(&event);
+                dbg!(&meta);
+
                 // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
-                root_tx.send(Uint::from_limbs(log.post_root.0))?;
+                root_tx.send(Uint::from_limbs(event.post_root.0))?;
             }
 
             Ok(())

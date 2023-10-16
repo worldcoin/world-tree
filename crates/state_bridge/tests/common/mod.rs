@@ -34,7 +34,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use state_bridge::bridge::{IStateBridge, StateBridge};
+use rand::rngs::mock;
+use state_bridge::bridge::{bridged_world_id, IStateBridge, StateBridge};
 use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 
@@ -50,44 +51,43 @@ struct CompiledContract {
 #[tokio::test]
 pub async fn test_relay_root() -> eyre::Result<()> {
     let MockChain {
-        anvil,
-        private_key,
         state_bridge,
         mock_bridged_world_id,
         mock_world_id,
         middleware,
+        ..
     } = spawn_mock_chain().await?;
-
-    let state_bridge = IStateBridge::new(state_bridge.address(), middleware.clone());
 
     let relaying_period = std::time::Duration::from_secs(5);
 
     let world_id = IWorldIdIdentityManager::new(mock_world_id.address(), middleware.clone());
 
-    // let mut state_bridge_service = StateBridgeService::new(world_id)
-    //     .await
-    //     .expect("couldn't create StateBridgeService");
+    state_bridge.propagate_root().send().await?.await?;
 
-    // state_bridge_service
-    //     .spawn()
-    //     .await
-    //     .expect("failed to spawn a state bridge service");
+    let mut state_bridge_service = StateBridgeService::new(world_id)
+        .await
+        .expect("couldn't create StateBridgeService");
+
+    state_bridge_service
+        .spawn()
+        .await
+        .expect("failed to spawn a state bridge service");
 
     let latest_root = U256::from_str("0x12312321321").expect("couldn't parse hexstring");
 
-    mock_world_id
-        .insert_root(latest_root)
-        .await
-        .expect("couldn't insert roots");
-
+    mock_world_id.insert_root(latest_root).send().await?.await?;
+    let mut bridged_world_id_root = mock_bridged_world_id.latest_root().call().await?;
     // in a loop:
-    for _i in 0..20 {
-        if latest_root != mock_bridged_world_id.latest_root().await? {
+    for _ in 0..20 {
+        if latest_root != bridged_world_id_root {
             tokio::time::sleep(relaying_period / 10).await;
+            bridged_world_id_root = mock_bridged_world_id.latest_root().call().await?;
         } else {
-            return Ok(());
+            break;
         }
     }
+
+    assert_eq!(latest_root, bridged_world_id_root);
 
     Ok(())
 }
