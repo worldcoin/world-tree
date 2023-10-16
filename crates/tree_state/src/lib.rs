@@ -1,29 +1,28 @@
 pub mod abi;
+pub mod block_scanner;
 pub mod error;
+pub mod index_packing;
 pub mod tree;
+pub mod tree_updater;
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::sync::Arc;
+use std::time::Duration;
 
-use abi::{IWorldIdIdentityManager, TreeChangedFilter};
 use error::TreeAvailabilityError;
-use ethers::{
-    contract::EthCall,
-    types::{BlockNumber, U64},
-};
-use ethers::{
-    providers::{Middleware, PubsubClient, StreamExt},
-    types::{H160, U256},
-};
+use ethers::providers::Middleware;
+use ethers::types::H160;
+use semaphore::lazy_merkle_tree::Canonical;
+use tokio::task::JoinHandle;
+use tree::{Hash, PoseidonTree, WorldTree};
+use tree_updater::TreeUpdater;
 
-use semaphore::lazy_merkle_tree::{Canonical, Derived};
-use tokio::{sync::RwLock, task::JoinHandle};
-use tree::{Hash, PoseidonTree, TreeData, WorldTree};
+// TODO: Change to a configurable parameter
+const TREE_HISTORY_SIZE: usize = 1000;
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
-    pub world_tree: Arc<WorldTree<TreeData<Canonical>, M>>,
+    pub world_tree: Arc<WorldTree>,
+    pub tree_updater: Arc<TreeUpdater<M>>,
+    pub middleware: Arc<M>,
 }
 
 impl<M: Middleware> TreeAvailabilityService<M> {
@@ -40,23 +39,34 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             &Hash::ZERO,
         );
 
+        let world_tree = Arc::new(WorldTree::new(tree, TREE_HISTORY_SIZE));
+
+        let tree_updater = Arc::new(TreeUpdater::new(
+            middleware.clone(),
+            world_tree_creation_block,
+            world_tree_address,
+        ));
+
         Self {
-            world_tree: Arc::new(WorldTree::new(
-                world_tree_address,
-                Arc::new(RwLock::new(TreeData::new(tree, 0))),
-                world_tree_creation_block,
-                middleware,
-            )),
+            world_tree,
+            tree_updater,
+            middleware,
         }
     }
 
-    pub async fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+    pub async fn spawn(
+        &self,
+    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let world_tree = self.world_tree.clone();
-        tokio::spawn(async move {
-            world_tree.sync_to_head().await?;
-            world_tree.listen_for_updates().await?;
+        let tree_updater = self.tree_updater.clone();
 
-            Ok(())
+        tokio::spawn(async move {
+            loop {
+                tree_updater.sync_to_head(&world_tree).await?;
+
+                // Sleep a little to unblock the executor
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
         })
     }
 }
@@ -65,24 +75,34 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
     use ethers::providers::{Provider, Ws};
     use ethers::types::H160;
-    use std::{str::FromStr, sync::Arc};
 
     use crate::TreeAvailabilityService;
 
     //TODO: set world tree address as const for tests
 
     async fn test_spawn_tree_availability_service() -> eyre::Result<()> {
-        let world_tree_address = H160::from_str("0x78eC127A3716D447F4575E9c834d452E397EE9E1")?;
+        let world_tree_address =
+            H160::from_str("0x78eC127A3716D447F4575E9c834d452E397EE9E1")?;
 
-        let middleware =
-            Arc::new(Provider::<Ws>::connect(std::env::var("GOERLI_WS_ENDPOINT")?).await?);
+        let middleware = Arc::new(
+            Provider::<Ws>::connect(std::env::var("GOERLI_WS_ENDPOINT")?)
+                .await?,
+        );
 
-        let tree_availability_service =
-            TreeAvailabilityService::new(30, 10, world_tree_address, 0, middleware);
+        let tree_availability_service = TreeAvailabilityService::new(
+            30,
+            10,
+            world_tree_address,
+            0,
+            middleware,
+        );
 
-        let handle = tree_availability_service.spawn().await;
+        let _handle = tree_availability_service.spawn().await;
 
         Ok(())
     }

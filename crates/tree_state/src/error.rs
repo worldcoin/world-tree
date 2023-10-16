@@ -1,14 +1,19 @@
 use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
-use ethers::types::{H160, U256};
 use thiserror::Error;
-use tokio::task::JoinError;
 
 #[derive(Error, Debug)]
 pub enum TreeAvailabilityError<M>
 where
     M: Middleware + 'static,
 {
+    // Internal errors
+    #[error("Missing transaction on log")]
+    MissingTransaction,
+    #[error("Unrecognized transaction")]
+    UnrecognizedTransaction,
+
+    // Third-party converted errors
     #[error("Middleware error")]
     MiddlewareError(<M as Middleware>::Error),
     #[error("Provider error")]
