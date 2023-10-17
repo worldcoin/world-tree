@@ -1,5 +1,4 @@
-use ethers::{prelude::abigen, providers::Middleware};
-use state_bridge::root::IWorldIdIdentityManager;
+use ethers::prelude::abigen;
 
 abigen!(
     MockWorldID,

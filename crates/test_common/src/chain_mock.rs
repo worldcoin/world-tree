@@ -8,18 +8,19 @@ use ethers::abi::{Abi, AbiDecode, AbiEncode, Uint};
 use ethers::contract::{abigen, Contract};
 use ethers::core::{k256::ecdsa::SigningKey, types::Bytes};
 use ethers::prelude::{
-    ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, SignerMiddleware,
-    Wallet,
+    ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
+    Signer, SignerMiddleware, Wallet,
 };
 use ethers::providers::{Middleware, Ws};
 use ethers::types::{Uint8, H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
-use state_bridge::bridge::{self, bridged_world_id};
 use tracing::{info, instrument};
 
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
 
-type TestMiddleware = NonceManagerMiddleware<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
+type TestMiddleware = NonceManagerMiddleware<
+    SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
+>;
 
 pub struct MockChain<M: Middleware> {
     pub anvil: AnvilInstance,
@@ -33,21 +34,23 @@ pub struct MockChain<M: Middleware> {
 pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let chain = Anvil::new().block_time(2u64).spawn();
 
-    let private_key = H256::from_slice(&chain.keys()[0].to_bytes());
+    let private_key = H256::from_slice(chain.keys()[0].to_bytes().as_slice());
 
-    let provider = Provider::<Http>::try_from(chain.endpoint())
+    let provider = Provider::<Http>::try_from("http://127.0.0.1:8545")
         .unwrap()
         .interval(Duration::from_millis(500u64));
 
     let chain_id = provider.get_chainid().await?.as_u64();
 
-    let wallet = LocalWallet::from(chain.keys()[0].clone()).with_chain_id(chain_id);
+    let wallet =
+        LocalWallet::from(chain.keys()[0].clone()).with_chain_id(chain_id);
 
     let client = SignerMiddleware::new(provider, wallet.clone());
     let client = NonceManagerMiddleware::new(client, wallet.address());
     let client = Arc::new(client);
 
-    let initial_root = U256::from_str("0x111").expect("couln't convert hex string to u256");
+    let initial_root =
+        U256::from_str("0x111").expect("couln't convert hex string to u256");
 
     let mock_world_id = MockWorldID::deploy(client.clone(), initial_root)
         .unwrap()
@@ -59,11 +62,12 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
 
     let tree_depth = Uint8::from(30);
 
-    let mock_bridged_world_id = MockBridgedWorldID::deploy(client.clone(), tree_depth)
-        .unwrap()
-        .send()
-        .await
-        .unwrap();
+    let mock_bridged_world_id =
+        MockBridgedWorldID::deploy(client.clone(), tree_depth)
+            .unwrap()
+            .send()
+            .await
+            .unwrap();
 
     let bridged_world_id_address = mock_bridged_world_id.address();
 

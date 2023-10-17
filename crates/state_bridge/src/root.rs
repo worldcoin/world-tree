@@ -16,11 +16,9 @@ use semaphore::{
 };
 
 pub type Hash = <PoseidonHash as Hasher>::Hash;
-
+use crate::error::StateBridgeError;
 use ethers::prelude::abigen;
 use tokio::task::JoinHandle;
-
-use crate::error::StateBridgeError;
 
 abigen!(
     IWorldIdIdentityManager,
@@ -56,8 +54,10 @@ where
     ) -> Result<Self, StateBridgeError<M>> {
         let (root_tx, _) = tokio::sync::broadcast::channel::<Hash>(1000);
 
-        let world_id_identity_manager =
-            IWorldIdIdentityManager::new(world_tree_address, middleware.clone());
+        let world_id_identity_manager = IWorldIdIdentityManager::new(
+            world_tree_address,
+            middleware.clone(),
+        );
 
         Ok(Self {
             world_id_identity_manager,
@@ -81,11 +81,29 @@ where
                 dbg!(&event);
                 dbg!(&meta);
 
+                dbg!(event.post_root.0);
+
                 // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
-                root_tx.send(Uint::from_limbs(event.post_root.0))?;
+                let _ = root_tx.send(Uint::from_limbs(event.post_root.0));
             }
 
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+    use test_common::chain_mock::{spawn_mock_chain, MockChain};
+
+    #[tokio::test]
+    async fn listen_and_propagate_root() -> eyre::Result<()> {
+        let (root_tx, root_rx) = tokio::sync::broadcast::channel::<Hash>(1000);
+
+        let MockChain { mock_world_id, .. } = spawn_mock_chain().await?;
+
+        Ok(())
     }
 }

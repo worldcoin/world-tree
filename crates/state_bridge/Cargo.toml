@@ -14,7 +14,7 @@ semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main"
 thiserror = "1.0.49"
 tracing = "0.1.37"
 chrono = { version = "0.4.31", features = ["serde"] } # TODO: maybe remove this
-tokio = {version = "1.32.0", features = ["sync","test-util", "macros"]}
+tokio = {version = "1.32.0", features = ["sync","test-util","macros"]}
 take_mut = "0.2.2"
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
 ethers = { version = "2.0.10", features = [
@@ -28,3 +28,6 @@ ruint = "1.10.1"
 eyre = "0.6.8"
 anyhow = "1.0.75"
 hex = "0.4.3"
+
+[dev-dependencies]
+test_common = {path = "../test_common"}

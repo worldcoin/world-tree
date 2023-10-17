@@ -1,0 +1,1248 @@
+{
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_mockWorldID",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_mockBridgedWorldID",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidRoot",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "mockBridgedWorldID",
+      "outputs": [
+        {
+          "internalType": "contract MockBridgedWorldID",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "propagateRoot",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "worldID",
+      "outputs": [
+        {
+          "internalType": "contract IWorldIDIdentityManager",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": {
+    "object": "0x608060405234801561001057600080fd5b5060405161058938038061058983398101604081905261002f916100d5565b61003833610069565b600180546001600160a01b039384166001600160a01b03199182161790915560028054929093169116179055610108565b600080546001600160a01b038381166001600160a01b0319831681178455604051919092169283917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09190a35050565b80516001600160a01b03811681146100d057600080fd5b919050565b600080604083850312156100e857600080fd5b6100f1836100b9565b91506100ff602084016100b9565b90509250929050565b610472806101176000396000f3fe608060405234801561001057600080fd5b50600436106100725760003560e01c80638da5cb5b116100505780638da5cb5b146100d2578063d9605de4146100f0578063f2fde38b1461011057600080fd5b80631213c3ef14610077578063380db829146100c0578063715018a6146100ca575b600080fd5b6001546100979073ffffffffffffffffffffffffffffffffffffffff1681565b60405173ffffffffffffffffffffffffffffffffffffffff909116815260200160405180910390f35b6100c8610123565b005b6100c86101c5565b60005473ffffffffffffffffffffffffffffffffffffffff16610097565b6002546100979073ffffffffffffffffffffffffffffffffffffffff1681565b6100c861011e36600461040f565b6101d9565b600154604080517fd7b0fef1000000000000000000000000000000000000000000000000000000008152905160009273ffffffffffffffffffffffffffffffffffffffff169163d7b0fef19160048083019260209291908290030181865afa158015610193573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906101b7919061044c565b90506101c281610292565b50565b6101cd610319565b6101d7600061039a565b565b6101e1610319565b73ffffffffffffffffffffffffffffffffffffffff8116610289576040517f08c379a000000000000000000000000000000000000000000000000000000000815260206004820152602660248201527f4f776e61626c653a206e6577206f776e657220697320746865207a65726f206160448201527f646472657373000000000000000000000000000000000000000000000000000060648201526084015b60405180910390fd5b6101c28161039a565b6002546040517ffbde929b0000000000000000000000000000000000000000000000000000000081526004810183905273ffffffffffffffffffffffffffffffffffffffff9091169063fbde929b90602401600060405180830381600087803b1580156102fe57600080fd5b505af1158015610312573d6000803e3d6000fd5b5050505050565b60005473ffffffffffffffffffffffffffffffffffffffff1633146101d7576040517f08c379a000000000000000000000000000000000000000000000000000000000815260206004820181905260248201527f4f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e65726044820152606401610280565b6000805473ffffffffffffffffffffffffffffffffffffffff8381167fffffffffffffffffffffffff0000000000000000000000000000000000000000831681178455604051919092169283917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09190a35050565b60006020828403121561042157600080fd5b813573ffffffffffffffffffffffffffffffffffffffff8116811461044557600080fd5b9392505050565b60006020828403121561045e57600080fd5b505191905056fea164736f6c634300080f000a",
+    "sourceMap": "536:1355:22:-:0;;;989:197;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;936:32:11;719:10:12;936:18:11;:32::i;:::-;1062:7:22;:47;;-1:-1:-1;;;;;1062:47:22;;;-1:-1:-1;;;;;;1062:47:22;;;;;;;1119:18;:60;;;;;;;;;;;536:1355;;2433:187:11;2506:16;2525:6;;-1:-1:-1;;;;;2541:17:11;;;-1:-1:-1;;;;;;2541:17:11;;;;;;2573:40;;2525:6;;;;;;;2573:40;;2506:16;2573:40;2496:124;2433:187;:::o;14:177:28:-;93:13;;-1:-1:-1;;;;;135:31:28;;125:42;;115:70;;181:1;178;171:12;115:70;14:177;;;:::o;196:293::-;275:6;283;336:2;324:9;315:7;311:23;307:32;304:52;;;352:1;349;342:12;304:52;375:40;405:9;375:40;:::i;:::-;365:50;;434:49;479:2;468:9;464:18;434:49;:::i;:::-;424:59;;196:293;;;;;:::o;:::-;536:1355:22;;;;;;",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x608060405234801561001057600080fd5b50600436106100725760003560e01c80638da5cb5b116100505780638da5cb5b146100d2578063d9605de4146100f0578063f2fde38b1461011057600080fd5b80631213c3ef14610077578063380db829146100c0578063715018a6146100ca575b600080fd5b6001546100979073ffffffffffffffffffffffffffffffffffffffff1681565b60405173ffffffffffffffffffffffffffffffffffffffff909116815260200160405180910390f35b6100c8610123565b005b6100c86101c5565b60005473ffffffffffffffffffffffffffffffffffffffff16610097565b6002546100979073ffffffffffffffffffffffffffffffffffffffff1681565b6100c861011e36600461040f565b6101d9565b600154604080517fd7b0fef1000000000000000000000000000000000000000000000000000000008152905160009273ffffffffffffffffffffffffffffffffffffffff169163d7b0fef19160048083019260209291908290030181865afa158015610193573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906101b7919061044c565b90506101c281610292565b50565b6101cd610319565b6101d7600061039a565b565b6101e1610319565b73ffffffffffffffffffffffffffffffffffffffff8116610289576040517f08c379a000000000000000000000000000000000000000000000000000000000815260206004820152602660248201527f4f776e61626c653a206e6577206f776e657220697320746865207a65726f206160448201527f646472657373000000000000000000000000000000000000000000000000000060648201526084015b60405180910390fd5b6101c28161039a565b6002546040517ffbde929b0000000000000000000000000000000000000000000000000000000081526004810183905273ffffffffffffffffffffffffffffffffffffffff9091169063fbde929b90602401600060405180830381600087803b1580156102fe57600080fd5b505af1158015610312573d6000803e3d6000fd5b5050505050565b60005473ffffffffffffffffffffffffffffffffffffffff1633146101d7576040517f08c379a000000000000000000000000000000000000000000000000000000000815260206004820181905260248201527f4f776e61626c653a2063616c6c6572206973206e6f7420746865206f776e65726044820152606401610280565b6000805473ffffffffffffffffffffffffffffffffffffffff8381167fffffffffffffffffffffffff0000000000000000000000000000000000000000831681178455604051919092169283917f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e09190a35050565b60006020828403121561042157600080fd5b813573ffffffffffffffffffffffffffffffffffffffff8116811461044557600080fd5b9392505050565b60006020828403121561045e57600080fd5b505191905056fea164736f6c634300080f000a",
+    "sourceMap": "536:1355:22:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;658:38;;;;;;;;;;;;223:42:28;211:55;;;193:74;;181:2;166:18;658:38:22;;;;;;;1388:141;;;:::i;:::-;;1831:101:11;;;:::i;1201:85::-;1247:7;1273:6;;;1201:85;;775:44:22;;;;;;;;;2081:198:11;;;;;;:::i;:::-;;:::i;1388:141:22:-;1451:7;;:20;;;;;;;;1430:18;;1451:7;;;:18;;:20;;;;;;;;;;;;;;:7;:20;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;1430:41;;1481;1511:10;1481:29;:41::i;:::-;1420:109;1388:141::o;1831:101:11:-;1094:13;:11;:13::i;:::-;1895:30:::1;1922:1;1895:18;:30::i;:::-;1831:101::o:0;2081:198::-;1094:13;:11;:13::i;:::-;2169:22:::1;::::0;::::1;2161:73;;;::::0;::::1;::::0;;1473:2:28;2161:73:11::1;::::0;::::1;1455:21:28::0;1512:2;1492:18;;;1485:30;1551:34;1531:18;;;1524:62;1622:8;1602:18;;;1595:36;1648:19;;2161:73:11::1;;;;;;;;;2244:28;2263:8;2244:18;:28::i;1774:115:22:-:0;1846:18;;:36;;;;;;;;1824:25:28;;;1846:18:22;;;;;:30;;1797:18:28;;1846:36:22;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1774:115;:::o;1359:130:11:-;1247:7;1273:6;1422:23;1273:6;719:10:12;1422:23:11;1414:68;;;;;;;2062:2:28;1414:68:11;;;2044:21:28;;;2081:18;;;2074:30;2140:34;2120:18;;;2113:62;2192:18;;1414:68:11;1860:356:28;2433:187:11;2506:16;2525:6;;;2541:17;;;;;;;;;;2573:40;;2525:6;;;;;;;2573:40;;2506:16;2573:40;2496:124;2433:187;:::o;768:309:28:-;827:6;880:2;868:9;859:7;855:23;851:32;848:52;;;896:1;893;886:12;848:52;935:9;922:23;985:42;978:5;974:54;967:5;964:65;954:93;;1043:1;1040;1033:12;954:93;1066:5;768:309;-1:-1:-1;;;768:309:28:o;1082:184::-;1152:6;1205:2;1193:9;1184:7;1180:23;1176:32;1173:52;;;1221:1;1218;1211:12;1173:52;-1:-1:-1;1244:16:28;;1082:184;-1:-1:-1;1082:184:28:o",
+    "linkReferences": {}
+  },
+  "methodIdentifiers": {
+    "mockBridgedWorldID()": "d9605de4",
+    "owner()": "8da5cb5b",
+    "propagateRoot()": "380db829",
+    "renounceOwnership()": "715018a6",
+    "transferOwnership(address)": "f2fde38b",
+    "worldID()": "1213c3ef"
+  },
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.15+commit.e14f2714\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_mockWorldID\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"_mockBridgedWorldID\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"InvalidRoot\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"mockBridgedWorldID\",\"outputs\":[{\"internalType\":\"contract MockBridgedWorldID\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"propagateRoot\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"worldID\",\"outputs\":[{\"internalType\":\"contract IWorldIDIdentityManager\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"Worldcoin\",\"custom:deployment\":\"deployed through make local-mock\",\"kind\":\"dev\",\"methods\":{\"owner()\":{\"details\":\"Returns the address of the current owner.\"},\"propagateRoot()\":{\"details\":\"Calls this method on the L1 Proxy contract to relay roots to WorldID supported chains.\"},\"renounceOwnership()\":{\"details\":\"Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner.\"},\"transferOwnership(address)\":{\"details\":\"Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner.\"}},\"title\":\"Mock State Bridge\",\"version\":1},\"userdoc\":{\"errors\":{\"InvalidRoot()\":[{\"notice\":\"Emmited when the root is not a valid root in the canonical WorldID Identity Manager contract\"}]},\"kind\":\"user\",\"methods\":{\"constructor\":{\"notice\":\"constructor\"},\"mockBridgedWorldID()\":{\"notice\":\"MockBridgedWorldID contract which will receive the root\"},\"propagateRoot()\":{\"notice\":\"Sends the latest WorldID Identity Manager root to the Bridged WorldID contract.\"},\"worldID()\":{\"notice\":\"WorldIDIdentityManagerMock contract which will hold a mock root\"}},\"notice\":\"Mock of the StateBridge to test functionality on a local chain\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/mock/MockStateBridge.sol\":\"MockStateBridge\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":10000},\"remappings\":[\":@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/\",\":@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/\",\":@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/\",\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@prb/test/=lib/prb-test/src/\",\":@rari-capital/solmate/=lib/solmate/\",\":ds-test/=lib/forge-std/lib/ds-test/src/\",\":forge-std/=lib/forge-std/src/\",\":fx-portal/contracts/=lib/contracts/contracts/\",\":openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/\",\":prb-test/=lib/prb-test/src/\",\":solmate/=lib/solmate/\",\":src/=src/\"]},\"sources\":{\"lib/openzeppelin-contracts/contracts/access/Ownable.sol\":{\"keccak256\":\"0xa94b34880e3c1b0b931662cb1c09e5dfa6662f31cba80e07c5ee71cd135c9673\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://40fb1b5102468f783961d0af743f91b9980cf66b50d1d12009f6bb1869cea4d2\",\"dweb:/ipfs/QmYqEbJML4jB1GHbzD4cUZDtJg5wVwNm3vDJq1GbyDus8y\"]},\"lib/openzeppelin-contracts/contracts/utils/Context.sol\":{\"keccak256\":\"0xe2e337e6dde9ef6b680e07338c493ebea1b5fd09b43424112868e9cc1706bca7\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://6df0ddf21ce9f58271bdfaa85cde98b200ef242a05a3f85c2bc10a8294800a92\",\"dweb:/ipfs/QmRK2Y5Yc6BK7tGKkgsgn3aJEQGi5aakeSPZvS65PV8Xp3\"]},\"src/SemaphoreVerifier.sol\":{\"keccak256\":\"0xfe9d9568afcaf3beacde57ea8b400f77f783505eaa77986dd9ea74c18fc8cc58\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://c86f9fd5e48269d983832e5725ecc57b7c73614c0fc372e53e4889fcf822345f\",\"dweb:/ipfs/QmegmxyJsrNP4iq5JkCg2YNvCpBPUHFPNWVsjg3oU9AvMF\"]},\"src/abstract/WorldIDBridge.sol\":{\"keccak256\":\"0xda64973fd8db8a48d1a3a956f749c1147382f20e49031b81693fab759de0559c\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://3e9a4610c779d89855a987466f77df1f0911a3e9493be1e09540fbd863bcd66d\",\"dweb:/ipfs/QmbVsDpZ8n8uUaBkrzJk8hrbm7sedeTCQKRjV9wM5b2ePC\"]},\"src/interfaces/ISemaphoreVerifier.sol\":{\"keccak256\":\"0x148cc393769ae9101bb83e6a3ad96b9ad4d3cfe3e603251b6b45e393154c4f49\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://d6caa4906d0823bf15a438a57acc2b63ef8ba86c411f979d712e75e6d883d585\",\"dweb:/ipfs/QmS6cmSQXYBC8zEyMan8pJDejahAM13sqNz8NfRb1QCmKs\"]},\"src/interfaces/IWorldID.sol\":{\"keccak256\":\"0x8e480116b6e51b7c9920e2e452f40a940f693b3318f6d6625c590ac87c2d9e02\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://eb203172fcf0b5b2a35fe2dd8cf62af220f0aabcb05ed306c7eaa3836edd6ee6\",\"dweb:/ipfs/QmZ6Z5wJHzWdCtLoNxNWFzKsb5WnT53mjamfziN1VhJbYv\"]},\"src/interfaces/IWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd\",\"dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1\"]},\"src/mock/MockBridgedWorldID.sol\":{\"keccak256\":\"0xd8c0319bda2662df713531e99d74ee429e70d1bc349f68dbedc0a0e718c26d00\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://00e30c544b4dadc5cfcebf1118846f2d0c8c4f234559753b4bac7bedba04f98a\",\"dweb:/ipfs/QmNWe47cm8rW2GUjwDMS2aZK92u4ciuvYAHmFxSy2A2iND\"]},\"src/mock/MockStateBridge.sol\":{\"keccak256\":\"0xfc932725b15a1a400a9b223ff824144d942918ae0675c00394c36379be5c7556\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://1426d3d99cf8ee4053f8e3bf68740215b749d2857315985d4f084e703556ed61\",\"dweb:/ipfs/QmSFWxE81zRS7ZA3pFKebqhPJBDCP1TZWMez3fXqjiABqC\"]},\"src/utils/SemaphoreTreeDepthValidator.sol\":{\"keccak256\":\"0x383ed25705dadfb674c7bd2f8c4999c6368da1bc63b9f212a9526ed3672e7acb\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://93f49cc11cc7a3b6d70aca44a223bfccfe5ccbc513e294076efb0d4b55b0e231\",\"dweb:/ipfs/QmSYASLuaNjFk6zyp436j5Meoa9M6ECnLure286bHKg1Ma\"]}},\"version\":1}",
+  "metadata": {
+    "compiler": {
+      "version": "0.8.15+commit.e14f2714"
+    },
+    "language": "Solidity",
+    "output": {
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "_mockWorldID",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "_mockBridgedWorldID",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidRoot"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "previousOwner",
+              "type": "address",
+              "indexed": true
+            },
+            {
+              "internalType": "address",
+              "name": "newOwner",
+              "type": "address",
+              "indexed": true
+            }
+          ],
+          "type": "event",
+          "name": "OwnershipTransferred",
+          "anonymous": false
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "mockBridgedWorldID",
+          "outputs": [
+            {
+              "internalType": "contract MockBridgedWorldID",
+              "name": "",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "owner",
+          "outputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "propagateRoot"
+        },
+        {
+          "inputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "renounceOwnership"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "newOwner",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "transferOwnership"
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "worldID",
+          "outputs": [
+            {
+              "internalType": "contract IWorldIDIdentityManager",
+              "name": "",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "devdoc": {
+        "kind": "dev",
+        "methods": {
+          "owner()": {
+            "details": "Returns the address of the current owner."
+          },
+          "propagateRoot()": {
+            "details": "Calls this method on the L1 Proxy contract to relay roots to WorldID supported chains."
+          },
+          "renounceOwnership()": {
+            "details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions anymore. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby removing any functionality that is only available to the owner."
+          },
+          "transferOwnership(address)": {
+            "details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+          }
+        },
+        "version": 1
+      },
+      "userdoc": {
+        "kind": "user",
+        "methods": {
+          "constructor": {
+            "notice": "constructor"
+          },
+          "mockBridgedWorldID()": {
+            "notice": "MockBridgedWorldID contract which will receive the root"
+          },
+          "propagateRoot()": {
+            "notice": "Sends the latest WorldID Identity Manager root to the Bridged WorldID contract."
+          },
+          "worldID()": {
+            "notice": "WorldIDIdentityManagerMock contract which will hold a mock root"
+          }
+        },
+        "version": 1
+      }
+    },
+    "settings": {
+      "remappings": [
+        "@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/",
+        "@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/",
+        "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+        "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+        "@prb/test/=lib/prb-test/src/",
+        "@rari-capital/solmate/=lib/solmate/",
+        "ds-test/=lib/forge-std/lib/ds-test/src/",
+        "forge-std/=lib/forge-std/src/",
+        "fx-portal/contracts/=lib/contracts/contracts/",
+        "openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/",
+        "openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
+        "prb-test/=lib/prb-test/src/",
+        "solmate/=lib/solmate/",
+        "src/=src/"
+      ],
+      "optimizer": {
+        "enabled": true,
+        "runs": 10000
+      },
+      "metadata": {
+        "bytecodeHash": "none"
+      },
+      "compilationTarget": {
+        "src/mock/MockStateBridge.sol": "MockStateBridge"
+      },
+      "libraries": {}
+    },
+    "sources": {
+      "lib/openzeppelin-contracts/contracts/access/Ownable.sol": {
+        "keccak256": "0xa94b34880e3c1b0b931662cb1c09e5dfa6662f31cba80e07c5ee71cd135c9673",
+        "urls": [
+          "bzz-raw://40fb1b5102468f783961d0af743f91b9980cf66b50d1d12009f6bb1869cea4d2",
+          "dweb:/ipfs/QmYqEbJML4jB1GHbzD4cUZDtJg5wVwNm3vDJq1GbyDus8y"
+        ],
+        "license": "MIT"
+      },
+      "lib/openzeppelin-contracts/contracts/utils/Context.sol": {
+        "keccak256": "0xe2e337e6dde9ef6b680e07338c493ebea1b5fd09b43424112868e9cc1706bca7",
+        "urls": [
+          "bzz-raw://6df0ddf21ce9f58271bdfaa85cde98b200ef242a05a3f85c2bc10a8294800a92",
+          "dweb:/ipfs/QmRK2Y5Yc6BK7tGKkgsgn3aJEQGi5aakeSPZvS65PV8Xp3"
+        ],
+        "license": "MIT"
+      },
+      "src/SemaphoreVerifier.sol": {
+        "keccak256": "0xfe9d9568afcaf3beacde57ea8b400f77f783505eaa77986dd9ea74c18fc8cc58",
+        "urls": [
+          "bzz-raw://c86f9fd5e48269d983832e5725ecc57b7c73614c0fc372e53e4889fcf822345f",
+          "dweb:/ipfs/QmegmxyJsrNP4iq5JkCg2YNvCpBPUHFPNWVsjg3oU9AvMF"
+        ],
+        "license": "MIT"
+      },
+      "src/abstract/WorldIDBridge.sol": {
+        "keccak256": "0xda64973fd8db8a48d1a3a956f749c1147382f20e49031b81693fab759de0559c",
+        "urls": [
+          "bzz-raw://3e9a4610c779d89855a987466f77df1f0911a3e9493be1e09540fbd863bcd66d",
+          "dweb:/ipfs/QmbVsDpZ8n8uUaBkrzJk8hrbm7sedeTCQKRjV9wM5b2ePC"
+        ],
+        "license": "MIT"
+      },
+      "src/interfaces/ISemaphoreVerifier.sol": {
+        "keccak256": "0x148cc393769ae9101bb83e6a3ad96b9ad4d3cfe3e603251b6b45e393154c4f49",
+        "urls": [
+          "bzz-raw://d6caa4906d0823bf15a438a57acc2b63ef8ba86c411f979d712e75e6d883d585",
+          "dweb:/ipfs/QmS6cmSQXYBC8zEyMan8pJDejahAM13sqNz8NfRb1QCmKs"
+        ],
+        "license": "MIT"
+      },
+      "src/interfaces/IWorldID.sol": {
+        "keccak256": "0x8e480116b6e51b7c9920e2e452f40a940f693b3318f6d6625c590ac87c2d9e02",
+        "urls": [
+          "bzz-raw://eb203172fcf0b5b2a35fe2dd8cf62af220f0aabcb05ed306c7eaa3836edd6ee6",
+          "dweb:/ipfs/QmZ6Z5wJHzWdCtLoNxNWFzKsb5WnT53mjamfziN1VhJbYv"
+        ],
+        "license": "MIT"
+      },
+      "src/interfaces/IWorldIDIdentityManager.sol": {
+        "keccak256": "0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf",
+        "urls": [
+          "bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd",
+          "dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1"
+        ],
+        "license": "MIT"
+      },
+      "src/mock/MockBridgedWorldID.sol": {
+        "keccak256": "0xd8c0319bda2662df713531e99d74ee429e70d1bc349f68dbedc0a0e718c26d00",
+        "urls": [
+          "bzz-raw://00e30c544b4dadc5cfcebf1118846f2d0c8c4f234559753b4bac7bedba04f98a",
+          "dweb:/ipfs/QmNWe47cm8rW2GUjwDMS2aZK92u4ciuvYAHmFxSy2A2iND"
+        ],
+        "license": "MIT"
+      },
+      "src/mock/MockStateBridge.sol": {
+        "keccak256": "0xfc932725b15a1a400a9b223ff824144d942918ae0675c00394c36379be5c7556",
+        "urls": [
+          "bzz-raw://1426d3d99cf8ee4053f8e3bf68740215b749d2857315985d4f084e703556ed61",
+          "dweb:/ipfs/QmSFWxE81zRS7ZA3pFKebqhPJBDCP1TZWMez3fXqjiABqC"
+        ],
+        "license": "MIT"
+      },
+      "src/utils/SemaphoreTreeDepthValidator.sol": {
+        "keccak256": "0x383ed25705dadfb674c7bd2f8c4999c6368da1bc63b9f212a9526ed3672e7acb",
+        "urls": [
+          "bzz-raw://93f49cc11cc7a3b6d70aca44a223bfccfe5ccbc513e294076efb0d4b55b0e231",
+          "dweb:/ipfs/QmSYASLuaNjFk6zyp436j5Meoa9M6ECnLure286bHKg1Ma"
+        ],
+        "license": "MIT"
+      }
+    },
+    "version": 1
+  },
+  "ast": {
+    "absolutePath": "src/mock/MockStateBridge.sol",
+    "id": 29404,
+    "exportedSymbols": {
+      "IWorldIDIdentityManager": [
+        29278
+      ],
+      "MockBridgedWorldID": [
+        29329
+      ],
+      "MockStateBridge": [
+        29403
+      ],
+      "Ownable": [
+        22914
+      ]
+    },
+    "nodeType": "SourceUnit",
+    "src": "32:1860:22",
+    "nodes": [
+      {
+        "id": 29331,
+        "nodeType": "PragmaDirective",
+        "src": "32:24:22",
+        "nodes": [],
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".15"
+        ]
+      },
+      {
+        "id": 29333,
+        "nodeType": "ImportDirective",
+        "src": "58:60:22",
+        "nodes": [],
+        "absolutePath": "src/mock/MockBridgedWorldID.sol",
+        "file": "./MockBridgedWorldID.sol",
+        "nameLocation": "-1:-1:-1",
+        "scope": 29404,
+        "sourceUnit": 29330,
+        "symbolAliases": [
+          {
+            "foreign": {
+              "id": 29332,
+              "name": "MockBridgedWorldID",
+              "nodeType": "Identifier",
+              "overloadedDeclarations": [],
+              "referencedDeclaration": 29329,
+              "src": "66:18:22",
+              "typeDescriptions": {}
+            },
+            "nameLocation": "-1:-1:-1"
+          }
+        ],
+        "unitAlias": ""
+      },
+      {
+        "id": 29335,
+        "nodeType": "ImportDirective",
+        "src": "119:83:22",
+        "nodes": [],
+        "absolutePath": "src/interfaces/IWorldIDIdentityManager.sol",
+        "file": "src/interfaces/IWorldIDIdentityManager.sol",
+        "nameLocation": "-1:-1:-1",
+        "scope": 29404,
+        "sourceUnit": 29279,
+        "symbolAliases": [
+          {
+            "foreign": {
+              "id": 29334,
+              "name": "IWorldIDIdentityManager",
+              "nodeType": "Identifier",
+              "overloadedDeclarations": [],
+              "referencedDeclaration": 29278,
+              "src": "127:23:22",
+              "typeDescriptions": {}
+            },
+            "nameLocation": "-1:-1:-1"
+          }
+        ],
+        "unitAlias": ""
+      },
+      {
+        "id": 29337,
+        "nodeType": "ImportDirective",
+        "src": "203:66:22",
+        "nodes": [],
+        "absolutePath": "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+        "file": "openzeppelin-contracts/access/Ownable.sol",
+        "nameLocation": "-1:-1:-1",
+        "scope": 29404,
+        "sourceUnit": 22915,
+        "symbolAliases": [
+          {
+            "foreign": {
+              "id": 29336,
+              "name": "Ownable",
+              "nodeType": "Identifier",
+              "overloadedDeclarations": [],
+              "referencedDeclaration": 22914,
+              "src": "211:7:22",
+              "typeDescriptions": {}
+            },
+            "nameLocation": "-1:-1:-1"
+          }
+        ],
+        "unitAlias": ""
+      },
+      {
+        "id": 29339,
+        "nodeType": "ImportDirective",
+        "src": "270:82:22",
+        "nodes": [],
+        "absolutePath": "src/interfaces/IWorldIDIdentityManager.sol",
+        "file": "../interfaces/IWorldIDIdentityManager.sol",
+        "nameLocation": "-1:-1:-1",
+        "scope": 29404,
+        "sourceUnit": 29279,
+        "symbolAliases": [
+          {
+            "foreign": {
+              "id": 29338,
+              "name": "IWorldIDIdentityManager",
+              "nodeType": "Identifier",
+              "overloadedDeclarations": [],
+              "referencedDeclaration": 29278,
+              "src": "278:23:22",
+              "typeDescriptions": {}
+            },
+            "nameLocation": "-1:-1:-1"
+          }
+        ],
+        "unitAlias": ""
+      },
+      {
+        "id": 29403,
+        "nodeType": "ContractDefinition",
+        "src": "536:1355:22",
+        "nodes": [
+          {
+            "id": 29346,
+            "nodeType": "VariableDeclaration",
+            "src": "658:38:22",
+            "nodes": [],
+            "constant": false,
+            "documentation": {
+              "id": 29343,
+              "nodeType": "StructuredDocumentation",
+              "src": "578:75:22",
+              "text": "@notice WorldIDIdentityManagerMock contract which will hold a mock root"
+            },
+            "functionSelector": "1213c3ef",
+            "mutability": "mutable",
+            "name": "worldID",
+            "nameLocation": "689:7:22",
+            "scope": 29403,
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+              "typeString": "contract IWorldIDIdentityManager"
+            },
+            "typeName": {
+              "id": 29345,
+              "nodeType": "UserDefinedTypeName",
+              "pathNode": {
+                "id": 29344,
+                "name": "IWorldIDIdentityManager",
+                "nodeType": "IdentifierPath",
+                "referencedDeclaration": 29278,
+                "src": "658:23:22"
+              },
+              "referencedDeclaration": 29278,
+              "src": "658:23:22",
+              "typeDescriptions": {
+                "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+                "typeString": "contract IWorldIDIdentityManager"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "id": 29350,
+            "nodeType": "VariableDeclaration",
+            "src": "775:44:22",
+            "nodes": [],
+            "constant": false,
+            "documentation": {
+              "id": 29347,
+              "nodeType": "StructuredDocumentation",
+              "src": "703:67:22",
+              "text": "@notice MockBridgedWorldID contract which will receive the root"
+            },
+            "functionSelector": "d9605de4",
+            "mutability": "mutable",
+            "name": "mockBridgedWorldID",
+            "nameLocation": "801:18:22",
+            "scope": 29403,
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+              "typeString": "contract MockBridgedWorldID"
+            },
+            "typeName": {
+              "id": 29349,
+              "nodeType": "UserDefinedTypeName",
+              "pathNode": {
+                "id": 29348,
+                "name": "MockBridgedWorldID",
+                "nodeType": "IdentifierPath",
+                "referencedDeclaration": 29329,
+                "src": "775:18:22"
+              },
+              "referencedDeclaration": 29329,
+              "src": "775:18:22",
+              "typeDescriptions": {
+                "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+                "typeString": "contract MockBridgedWorldID"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "id": 29353,
+            "nodeType": "ErrorDefinition",
+            "src": "935:20:22",
+            "nodes": [],
+            "documentation": {
+              "id": 29351,
+              "nodeType": "StructuredDocumentation",
+              "src": "826:104:22",
+              "text": "@notice Emmited when the root is not a valid root in the canonical WorldID Identity Manager contract"
+            },
+            "errorSelector": "504570e3",
+            "name": "InvalidRoot",
+            "nameLocation": "941:11:22",
+            "parameters": {
+              "id": 29352,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "952:2:22"
+            }
+          },
+          {
+            "id": 29374,
+            "nodeType": "FunctionDefinition",
+            "src": "989:197:22",
+            "nodes": [],
+            "body": {
+              "id": 29373,
+              "nodeType": "Block",
+              "src": "1052:134:22",
+              "nodes": [],
+              "statements": [
+                {
+                  "expression": {
+                    "id": 29365,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "id": 29361,
+                      "name": "worldID",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 29346,
+                      "src": "1062:7:22",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+                        "typeString": "contract IWorldIDIdentityManager"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "arguments": [
+                        {
+                          "id": 29363,
+                          "name": "_mockWorldID",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 29356,
+                          "src": "1096:12:22",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        }
+                      ],
+                      "expression": {
+                        "argumentTypes": [
+                          {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        ],
+                        "id": 29362,
+                        "name": "IWorldIDIdentityManager",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29278,
+                        "src": "1072:23:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_type$_t_contract$_IWorldIDIdentityManager_$29278_$",
+                          "typeString": "type(contract IWorldIDIdentityManager)"
+                        }
+                      },
+                      "id": 29364,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "kind": "typeConversion",
+                      "lValueRequested": false,
+                      "names": [],
+                      "nodeType": "FunctionCall",
+                      "src": "1072:37:22",
+                      "tryCall": false,
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+                        "typeString": "contract IWorldIDIdentityManager"
+                      }
+                    },
+                    "src": "1062:47:22",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+                      "typeString": "contract IWorldIDIdentityManager"
+                    }
+                  },
+                  "id": 29366,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1062:47:22"
+                },
+                {
+                  "expression": {
+                    "id": 29371,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "id": 29367,
+                      "name": "mockBridgedWorldID",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 29350,
+                      "src": "1119:18:22",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+                        "typeString": "contract MockBridgedWorldID"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "arguments": [
+                        {
+                          "id": 29369,
+                          "name": "_mockBridgedWorldID",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 29358,
+                          "src": "1159:19:22",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        }
+                      ],
+                      "expression": {
+                        "argumentTypes": [
+                          {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        ],
+                        "id": 29368,
+                        "name": "MockBridgedWorldID",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29329,
+                        "src": "1140:18:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_type$_t_contract$_MockBridgedWorldID_$29329_$",
+                          "typeString": "type(contract MockBridgedWorldID)"
+                        }
+                      },
+                      "id": 29370,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "kind": "typeConversion",
+                      "lValueRequested": false,
+                      "names": [],
+                      "nodeType": "FunctionCall",
+                      "src": "1140:39:22",
+                      "tryCall": false,
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+                        "typeString": "contract MockBridgedWorldID"
+                      }
+                    },
+                    "src": "1119:60:22",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+                      "typeString": "contract MockBridgedWorldID"
+                    }
+                  },
+                  "id": 29372,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1119:60:22"
+                }
+              ]
+            },
+            "documentation": {
+              "id": 29354,
+              "nodeType": "StructuredDocumentation",
+              "src": "961:23:22",
+              "text": "@notice constructor"
+            },
+            "implemented": true,
+            "kind": "constructor",
+            "modifiers": [],
+            "name": "",
+            "nameLocation": "-1:-1:-1",
+            "parameters": {
+              "id": 29359,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 29356,
+                  "mutability": "mutable",
+                  "name": "_mockWorldID",
+                  "nameLocation": "1009:12:22",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 29374,
+                  "src": "1001:20:22",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 29355,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1001:7:22",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 29358,
+                  "mutability": "mutable",
+                  "name": "_mockBridgedWorldID",
+                  "nameLocation": "1031:19:22",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 29374,
+                  "src": "1023:27:22",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 29357,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1023:7:22",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1000:51:22"
+            },
+            "returnParameters": {
+              "id": 29360,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1052:0:22"
+            },
+            "scope": 29403,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "id": 29389,
+            "nodeType": "FunctionDefinition",
+            "src": "1388:141:22",
+            "nodes": [],
+            "body": {
+              "id": 29388,
+              "nodeType": "Block",
+              "src": "1420:109:22",
+              "nodes": [],
+              "statements": [
+                {
+                  "assignments": [
+                    29379
+                  ],
+                  "declarations": [
+                    {
+                      "constant": false,
+                      "id": 29379,
+                      "mutability": "mutable",
+                      "name": "latestRoot",
+                      "nameLocation": "1438:10:22",
+                      "nodeType": "VariableDeclaration",
+                      "scope": 29388,
+                      "src": "1430:18:22",
+                      "stateVariable": false,
+                      "storageLocation": "default",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      },
+                      "typeName": {
+                        "id": 29378,
+                        "name": "uint256",
+                        "nodeType": "ElementaryTypeName",
+                        "src": "1430:7:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      "visibility": "internal"
+                    }
+                  ],
+                  "id": 29383,
+                  "initialValue": {
+                    "arguments": [],
+                    "expression": {
+                      "argumentTypes": [],
+                      "expression": {
+                        "id": 29380,
+                        "name": "worldID",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29346,
+                        "src": "1451:7:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_contract$_IWorldIDIdentityManager_$29278",
+                          "typeString": "contract IWorldIDIdentityManager"
+                        }
+                      },
+                      "id": 29381,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberName": "latestRoot",
+                      "nodeType": "MemberAccess",
+                      "referencedDeclaration": 29277,
+                      "src": "1451:18:22",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_external_view$__$returns$_t_uint256_$",
+                        "typeString": "function () view external returns (uint256)"
+                      }
+                    },
+                    "id": 29382,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1451:20:22",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "nodeType": "VariableDeclarationStatement",
+                  "src": "1430:41:22"
+                },
+                {
+                  "expression": {
+                    "arguments": [
+                      {
+                        "id": 29385,
+                        "name": "latestRoot",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29379,
+                        "src": "1511:10:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "id": 29384,
+                      "name": "_sendRootToMockBridgedWorldID",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 29402,
+                      "src": "1481:29:22",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_internal_nonpayable$_t_uint256_$returns$__$",
+                        "typeString": "function (uint256)"
+                      }
+                    },
+                    "id": 29386,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1481:41:22",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 29387,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1481:41:22"
+                }
+              ]
+            },
+            "documentation": {
+              "id": 29375,
+              "nodeType": "StructuredDocumentation",
+              "src": "1192:191:22",
+              "text": "@notice Sends the latest WorldID Identity Manager root to the Bridged WorldID contract.\n @dev Calls this method on the L1 Proxy contract to relay roots to WorldID supported chains."
+            },
+            "functionSelector": "380db829",
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "propagateRoot",
+            "nameLocation": "1397:13:22",
+            "parameters": {
+              "id": 29376,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1410:2:22"
+            },
+            "returnParameters": {
+              "id": 29377,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1420:0:22"
+            },
+            "scope": 29403,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "id": 29402,
+            "nodeType": "FunctionDefinition",
+            "src": "1774:115:22",
+            "nodes": [],
+            "body": {
+              "id": 29401,
+              "nodeType": "Block",
+              "src": "1836:53:22",
+              "nodes": [],
+              "statements": [
+                {
+                  "expression": {
+                    "arguments": [
+                      {
+                        "id": 29398,
+                        "name": "root",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29392,
+                        "src": "1877:4:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "expression": {
+                        "id": 29395,
+                        "name": "mockBridgedWorldID",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 29350,
+                        "src": "1846:18:22",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_contract$_MockBridgedWorldID_$29329",
+                          "typeString": "contract MockBridgedWorldID"
+                        }
+                      },
+                      "id": 29397,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberName": "receiveRoot",
+                      "nodeType": "MemberAccess",
+                      "referencedDeclaration": 29314,
+                      "src": "1846:30:22",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_external_nonpayable$_t_uint256_$returns$__$",
+                        "typeString": "function (uint256) external"
+                      }
+                    },
+                    "id": 29399,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1846:36:22",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 29400,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1846:36:22"
+                }
+              ]
+            },
+            "documentation": {
+              "id": 29390,
+              "nodeType": "StructuredDocumentation",
+              "src": "1612:157:22",
+              "text": "@dev Calls this method on the L1 Proxy contract to relay roots to WorldID supported chains.\n @param root The latest WorldID Identity Manager root."
+            },
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "_sendRootToMockBridgedWorldID",
+            "nameLocation": "1783:29:22",
+            "parameters": {
+              "id": 29393,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 29392,
+                  "mutability": "mutable",
+                  "name": "root",
+                  "nameLocation": "1821:4:22",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 29402,
+                  "src": "1813:12:22",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 29391,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1813:7:22",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1812:14:22"
+            },
+            "returnParameters": {
+              "id": 29394,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1836:0:22"
+            },
+            "scope": 29403,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "internal"
+          }
+        ],
+        "abstract": false,
+        "baseContracts": [
+          {
+            "baseName": {
+              "id": 29341,
+              "name": "Ownable",
+              "nodeType": "IdentifierPath",
+              "referencedDeclaration": 22914,
+              "src": "564:7:22"
+            },
+            "id": 29342,
+            "nodeType": "InheritanceSpecifier",
+            "src": "564:7:22"
+          }
+        ],
+        "canonicalName": "MockStateBridge",
+        "contractDependencies": [],
+        "contractKind": "contract",
+        "documentation": {
+          "id": 29340,
+          "nodeType": "StructuredDocumentation",
+          "src": "354:182:22",
+          "text": "@title Mock State Bridge\n @author Worldcoin\n @notice Mock of the StateBridge to test functionality on a local chain\n @custom:deployment deployed through make local-mock"
+        },
+        "fullyImplemented": true,
+        "linearizedBaseContracts": [
+          29403,
+          22914,
+          22936
+        ],
+        "name": "MockStateBridge",
+        "nameLocation": "545:15:22",
+        "scope": 29404,
+        "usedErrors": [
+          29353
+        ]
+      }
+    ],
+    "license": "MIT"
+  },
+  "id": 22
+}

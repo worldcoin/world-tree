@@ -3,7 +3,9 @@ use std::sync::Arc;
 use ruint::Uint;
 use tokio::time::Duration;
 
-use ethers::{middleware::contract::abigen, providers::Middleware, types::H160};
+use ethers::{
+    middleware::contract::abigen, providers::Middleware, types::H160,
+};
 use tokio::task::JoinHandle;
 
 use crate::{
@@ -55,10 +57,13 @@ impl<M: Middleware> StateBridge<M> {
         derived_middleware: Arc<M>,
         relaying_period: Duration,
     ) -> Result<Self, StateBridgeError<M>> {
-        let state_bridge = IStateBridge::new(bridge_address, canonical_middleware);
+        let state_bridge =
+            IStateBridge::new(bridge_address, canonical_middleware);
 
-        let bridged_world_id =
-            BridgedWorldID::new(bridged_world_id_address, derived_middleware.clone());
+        let bridged_world_id = BridgedWorldID::new(
+            bridged_world_id_address,
+            derived_middleware.clone(),
+        );
 
         Ok(Self {
             state_bridge,
@@ -79,9 +84,11 @@ impl<M: Middleware> StateBridge<M> {
             let mut latest_root = Hash::ZERO;
             loop {
                 // Process all of the updates and get the latest root
-                while let Ok(root) = root_rx.try_recv() {
+                while let Ok(root) = root_rx.recv().await {
                     // Check if the latest root is different than on L2 and if so, update the root
-                    latest_root = Uint::from_limbs(bridged_world_id.latest_root().call().await?.0);
+                    latest_root = Uint::from_limbs(
+                        bridged_world_id.latest_root().call().await?.0,
+                    );
 
                     if latest_root != root {
                         // Propagate root and ensure tx inclusion
@@ -89,7 +96,7 @@ impl<M: Middleware> StateBridge<M> {
                             .propagate_root()
                             .send()
                             .await?
-                            .confirmations(6)
+                            .confirmations(6usize)
                             .await?;
 
                         //TODO: Handle reorgs
@@ -99,6 +106,8 @@ impl<M: Middleware> StateBridge<M> {
                     // Sleep for the specified time interval, this still need to be added
                     tokio::time::sleep(relaying_period).await;
                 }
+
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         })
     }
