@@ -19,7 +19,7 @@ use tracing::{info, instrument};
 
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
 
-type TestMiddleware = NonceManagerMiddleware<SignerMiddleware<Provider<Ws>, Wallet<SigningKey>>>;
+type TestMiddleware = NonceManagerMiddleware<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
 pub struct MockChain<M: Middleware> {
     pub anvil: AnvilInstance,
@@ -35,9 +35,8 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
 
     let private_key = H256::from_slice(&chain.keys()[0].to_bytes());
 
-    let provider = Provider::<Ws>::connect(chain.ws_endpoint())
-        .await
-        .expect("Failed to initialize chain endpoint")
+    let provider = Provider::<Http>::try_from(chain.endpoint())
+        .unwrap()
         .interval(Duration::from_millis(500u64));
 
     let chain_id = provider.get_chainid().await?.as_u64();
