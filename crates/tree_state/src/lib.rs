@@ -1,34 +1,109 @@
-use std::collections::HashMap;
-
-use ethers::{
-    providers::{Middleware, PubsubClient},
-    types::H160,
-};
-use semaphore::lazy_merkle_tree::{Canonical, Derived};
-use tree::{builder::WorldTreeBuilder, Hash, TreeData, WorldTree};
+pub mod abi;
+pub mod block_scanner;
+pub mod error;
+pub mod index_packing;
 pub mod tree;
+pub mod tree_updater;
 
-//TODO: change to inherit both middleware and pubsub? or maybe just pubsub since we will be listening to streams?
-pub struct TreeAvailabilityService<M: Middleware + PubsubClient> {
-    pub canonical_tree: WorldTree<TreeData<Canonical>, M>,
-    pub derived_trees: HashMap<usize, WorldTree<TreeData<Derived>, M>>,
-    //TODO: add a field for join handles
+use std::sync::Arc;
+use std::time::Duration;
+
+use error::TreeAvailabilityError;
+use ethers::providers::Middleware;
+use ethers::types::H160;
+use semaphore::lazy_merkle_tree::Canonical;
+use tokio::task::JoinHandle;
+use tree::{Hash, PoseidonTree, WorldTree};
+use tree_updater::TreeUpdater;
+
+// TODO: Change to a configurable parameter
+const TREE_HISTORY_SIZE: usize = 1000;
+
+pub struct TreeAvailabilityService<M: Middleware + 'static> {
+    pub world_tree: Arc<WorldTree>,
+    pub tree_updater: Arc<TreeUpdater<M>>,
+    pub middleware: Arc<M>,
 }
 
-impl<M: Middleware + PubsubClient> TreeAvailabilityService<M> {
-    pub fn spawn() {
-        //         let canonical_tree_builder = CanonicalTreeBuilder::new(tree_depth, dense_prefix_depth);
+impl<M: Middleware> TreeAvailabilityService<M> {
+    pub fn new(
+        tree_depth: usize,
+        dense_prefix_depth: usize,
+        world_tree_address: H160,
+        world_tree_creation_block: u64,
+        middleware: Arc<M>,
+    ) -> Self {
+        let tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+            tree_depth,
+            dense_prefix_depth,
+            &Hash::ZERO,
+        );
 
-        //         //TODO: get the current block height and root for the canonical tree
+        let world_tree = Arc::new(WorldTree::new(tree, TREE_HISTORY_SIZE));
 
-        //         //TODO: get the current block height and root for the derived trees
+        let tree_updater = Arc::new(TreeUpdater::new(
+            middleware.clone(),
+            world_tree_creation_block,
+            world_tree_address,
+        ));
 
-        //         //TODO: check database and start sync from there
+        Self {
+            world_tree,
+            tree_updater,
+            middleware,
+        }
+    }
 
-        //         //TODO: get each block, get the identity updates and then update the tree accordingly
-        //         //TODO: after each update to the canonical tree, check if the derived tree's root is the same and if so cut a new derived tree, removing from the temp hashmap
+    pub async fn spawn(
+        &self,
+    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+        let world_tree = self.world_tree.clone();
+        let tree_updater = self.tree_updater.clone();
 
-        //         //TODO: after all trees are synced o the current block and initialize, spawn a task for each tree to listen for new blocks. The canonical tree will send updates through
-        //         //TODO: a broadcast channel and when a new root is received from the derived chain, it will process updates until it hits the new root.
+        tokio::spawn(async move {
+            loop {
+                tree_updater.sync_to_head(&world_tree).await?;
+
+                // Sleep a little to unblock the executor
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        })
+    }
+}
+
+//TODO: implement the api trait
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
+    use ethers::providers::{Provider, Ws};
+    use ethers::types::H160;
+
+    use crate::TreeAvailabilityService;
+
+    //TODO: set world tree address as const for tests
+
+    async fn test_spawn_tree_availability_service() -> eyre::Result<()> {
+        let world_tree_address =
+            H160::from_str("0x78eC127A3716D447F4575E9c834d452E397EE9E1")?;
+
+        let middleware = Arc::new(
+            Provider::<Ws>::connect(std::env::var("GOERLI_WS_ENDPOINT")?)
+                .await?,
+        );
+
+        let tree_availability_service = TreeAvailabilityService::new(
+            30,
+            10,
+            world_tree_address,
+            0,
+            middleware,
+        );
+
+        let _handle = tree_availability_service.spawn().await;
+
+        Ok(())
     }
 }

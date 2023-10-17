@@ -15,7 +15,15 @@ members = [
 
 [[bin]]
 name = "identity-sequencer"
-path = "bin/identity_sequencer.rs"
+path = "bin/identity_sequencer_service.rs"
 
+[[bin]]
+name = "state-bridge-service"
+path = "bin/state_bridge_service.rs"
+
+
+[[bin]]
+name = "tree-availability-service"
+path = "bin/tree_availability_service.rs"
 [dependencies]
 
