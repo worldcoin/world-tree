@@ -27,6 +27,7 @@ pub struct StateBridgeService<M: Middleware + 'static> {
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
+ 
 impl<M> StateBridgeService<M>
 where
     M: Middleware,
@@ -60,6 +61,8 @@ where
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
+
+        //TODO: maybe check that the bridges vec is not empty otherwise, return an error
 
         //TODO: add a comment why we spawn this first
         for bridge in self.state_bridges.iter() {
