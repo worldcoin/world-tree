@@ -77,7 +77,7 @@ where
             // Listen to a stream of events, when a new event is received, update the root and block number
             while let Some(Ok((event, _))) = event_stream.next().await {
                 // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
-                let _ = root_tx.send(Uint::from_limbs(event.post_root.0));
+                root_tx.send(Uint::from_limbs(event.post_root.0))?;
             }
 
             Ok(())
@@ -91,7 +91,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use test_common::chain_mock::{spawn_mock_chain, MockChain};
+    use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
 
     #[tokio::test]
     async fn listen_and_propagate_root() -> eyre::Result<()> {

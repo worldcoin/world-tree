@@ -817,6 +817,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "ethers",
+ "eyre",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4224,6 +4234,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "common",
  "ethers",
  "ethers-solc 2.0.10 (git+https://github.com/gakonst/ethers-rs)",
  "eyre",
@@ -4233,7 +4244,6 @@ dependencies = [
  "serde",
  "serde_json",
  "take_mut",
- "test_common",
  "thiserror",
  "tokio",
  "tracing",
@@ -4382,16 +4392,6 @@ dependencies = [
  "dirs-next",
  "rustversion",
  "winapi",
-]
-
-[[package]]
-name = "test_common"
-version = "0.1.0"
-dependencies = [
- "ethers",
- "eyre",
- "serde",
- "tracing",
 ]
 
 [[package]]

@@ -2,18 +2,18 @@ use ethers::prelude::abigen;
 
 abigen!(
     MockWorldID,
-    "sol/WorldIDIdentityManagerMock.json",
+    "src/test_utilities/abi/WorldIDIdentityManagerMock.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
 abigen!(
     MockStateBridge,
-    "sol/MockStateBridge.json",
+    "src/test_utilities/abi/MockStateBridge.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
 abigen!(
     MockBridgedWorldID,
-    "sol/MockBridgedWorldID.json",
+    "src/test_utilities/abi/MockBridgedWorldID.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );

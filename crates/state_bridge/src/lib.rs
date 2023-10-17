@@ -31,7 +31,9 @@ impl<M> StateBridgeService<M>
 where
     M: Middleware,
 {
-    pub async fn new(world_tree: IWorldIdIdentityManager<M>) -> Result<Self, StateBridgeError<M>> {
+    pub async fn new(
+        world_tree: IWorldIdIdentityManager<M>,
+    ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
             canonical_root: WorldTreeRoot::new(world_tree).await?,
             state_bridges: vec![],
@@ -43,7 +45,8 @@ where
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
-        let world_tree = IWorldIdIdentityManager::new(world_tree_address, middleware);
+        let world_tree =
+            IWorldIdIdentityManager::new(world_tree_address, middleware);
 
         Ok(Self {
             canonical_root: WorldTreeRoot::new(world_tree).await?,
@@ -57,12 +60,15 @@ where
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
-        self.handles.push(self.canonical_root.spawn().await);
 
+        //TODO: add a comment why we spawn this first
         for bridge in self.state_bridges.iter() {
-            self.handles
-                .push(bridge.spawn(self.canonical_root.root_tx.subscribe()).await);
+            self.handles.push(
+                bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
+            );
         }
+
+        self.handles.push(self.canonical_root.spawn().await);
 
         Ok(())
     }

@@ -23,7 +23,7 @@ use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 use std::str::FromStr;
 
-use test_common::chain_mock::{spawn_mock_chain, MockChain};
+use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CompiledContract {
