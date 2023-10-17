@@ -22,7 +22,7 @@
         },
         {
           "indexed": true,
-          "internalType": "enum WorldIDIdentityManagerMock.TreeChange",
+          "internalType": "enum MockWorldIDIdentityManager.TreeChange",
           "name": "kind",
           "type": "uint8"
         },
@@ -65,19 +65,19 @@
   ],
   "bytecode": {
     "object": "0x608060405234801561001057600080fd5b5060405161011938038061011983398101604081905261002f91610037565b600055610050565b60006020828403121561004957600080fd5b5051919050565b60bb8061005e6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c8063c46d227a146037578063d7b0fef1146048575b600080fd5b604660423660046096565b605d565b005b60005460405190815260200160405180910390f35b6000805482825590829060405183907f25f6d5cc356ee0b49cf708c13c68197947f5740a878a298765e4b18e4afdaf0490600090a45050565b60006020828403121560a757600080fd5b503591905056fea164736f6c634300080f000a",
-    "sourceMap": "381:1053:36:-:0;;;1071:69;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;1111:11;:22;381:1053;;14:184:43;84:6;137:2;125:9;116:7;112:23;108:32;105:52;;;153:1;150;143:12;105:52;-1:-1:-1;176:16:43;;14:184;-1:-1:-1;14:184:43:o;:::-;381:1053:36;;;;;;",
+    "sourceMap": "381:1053:36:-:0;;;1071:69;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;1111:11;:22;381:1053;;14:184:44;84:6;137:2;125:9;116:7;112:23;108:32;105:52;;;153:1;150;143:12;105:52;-1:-1:-1;176:16:44;;14:184;-1:-1:-1;14:184:44:o;:::-;381:1053:36;;;;;;",
     "linkReferences": {}
   },
   "deployedBytecode": {
     "object": "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063c46d227a146037578063d7b0fef1146048575b600080fd5b604660423660046096565b605d565b005b60005460405190815260200160405180910390f35b6000805482825590829060405183907f25f6d5cc356ee0b49cf708c13c68197947f5740a878a298765e4b18e4afdaf0490600090a45050565b60006020828403121560a757600080fd5b503591905056fea164736f6c634300080f000a",
-    "sourceMap": "381:1053:36:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1146:191;;;;;;:::i;:::-;;:::i;:::-;;1343:89;1388:7;1414:11;1343:89;;345:25:43;;;333:2;318:18;1343:89:36;;;;;;;1146:191;1201:15;1219:11;;1240:22;;;1219:11;1254:8;;1278:52;;1290:7;;1278:52;;;;;1191:146;1146:191;:::o;14:180:43:-;73:6;126:2;114:9;105:7;101:23;97:32;94:52;;;142:1;139;132:12;94:52;-1:-1:-1;165:23:43;;14:180;-1:-1:-1;14:180:43:o",
+    "sourceMap": "381:1053:36:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;1146:191;;;;;;:::i;:::-;;:::i;:::-;;1343:89;1388:7;1414:11;1343:89;;345:25:44;;;333:2;318:18;1343:89:36;;;;;;;1146:191;1201:15;1219:11;;1240:22;;;1219:11;1254:8;;1278:52;;1290:7;;1278:52;;;;;1191:146;1146:191;:::o;14:180:44:-;73:6;126:2;114:9;105:7;101:23;97:32;94:52;;;142:1;139;132:12;94:52;-1:-1:-1;165:23:44;;14:180;-1:-1:-1;14:180:44:o",
     "linkReferences": {}
   },
   "methodIdentifiers": {
     "insertRoot(uint256)": "c46d227a",
     "latestRoot()": "d7b0fef1"
   },
-  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.15+commit.e14f2714\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"initRoot\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"preRoot\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"enum WorldIDIdentityManagerMock.TreeChange\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"TreeChanged\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"insertRoot\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"latestRoot\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"Worldcoin\",\"details\":\"deployed through make mock and make local-mock\",\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"params\":{\"kind\":\"Either \\\"insertion\\\" or \\\"update\\\", the kind of alteration that was made to the        tree.\",\"postRoot\":\"The value of the tree's root after the update.\",\"preRoot\":\"The value of the tree's root before the update.\"}}},\"kind\":\"dev\",\"methods\":{},\"title\":\"WorldID Identity Manager Mock\",\"version\":1},\"userdoc\":{\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"notice\":\"Emitted when the current root of the tree is updated.\"}},\"kind\":\"user\",\"methods\":{\"latestRoot()\":{\"notice\":\"returns the latest root\"}},\"notice\":\"Mock of the WorldID Identity Manager contract (world-id-contracts) to test functionality on a local chain\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/mock/WorldIDIdentityManagerMock.sol\":\"WorldIDIdentityManagerMock\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":10000},\"remappings\":[\":@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/\",\":@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/\",\":@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/\",\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@prb/test/=lib/prb-test/src/\",\":@rari-capital/solmate/=lib/solmate/\",\":ds-test/=lib/forge-std/lib/ds-test/src/\",\":forge-std/=lib/forge-std/src/\",\":fx-portal/contracts/=lib/contracts/contracts/\",\":openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/\",\":prb-test/=lib/prb-test/src/\",\":solmate/=lib/solmate/\",\":src/=src/\"]},\"sources\":{\"src/interfaces/IWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd\",\"dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1\"]},\"src/mock/WorldIDIdentityManagerMock.sol\":{\"keccak256\":\"0xbc623ea97abf266b3acb9af8789d10dfde106aac026da8a67e4a598e00786939\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://705f38e90836dd00ed363a0ae908e96ad8a230450c6831a31f0c0973e166c600\",\"dweb:/ipfs/QmX1SJiBwmvPPidpZmmJL2twGq3f7i3gDLT5yvDb7TwhCf\"]}},\"version\":1}",
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.15+commit.e14f2714\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"initRoot\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"preRoot\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"enum MockWorldIDIdentityManager.TreeChange\",\"name\":\"kind\",\"type\":\"uint8\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"TreeChanged\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"postRoot\",\"type\":\"uint256\"}],\"name\":\"insertRoot\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"latestRoot\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"author\":\"Worldcoin\",\"details\":\"deployed through make mock and make local-mock\",\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"params\":{\"kind\":\"Either \\\"insertion\\\" or \\\"update\\\", the kind of alteration that was made to the        tree.\",\"postRoot\":\"The value of the tree's root after the update.\",\"preRoot\":\"The value of the tree's root before the update.\"}}},\"kind\":\"dev\",\"methods\":{},\"title\":\"WorldID Identity Manager Mock\",\"version\":1},\"userdoc\":{\"events\":{\"TreeChanged(uint256,uint8,uint256)\":{\"notice\":\"Emitted when the current root of the tree is updated.\"}},\"kind\":\"user\",\"methods\":{\"latestRoot()\":{\"notice\":\"returns the latest root\"}},\"notice\":\"Mock of the WorldID Identity Manager contract (world-id-contracts) to test functionality on a local chain\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/mock/MockWorldIDIdentityManager.sol\":\"MockWorldIDIdentityManager\"},\"evmVersion\":\"london\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"none\"},\"optimizer\":{\"enabled\":true,\"runs\":10000},\"remappings\":[\":@eth-optimism/contracts-bedrock/=node_modules/@eth-optimism/contracts-bedrock/\",\":@eth-optimism/contracts/=node_modules/@eth-optimism/contracts/\",\":@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/\",\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":@prb/test/=lib/prb-test/src/\",\":@rari-capital/solmate/=lib/solmate/\",\":ds-test/=lib/forge-std/lib/ds-test/src/\",\":forge-std/=lib/forge-std/src/\",\":fx-portal/contracts/=lib/contracts/contracts/\",\":openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/\",\":prb-test/=lib/prb-test/src/\",\":solmate/=lib/solmate/\",\":src/=src/\"]},\"sources\":{\"src/interfaces/IWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf088e152bce5d5dbf7ec47aeaf3e942bbea4f55a1f0b6422688dbe30f52ec6cf\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://e4a8e3951f0d3110b972a7ecc9374514e8ccb4d48affadbcac7c1ef1cee3d7dd\",\"dweb:/ipfs/QmYuWrenPXH92iRjkf9ERpcJuetEEqS3m9ykJW8Kaasyi1\"]},\"src/mock/MockWorldIDIdentityManager.sol\":{\"keccak256\":\"0xf81887da2d3a0d24b423c7837cb1f56b22fbbcfff267c2ee8e83ec1d53b3fd29\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://2fc5cfd68d31109af17f684c6203ae49b37d6335f00080b11021558d555c24c5\",\"dweb:/ipfs/QmZjPzQPo32gfKFyD1h6A8eT2UTwGFWtDWAFDxAyxg8vNR\"]}},\"version\":1}",
   "metadata": {
     "compiler": {
       "version": "0.8.15+commit.e14f2714"
@@ -105,7 +105,7 @@
               "indexed": true
             },
             {
-              "internalType": "enum WorldIDIdentityManagerMock.TreeChange",
+              "internalType": "enum MockWorldIDIdentityManager.TreeChange",
               "name": "kind",
               "type": "uint8",
               "indexed": true
@@ -187,7 +187,7 @@
         "bytecodeHash": "none"
       },
       "compilationTarget": {
-        "src/mock/WorldIDIdentityManagerMock.sol": "WorldIDIdentityManagerMock"
+        "src/mock/MockWorldIDIdentityManager.sol": "MockWorldIDIdentityManager"
       },
       "libraries": {}
     },
@@ -200,11 +200,11 @@
         ],
         "license": "MIT"
       },
-      "src/mock/WorldIDIdentityManagerMock.sol": {
-        "keccak256": "0xbc623ea97abf266b3acb9af8789d10dfde106aac026da8a67e4a598e00786939",
+      "src/mock/MockWorldIDIdentityManager.sol": {
+        "keccak256": "0xf81887da2d3a0d24b423c7837cb1f56b22fbbcfff267c2ee8e83ec1d53b3fd29",
         "urls": [
-          "bzz-raw://705f38e90836dd00ed363a0ae908e96ad8a230450c6831a31f0c0973e166c600",
-          "dweb:/ipfs/QmX1SJiBwmvPPidpZmmJL2twGq3f7i3gDLT5yvDb7TwhCf"
+          "bzz-raw://2fc5cfd68d31109af17f684c6203ae49b37d6335f00080b11021558d555c24c5",
+          "dweb:/ipfs/QmZjPzQPo32gfKFyD1h6A8eT2UTwGFWtDWAFDxAyxg8vNR"
         ],
         "license": "MIT"
       }
@@ -212,13 +212,13 @@
     "version": 1
   },
   "ast": {
-    "absolutePath": "src/mock/WorldIDIdentityManagerMock.sol",
+    "absolutePath": "src/mock/MockWorldIDIdentityManager.sol",
     "id": 32464,
     "exportedSymbols": {
       "IWorldIDIdentityManager": [
         32276
       ],
-      "WorldIDIdentityManagerMock": [
+      "MockWorldIDIdentityManager": [
         32463
       ]
     },
@@ -301,7 +301,7 @@
             "nodeType": "EnumDefinition",
             "src": "569:59:36",
             "nodes": [],
-            "canonicalName": "WorldIDIdentityManagerMock.TreeChange",
+            "canonicalName": "MockWorldIDIdentityManager.TreeChange",
             "members": [
               {
                 "id": 32411,
@@ -382,7 +382,7 @@
                   "storageLocation": "default",
                   "typeDescriptions": {
                     "typeIdentifier": "t_enum$_TreeChange_$32413",
-                    "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                    "typeString": "enum MockWorldIDIdentityManager.TreeChange"
                   },
                   "typeName": {
                     "id": 32418,
@@ -398,7 +398,7 @@
                     "src": "1014:10:36",
                     "typeDescriptions": {
                       "typeIdentifier": "t_enum$_TreeChange_$32413",
-                      "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                      "typeString": "enum MockWorldIDIdentityManager.TreeChange"
                     }
                   },
                   "visibility": "internal"
@@ -669,7 +669,7 @@
                           "src": "1299:10:36",
                           "typeDescriptions": {
                             "typeIdentifier": "t_type$_t_enum$_TreeChange_$32413_$",
-                            "typeString": "type(enum WorldIDIdentityManagerMock.TreeChange)"
+                            "typeString": "type(enum MockWorldIDIdentityManager.TreeChange)"
                           }
                         },
                         "id": 32449,
@@ -683,7 +683,7 @@
                         "src": "1299:20:36",
                         "typeDescriptions": {
                           "typeIdentifier": "t_enum$_TreeChange_$32413",
-                          "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                          "typeString": "enum MockWorldIDIdentityManager.TreeChange"
                         }
                       },
                       {
@@ -707,7 +707,7 @@
                         },
                         {
                           "typeIdentifier": "t_enum$_TreeChange_$32413",
-                          "typeString": "enum WorldIDIdentityManagerMock.TreeChange"
+                          "typeString": "enum MockWorldIDIdentityManager.TreeChange"
                         },
                         {
                           "typeIdentifier": "t_uint256",
@@ -722,7 +722,7 @@
                       "src": "1278:11:36",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_event_nonpayable$_t_uint256_$_t_enum$_TreeChange_$32413_$_t_uint256_$returns$__$",
-                        "typeString": "function (uint256,enum WorldIDIdentityManagerMock.TreeChange,uint256)"
+                        "typeString": "function (uint256,enum MockWorldIDIdentityManager.TreeChange,uint256)"
                       }
                     },
                     "id": 32451,
@@ -898,7 +898,7 @@
             "src": "420:23:36"
           }
         ],
-        "canonicalName": "WorldIDIdentityManagerMock",
+        "canonicalName": "MockWorldIDIdentityManager",
         "contractDependencies": [],
         "contractKind": "contract",
         "documentation": {
@@ -912,7 +912,7 @@
           32463,
           32276
         ],
-        "name": "WorldIDIdentityManagerMock",
+        "name": "MockWorldIDIdentityManager",
         "nameLocation": "390:26:36",
         "scope": 32464,
         "usedErrors": []

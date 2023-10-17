@@ -2,7 +2,7 @@ use ethers::prelude::abigen;
 
 abigen!(
     MockWorldID,
-    "src/test_utilities/abi/WorldIDIdentityManagerMock.json",
+    "src/test_utilities/abi/MockWorldIDIdentityManager.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 

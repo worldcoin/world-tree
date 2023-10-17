@@ -16,12 +16,12 @@ use crate::{
 abigen!(
     IStateBridge,
     r#"[
-    function propagateRoot() external
+        function propagateRoot() external
     ]"#;
 );
 
 abigen!(
-    BridgedWorldID,
+    IBridgedWorldID,
     r#"[
         event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
         event RootAdded(uint256 root, uint128 timestamp)
@@ -33,14 +33,14 @@ abigen!(
 
 pub struct StateBridge<M: Middleware + 'static> {
     pub state_bridge: IStateBridge<M>,
-    pub bridged_world_id: BridgedWorldID<M>,
+    pub bridged_world_id: IBridgedWorldID<M>,
     pub relaying_period: Duration,
 }
 
 impl<M: Middleware> StateBridge<M> {
     pub fn new(
         state_bridge: IStateBridge<M>,
-        bridged_world_id: BridgedWorldID<M>,
+        bridged_world_id: IBridgedWorldID<M>,
         relaying_period: Duration,
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
@@ -60,7 +60,7 @@ impl<M: Middleware> StateBridge<M> {
         let state_bridge =
             IStateBridge::new(bridge_address, canonical_middleware);
 
-        let bridged_world_id = BridgedWorldID::new(
+        let bridged_world_id = IBridgedWorldID::new(
             bridged_world_id_address,
             derived_middleware.clone(),
         );

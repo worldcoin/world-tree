@@ -1,3 +1,5 @@
+//! crate level docs
+
 pub mod bridge;
 pub mod error;
 pub mod root;

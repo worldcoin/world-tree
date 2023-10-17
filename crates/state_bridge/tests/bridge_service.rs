@@ -18,7 +18,7 @@ pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
 
-use state_bridge::bridge::{BridgedWorldID, IStateBridge, StateBridge};
+use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
 use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 use std::str::FromStr;
@@ -34,7 +34,7 @@ struct CompiledContract {
 #[tokio::test]
 pub async fn test_relay_root() -> eyre::Result<()> {
     let MockChain {
-        state_bridge,
+        mock_state_bridge,
         mock_bridged_world_id,
         mock_world_id,
         middleware,
@@ -49,9 +49,9 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         middleware.clone(),
     );
 
-    state_bridge.propagate_root().send().await?.await?;
+    mock_state_bridge.propagate_root().send().await?.await?;
 
-    let state_bridge_address = state_bridge.address();
+    let state_bridge_address = mock_state_bridge.address();
 
     let bridged_world_id_address = mock_bridged_world_id.address();
 
@@ -63,7 +63,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         IStateBridge::new(state_bridge_address, middleware.clone());
 
     let bridged_world_id =
-        BridgedWorldID::new(bridged_world_id_address, middleware.clone());
+        IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
 
     let state_bridge =
         StateBridge::new(state_bridge, bridged_world_id, relaying_period)
@@ -83,10 +83,10 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     let mut bridged_world_id_root =
         mock_bridged_world_id.latest_root().call().await?;
-    // in a loop:
+
     for _ in 0..20 {
         if latest_root != bridged_world_id_root {
-            tokio::time::sleep(relaying_period / 10).await;
+            tokio::time::sleep(relaying_period / 5).await;
             bridged_world_id_root =
                 mock_bridged_world_id.latest_root().call().await?;
         } else {
