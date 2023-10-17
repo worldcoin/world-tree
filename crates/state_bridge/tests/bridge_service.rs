@@ -12,21 +12,13 @@ pub use ethers::providers::Middleware;
 pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
 pub use ethers_solc::artifacts::Bytecode;
-use rand::rngs::mock;
-pub use semaphore::identity::Identity;
-pub use semaphore::merkle_tree::{self, Branch};
-pub use semaphore::poseidon_tree::{PoseidonHash, PoseidonTree};
-pub use semaphore::protocol::{self, generate_nullifier_hash, generate_proof};
-pub use semaphore::{hash_to_field, Field};
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
 
-use state_bridge::bridge::{
-    bridged_world_id, BridgedWorldID, IStateBridge, StateBridge,
-};
+use state_bridge::bridge::{BridgedWorldID, IStateBridge, StateBridge};
 use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 use std::str::FromStr;
@@ -46,6 +38,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         mock_bridged_world_id,
         mock_world_id,
         middleware,
+        anvil,
         ..
     } = spawn_mock_chain().await?;
 

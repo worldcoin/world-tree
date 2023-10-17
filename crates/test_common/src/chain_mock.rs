@@ -11,7 +11,7 @@ use ethers::prelude::{
     ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
     Signer, SignerMiddleware, Wallet,
 };
-use ethers::providers::{Middleware, Ws};
+use ethers::providers::Middleware;
 use ethers::types::{Uint8, H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
 use tracing::{info, instrument};
@@ -34,10 +34,10 @@ pub struct MockChain<M: Middleware> {
 pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let chain = Anvil::new().block_time(2u64).spawn();
 
-    let private_key = H256::from_slice(chain.keys()[0].to_bytes().as_slice());
+    let private_key = H256::from_slice(&chain.keys()[0].to_bytes());
 
-    let provider = Provider::<Http>::try_from("http://127.0.0.1:8545")
-        .unwrap()
+    let provider = Provider::<Http>::try_from(chain.endpoint())
+        .expect("Failed to initialize chain endpoint")
         .interval(Duration::from_millis(500u64));
 
     let chain_id = provider.get_chainid().await?.as_u64();

@@ -18,7 +18,7 @@ use semaphore::{
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 use crate::error::StateBridgeError;
 use ethers::prelude::abigen;
-use tokio::task::JoinHandle;
+use tokio::{task::JoinHandle, time::Duration};
 
 abigen!(
     IWorldIdIdentityManager,
@@ -77,12 +77,7 @@ where
             let mut event_stream = filter.stream().await?.with_meta();
 
             // Listen to a stream of events, when a new event is received, update the root and block number
-            while let Some(Ok((event, meta))) = event_stream.next().await {
-                dbg!(&event);
-                dbg!(&meta);
-
-                dbg!(event.post_root.0);
-
+            while let Some(Ok((event, _))) = event_stream.next().await {
                 // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
                 let _ = root_tx.send(Uint::from_limbs(event.post_root.0));
             }
@@ -95,14 +90,51 @@ where
 #[cfg(test)]
 
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use test_common::chain_mock::{spawn_mock_chain, MockChain};
 
     #[tokio::test]
     async fn listen_and_propagate_root() -> eyre::Result<()> {
-        let (root_tx, root_rx) = tokio::sync::broadcast::channel::<Hash>(1000);
+        let MockChain {
+            mock_world_id,
+            middleware,
+            anvil,
+            ..
+        } = spawn_mock_chain().await?;
 
-        let MockChain { mock_world_id, .. } = spawn_mock_chain().await?;
+        let world_id = IWorldIdIdentityManager::new(
+            mock_world_id.address(),
+            middleware.clone(),
+        );
+
+        let tree_root = WorldTreeRoot::new(world_id).await?;
+
+        tree_root.spawn().await;
+
+        let test_root = U256::from_str("0x222").unwrap();
+
+        mock_world_id.insert_root(test_root).send().await?.await?;
+
+        let mut root_rx = tree_root.root_tx.subscribe();
+
+        let relaying_period = Duration::from_secs(5);
+
+        tokio::spawn(async move {
+            loop {
+                // Process all of the updates and get the latest root
+                while let Ok(root) = root_rx.recv().await {
+                    if root == Uint::from_limbs(test_root.0) {
+                        break;
+                    }
+                    // Check if the latest root is different than on L2 and if so, update the root
+                    tokio::time::sleep(relaying_period).await;
+                }
+
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
 
         Ok(())
     }
