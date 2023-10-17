@@ -70,8 +70,6 @@ where
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         tokio::spawn(async move {
-            dbg!("Spawning root service");
-
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
 
             let mut event_stream = filter.stream().await?.with_meta();
