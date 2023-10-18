@@ -1,38 +1,47 @@
+//! crate level docs
+
 pub mod bridge;
 pub mod error;
 pub mod root;
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use bridge::StateBridge;
 use error::StateBridgeError;
-use ethers::{
-    providers::{Middleware, PubsubClient},
-    types::{spoof::State, H160, U256},
-};
-use root::WorldTreeRoot;
-use semaphore::{
-    merkle_tree::Hasher,
-    poseidon_tree::{PoseidonHash, Proof},
-};
+use ethers::{providers::Middleware, types::H160};
+use root::{IWorldIdIdentityManager, WorldTreeRoot};
+
 use tokio::task::JoinHandle;
 
-pub struct StateBridgeService<M: Middleware + PubsubClient + 'static> {
+pub struct StateBridgeService<M: Middleware + 'static> {
     pub canonical_root: WorldTreeRoot<M>,
     pub state_bridges: Vec<StateBridge<M>>,
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
-impl<M: Middleware + PubsubClient> StateBridgeService<M> {
+impl<M> StateBridgeService<M>
+where
+    M: Middleware,
+{
     pub async fn new(
+        world_tree: IWorldIdIdentityManager<M>,
+    ) -> Result<Self, StateBridgeError<M>> {
+        Ok(Self {
+            canonical_root: WorldTreeRoot::new(world_tree).await?,
+            state_bridges: vec![],
+            handles: vec![],
+        })
+    }
+
+    pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
+        let world_tree =
+            IWorldIdIdentityManager::new(world_tree_address, middleware);
+
         Ok(Self {
-            canonical_root: WorldTreeRoot::new(world_tree_address, middleware).await?,
+            canonical_root: WorldTreeRoot::new(world_tree).await?,
             state_bridges: vec![],
             handles: vec![],
         })
@@ -43,12 +52,16 @@ impl<M: Middleware + PubsubClient> StateBridgeService<M> {
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
-        self.handles.push(self.canonical_root.spawn().await);
+        //TODO: maybe check that the bridges vec is not empty otherwise, return an error
 
+        //TODO: add a comment why we spawn this first
         for bridge in self.state_bridges.iter() {
-            self.handles
-                .push(bridge.spawn(self.canonical_root.root_tx.subscribe()).await);
+            self.handles.push(
+                bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
+            );
         }
+
+        self.handles.push(self.canonical_root.spawn().await);
 
         Ok(())
     }

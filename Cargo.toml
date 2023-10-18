@@ -10,6 +10,7 @@ members = [
   "crates/sequencer",
   "crates/tree_state",
   "crates/state_bridge",
+  "crates/common"
 ]
 
 
