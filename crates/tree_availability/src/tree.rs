@@ -2,11 +2,12 @@ use std::collections::VecDeque;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use axum::middleware;
 use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
-use ethers::providers::Middleware;
+use ethers::providers::{FilterWatcher, Middleware};
 use ethers::types::{BlockNumber, Filter, H160, U256};
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
@@ -69,11 +70,13 @@ impl<M: Middleware> WorldTree<M> {
     pub async fn spawn(
         &self,
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        self.sync_to_head(None).await?;
+        //TODO: start stream in a task and buffer in a channel
 
-        tokio::spawn(async move {
-            // listen for updates to the tree
-        })
+        //TODO: sync to head
+
+        //TODO: handle all events from stream
+
+        todo!()
     }
 
     pub async fn insert_many_at(
