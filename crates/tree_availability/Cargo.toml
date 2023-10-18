@@ -6,7 +6,8 @@ edition = "2021"
 
 
 [dependencies]
-serde = "1.0.188"
+serde = { version = "1.0.189", features = ["derive"] }
+
 serde_json = "1.0.107"
 semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
     "depth_20",
@@ -25,3 +26,5 @@ ethers = { version = "2.0.10", features = [
 eyre = "0.6.8"
 axum = "0.6.20"
 clap = "4.4.6"
+hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
+

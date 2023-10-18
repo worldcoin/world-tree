@@ -24,4 +24,9 @@ where
     ABICodecError(#[from] AbiError),
     #[error("Eth ABI error")]
     EthABIError(#[from] ethers::abi::Error),
+    #[error(transparent)]
+    HyperError(#[from] hyper::Error),
 }
+
+#[derive(Error, Debug)]
+pub enum TreeError {}

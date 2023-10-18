@@ -6,6 +6,7 @@ pub mod server;
 pub mod tree;
 pub mod tree_updater;
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,7 +25,9 @@ use crate::server::inclusion_proof;
 
 // TODO: Change to a configurable parameter
 const TREE_HISTORY_SIZE: usize = 1000;
-
+const DEFAULT_SOCKET_ADDR: SocketAddr =
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DEFAULT_PORT);
+const DEFAULT_PORT: u16 = 8080;
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
     pub world_tree: Arc<WorldTree>,
     pub tree_updater: Arc<TreeUpdater<M>>,
@@ -79,41 +82,37 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         })
     }
 
-    //TODO: rename this, this function spawns the api service
     pub async fn serve(
         self,
-    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        let handle = self.spawn().await;
+        address: Option<SocketAddr>,
+    ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
+        let mut handles = vec![];
+
+        let world_tree_handle = self.spawn().await;
+        handles.push(world_tree_handle);
 
         let router = axum::Router::new()
-            .route(
-                "/inclusionProof",
-                axum::routing::post(Self::inclusion_proof),
-            )
+            .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .with_state(self.world_tree.clone());
 
-        todo!();
+        let address = address.unwrap_or_else(|| DEFAULT_SOCKET_ADDR);
+
+        let server_handle = tokio::spawn(async move {
+            axum::Server::bind(&address)
+                .serve(router.into_make_service())
+                .await
+                .map_err(TreeAvailabilityError::HyperError)?;
+            // .with_graceful_shutdown(await_shutdown());
+
+            Ok(())
+        });
+
+        handles.push(server_handle);
+
+        handles
     }
-
-    async fn inclusion_proof(
-        State(world_tree): State<Arc<WorldTree>>,
-        Json(inclusion_proof_request): Json<InclusionProofRequest>,
-    ) -> Result<
-        (StatusCode, Json<InclusionProofResponse>),
-        TreeAvailabilityError<M>,
-    > {
-        todo!();
-    }
 }
 
-pub struct InclusionProofRequest {
-    pub identity_commitment: Hash,
-    pub root: Hash,
-}
-
-pub struct InclusionProofResponse {
-    //TODO:
-}
 //TODO: implement the api trait
 
 #[cfg(test)]
