@@ -8,10 +8,7 @@ use ethers::{
 };
 use tokio::task::JoinHandle;
 
-use crate::{
-    error::StateBridgeError,
-    root::{self, Hash},
-};
+use crate::{error::StateBridgeError, root::Hash};
 
 abigen!(
     IStateBridge,
@@ -81,13 +78,13 @@ impl<M: Middleware> StateBridge<M> {
         let relaying_period = self.relaying_period;
 
         tokio::spawn(async move {
-            let mut latest_bridged_root = Hash::ZERO;
+            let mut latest_bridged_root;
             let mut latest_root = Hash::ZERO;
 
             loop {
                 // Process all of the updates and get the latest root
                 //TODO: explain why we use try_recv and drain the channel from updates rather than just using recv
-                //TODO: we can maybe just notify across threads when the value is updated instead of using a channel, 
+                //TODO: we can maybe just notify across threads when the value is updated instead of using a channel,
                 //TODO: allowing us to always have the most recent value and avoiding the need to drain the channel
                 while let Ok(root) = root_rx.try_recv() {
                     //TODO: Handle reorgs

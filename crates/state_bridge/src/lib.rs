@@ -4,23 +4,13 @@ pub mod bridge;
 pub mod error;
 pub mod root;
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use bridge::StateBridge;
 use error::StateBridgeError;
-use ethers::{
-    core::utils::Anvil,
-    providers::Middleware,
-    types::{spoof::State, H160, U256},
-};
+use ethers::{providers::Middleware, types::H160};
 use root::{IWorldIdIdentityManager, WorldTreeRoot};
-use semaphore::{
-    merkle_tree::Hasher,
-    poseidon_tree::{PoseidonHash, Proof},
-};
+
 use tokio::task::JoinHandle;
 
 pub struct StateBridgeService<M: Middleware + 'static> {
@@ -29,7 +19,6 @@ pub struct StateBridgeService<M: Middleware + 'static> {
     pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
- 
 impl<M> StateBridgeService<M>
 where
     M: Middleware,
@@ -63,7 +52,6 @@ where
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
-
         //TODO: maybe check that the bridges vec is not empty otherwise, return an error
 
         //TODO: add a comment why we spawn this first

@@ -33,6 +33,8 @@ struct CompiledContract {
 
 #[tokio::test]
 pub async fn test_relay_root() -> eyre::Result<()> {
+    // we need anvil to be in scope in order for the middleware provider to not be dropped
+    #[allow(unused_variables)]
     let MockChain {
         mock_state_bridge,
         mock_bridged_world_id,

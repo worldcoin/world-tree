@@ -1,24 +1,14 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use ethers::middleware::Middleware;
-use ethers::{
-    contract::Contract,
-    providers::{MiddlewareError, StreamExt},
-    types::{Filter, H160, U256},
-};
+use ethers::{providers::StreamExt, types::H160};
 use ruint::Uint;
-use semaphore::{
-    merkle_tree::Hasher,
-    poseidon_tree::{PoseidonHash, Proof},
-};
+use semaphore::{merkle_tree::Hasher, poseidon_tree::PoseidonHash};
 
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 use crate::error::StateBridgeError;
 use ethers::prelude::abigen;
-use tokio::{task::JoinHandle, time::Duration};
+use tokio::task::JoinHandle;
 
 abigen!(
     IWorldIdIdentityManager,
@@ -92,9 +82,13 @@ mod tests {
 
     use super::*;
     use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
+    use ethers::types::U256;
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn listen_and_propagate_root() -> eyre::Result<()> {
+        // we need anvil to be in scope for the provider to not be dropped
+        #[allow(unused_variables)]
         let MockChain {
             mock_world_id,
             middleware,

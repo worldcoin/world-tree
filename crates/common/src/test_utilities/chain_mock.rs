@@ -1,20 +1,15 @@
-use std::fs::File;
-use std::io::BufReader;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::abi::{Abi, AbiDecode, AbiEncode, Uint};
-use ethers::contract::{abigen, Contract};
-use ethers::core::{k256::ecdsa::SigningKey, types::Bytes};
+use ethers::core::k256::ecdsa::SigningKey;
 use ethers::prelude::{
-    ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
-    Signer, SignerMiddleware, Wallet,
+    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
+    SignerMiddleware, Wallet,
 };
 use ethers::providers::Middleware;
 use ethers::types::{Uint8, H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
-use tracing::{info, instrument};
 
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
 
@@ -46,7 +41,7 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
 
     let wallet =
         LocalWallet::from(chain.keys()[0].clone()).with_chain_id(chain_id);
-    let wallet_address = wallet.address(); 
+    let wallet_address = wallet.address();
 
     let client = SignerMiddleware::new(provider, wallet);
     let client = NonceManagerMiddleware::new(client, wallet_address);
@@ -65,17 +60,19 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
 
     let tree_depth = Uint8::from(TREE_DEPTH);
 
-    let mock_bridged_world_id =
-        MockBridgedWorldID::deploy(client.clone(), tree_depth)
-            .expect("Couldn't deploy MockBridgedWorldID")
-            .send()
-            .await
-            .expect("The MockBridgedWorldID deployment transaction couldn't finalize");
+    let mock_bridged_world_id = MockBridgedWorldID::deploy(
+        client.clone(),
+        tree_depth,
+    )
+    .expect("Couldn't deploy MockBridgedWorldID")
+    .send()
+    .await
+    .expect("The MockBridgedWorldID deployment transaction couldn't finalize");
 
     let bridged_world_id_address = mock_bridged_world_id.address();
 
     let mock_state_bridge = MockStateBridge::deploy(
-    client.clone(),
+        client.clone(),
         (world_id_mock_address, bridged_world_id_address),
     )
     .expect("Couldn't deploy MockStateBridge")
@@ -83,7 +80,11 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     .await
     .expect("The MockStateBridge deployment transaction couldn't finalize");
 
-    mock_bridged_world_id.transfer_ownership(mock_state_bridge.address()).send().await?.await?;
+    mock_bridged_world_id
+        .transfer_ownership(mock_state_bridge.address())
+        .send()
+        .await?
+        .await?;
 
     Ok(MockChain {
         anvil: chain,
