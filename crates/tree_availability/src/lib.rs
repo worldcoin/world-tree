@@ -1,10 +1,8 @@
 pub mod abi;
 pub mod block_scanner;
 pub mod error;
-pub mod index_packing;
 pub mod server;
 pub mod tree;
-pub mod tree_updater;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -19,19 +17,17 @@ use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
-use tree_updater::TreeUpdater;
 
 use crate::server::inclusion_proof;
 
-// TODO: Change to a configurable parameter
+// TODO: Change to a configurable parameter and also set a default
 const TREE_HISTORY_SIZE: usize = 1000;
+const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_SOCKET_ADDR: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DEFAULT_PORT);
-const DEFAULT_PORT: u16 = 8080;
+
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
-    pub world_tree: Arc<WorldTree>,
-    pub tree_updater: Arc<TreeUpdater<M>>,
-    pub middleware: Arc<M>,
+    pub world_tree: Arc<WorldTree<M>>,
 }
 
 impl<M: Middleware> TreeAvailabilityService<M> {
@@ -48,34 +44,32 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             &Hash::ZERO,
         );
 
-        let world_tree = Arc::new(WorldTree::new(tree, TREE_HISTORY_SIZE));
-
-        let tree_updater = Arc::new(TreeUpdater::new(
-            middleware.clone(),
-            world_tree_creation_block,
+        let world_tree = Arc::new(WorldTree::new(
+            tree,
+            TREE_HISTORY_SIZE,
             world_tree_address,
+            world_tree_creation_block,
+            middleware,
         ));
 
-        Self {
-            world_tree,
-            tree_updater,
-            middleware,
-        }
+        Self { world_tree }
     }
 
-    //TODO: maybe move this spawn function to the World Tree and then the tree avail service will only have one spawn function instead
-    //TODO: or maybe we can use a trait that will allow the service to extend an api like tas.server() which returns a builder and then we can call
-    //TODO: spawn on the server builder.
     pub async fn spawn(
         &self,
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+        // self.world_tree.sync_to_head().await?;
+
+        let middleware = self.world_tree.middleware.clone();
         let world_tree = self.world_tree.clone();
-        let tree_updater: Arc<TreeUpdater<M>> = self.tree_updater.clone();
 
         tokio::spawn(async move {
-            loop {
-                tree_updater.sync_to_head(&world_tree).await?;
+            //TODO: update this to be a stream listening to tree changed events or maybe to every block?
 
+            loop {
+                // world_tree.sync_to_head().await?;
+
+                //TODO: remove this and probably perpeturally just listen for new blocks after syncing to head initially
                 // Sleep a little to unblock the executor
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -88,9 +82,11 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
+        // Spawn a new task to keep the world tree synced to the chain head
         let world_tree_handle = self.spawn().await;
         handles.push(world_tree_handle);
 
+        // Initialize a new router and spawn the server
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .with_state(self.world_tree.clone());
@@ -112,6 +108,8 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles
     }
 }
+
+//TODO: extend api and it returns endpoints and functions that are called from the endpoint? That way you can add the api extension to your api
 
 //TODO: implement the api trait
 

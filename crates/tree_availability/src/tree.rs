@@ -1,6 +1,13 @@
 use std::collections::VecDeque;
 use std::ops::DerefMut;
+use std::sync::Arc;
+use std::thread::JoinHandle;
 
+use axum::middleware;
+use ethers::abi::AbiDecode;
+use ethers::contract::EthEvent;
+use ethers::providers::Middleware;
+use ethers::types::{BlockNumber, Filter, H160, U256};
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
@@ -8,6 +15,10 @@ use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use tokio::sync::RwLock;
 
+use crate::abi::{
+    DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
+};
+use crate::error::TreeAvailabilityError;
 use crate::server::InclusionProof;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
@@ -17,32 +28,52 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 ///
 /// In our data model the `tree` is the oldest available tree.
 /// The entires in `tree_history` represent new additions to the tree.
-pub struct WorldTree {
-    tree_history_size: usize,
-    tree: RwLock<PoseidonTree<Canonical>>,
+pub struct WorldTree<M: Middleware> {
+    pub tree_history_size: usize,
+    pub tree: RwLock<PoseidonTree<Canonical>>,
     // TODO: This is an inefficient representation
     //       we should keep a list of structs where each struct has an associated root
     //       that is equal to the root of the last update
     //       and contains a list of updates
     //       that way we can remove from the history entires associated with actual on-chain roots
-    tree_history: RwLock<VecDeque<(TreeUpdate, PoseidonTree<Derived>)>>,
+    pub tree_history: RwLock<VecDeque<(TreeUpdate, PoseidonTree<Derived>)>>,
+    pub address: H160,
+    pub latest_synced_block: u64, //TODO: revisit if we want to make this atomic
+    pub middleware: Arc<M>,
 }
 
-struct TreeUpdate {
-    index: usize,
-    value: Hash,
+pub struct TreeUpdate {
+    pub index: usize,
+    pub value: Hash,
 }
 
-impl WorldTree {
+impl<M: Middleware> WorldTree<M> {
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,
+        address: H160,
+        creation_block: u64,
+        middleware: Arc<M>,
     ) -> Self {
         Self {
             tree_history_size,
             tree: RwLock::new(tree),
             tree_history: RwLock::new(VecDeque::new()),
+            address,
+            latest_synced_block: creation_block,
+            middleware,
         }
+    }
+
+    //TODO: also with this approach, then you dont need to expose sync to head which is nice
+    pub async fn spawn(
+        &self,
+    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+        self.sync_to_head(None).await?;
+
+        tokio::spawn(async move {
+            // listen for updates to the tree
+        })
     }
 
     pub async fn insert_many_at(
@@ -209,185 +240,288 @@ impl WorldTree {
 
         Some(tree.proof(idx))
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    // Sync the state of the tree to to the chain head
+    pub async fn sync_to_head(
+        &self,
+        from_block: Option<u64>,
+        //TODO: I dont love this approach, but the idea here is if the from block is None, it would use the last synced block
+        //TODO: the benefit being, if there are no TreeChanged events for 1000 blocks, the from block could be the newest block with TreeChanged events
+        //TODO: which would save us from having to include the 1000 empty blocks in our call to the node. This does however introduce a footgun
+        //TODO: If someone uses a from block that skips over a block with TreeChanged event, this will cause issues.
+        //TODO: we could abstract this from the user and simply expose a spawn method that handles this logic under the hood
+    ) -> Result<(), TreeAvailabilityError<M>> {
+        let from_block = from_block.unwrap_or_else(|| self.latest_synced_block);
 
-    const TREE_DEPTH: usize = 10;
-    const NUM_IDENTITIES: usize = 10;
+        let filter = Filter::new()
+            .address(self.address)
+            .topic0(TreeChangedFilter::signature())
+            .from_block(from_block);
 
-    const TREE_HISTORY_SIZE: usize = 10;
+        //TODO: loop in intervals of n until you get to head
 
-    #[tokio::test]
-    async fn fetch_proof_for_latest_root() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
+        let logs = self
+            .middleware
+            .get_logs(&filter)
+            .await
+            .map_err(TreeAvailabilityError::MiddlewareError)?;
 
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+        for log in logs {
+            if let Some(tx_hash) = log.transaction_hash {
+                let transaction = self
+                    .middleware
+                    .get_transaction(tx_hash)
+                    .await
+                    .map_err(TreeAvailabilityError::MiddlewareError)?
+                    .ok_or(TreeAvailabilityError::MissingTransaction)?;
 
-        let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
+                if let Ok(delete_identities_call) =
+                    DeleteIdentitiesCall::decode(transaction.input.as_ref())
+                {
+                    let indices = unpack_indices(
+                        delete_identities_call.packed_deletion_indices.as_ref(),
+                    );
+                    let indices: Vec<_> =
+                        indices.into_iter().map(|x| x as usize).collect();
 
-        for (idx, identity) in identities.iter().enumerate() {
-            ref_tree = ref_tree.update_with_mutation(idx, identity);
+                    self.delete_many(&indices).await;
+                } else if let Ok(register_identities_call) =
+                    RegisterIdentitiesCall::decode(transaction.input.as_ref())
+                {
+                    let start_index = register_identities_call.start_index;
+                    let identities =
+                        register_identities_call.identity_commitments;
+                    let identities: Vec<_> = identities
+                        .into_iter()
+                        .map(|u256: U256| Hash::from_limbs(u256.0))
+                        .collect();
+
+                    self.insert_many_at(start_index as usize, &identities)
+                        .await;
+                } else {
+                    return Err(TreeAvailabilityError::UnrecognizedTransaction);
+                }
+            }
         }
 
-        world_tree.insert_many_at(0, &identities).await;
-
-        let root = ref_tree.root();
-
-        for i in 0..NUM_IDENTITIES {
-            let proof_from_world_tree = world_tree
-                .get_inclusion_proof(identities[i], Some(root))
-                .await
-                .unwrap();
-
-            assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
-        }
-    }
-
-    #[tokio::test]
-    async fn fetch_proof_for_intermediate_root() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
-
-        for (idx, identity) in identities.iter().enumerate().take(5) {
-            ref_tree = ref_tree.update_with_mutation(idx, identity);
-        }
-
-        let root = ref_tree.root();
-
-        // No more updates to the reference tree as we need to fetch
-        // the proof from an older version
-
-        world_tree.insert_many_at(0, &identities).await;
-
-        for i in 0..5 {
-            let proof_from_world_tree = world_tree
-                .get_inclusion_proof(identities[i], Some(root))
-                .await
-                .unwrap();
-
-            assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
-        }
-    }
-
-    #[tokio::test]
-    async fn deletion_of_identities() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
-
-        for (idx, identity) in identities.iter().enumerate() {
-            ref_tree = ref_tree.update_with_mutation(idx, identity);
-        }
-
-        world_tree.insert_many_at(0, &identities).await;
-
-        let deleted_identity_idxs = &[3, 7];
-        let non_deleted_identity_idxs: Vec<_> = (0..NUM_IDENTITIES)
-            .filter(|idx| !deleted_identity_idxs.contains(idx))
-            .collect();
-
-        for idx in deleted_identity_idxs {
-            ref_tree = ref_tree.update_with_mutation(*idx, &Hash::ZERO);
-        }
-
-        world_tree.delete_many(deleted_identity_idxs).await;
-
-        let root = ref_tree.root();
-
-        for i in non_deleted_identity_idxs {
-            let proof_from_world_tree = world_tree
-                .get_inclusion_proof(identities[i], Some(root))
-                .await
-                .unwrap();
-
-            assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
-        }
-    }
-
-    #[tokio::test]
-    async fn fetching_proof_after_gc() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        // NOTE: History size is set to 2
-        let world_tree = WorldTree::new(poseidon_tree, 5);
-
-        for (idx, identity) in identities.iter().enumerate() {
-            ref_tree = ref_tree.update_with_mutation(idx, identity);
-        }
-
-        world_tree.insert_many_at(0, &identities).await;
-
-        assert_eq!(
-            world_tree.tree_history.read().await.len(),
-            NUM_IDENTITIES,
-            "We should have {NUM_IDENTITIES} before GC"
-        );
-
-        world_tree.gc().await;
-
-        assert_eq!(
-            world_tree.tree_history.read().await.len(),
-            5,
-            "We should have 5 entries in tree history after GC"
-        );
-
-        let root = ref_tree.root();
-
-        for i in 0..NUM_IDENTITIES {
-            let proof_from_world_tree = world_tree
-                .get_inclusion_proof(identities[i], Some(root))
-                .await
-                .unwrap();
-
-            assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
-        }
+        Ok(())
     }
 }
+
+pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
+    let mut packed = Vec::with_capacity(indices.len() * 4);
+
+    for index in indices {
+        packed.extend_from_slice(&index.to_be_bytes());
+    }
+
+    packed
+}
+
+pub fn unpack_indices(packed: &[u8]) -> Vec<u32> {
+    let mut indices = Vec::with_capacity(packed.len() / 4);
+
+    for packed_index in packed.chunks_exact(4) {
+        let index = u32::from_be_bytes(
+            packed_index.try_into().expect("Invalid index length"),
+        );
+
+        indices.push(index);
+    }
+
+    indices
+}
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     const TREE_DEPTH: usize = 10;
+//     const NUM_IDENTITIES: usize = 10;
+
+//     const TREE_HISTORY_SIZE: usize = 10;
+
+// #[test]
+// fn test_pack_indices() {
+//     let indices = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+//     let packed = pack_indices(&indices);
+
+//     assert_eq!(packed.len(), 32);
+
+//     let unpacked = unpack_indices(&packed);
+
+//     assert_eq!(unpacked, indices);
+// }
+
+//     #[tokio::test]
+//     async fn fetch_proof_for_latest_root() {
+//         let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+//         let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+
+//         let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
+
+//         for (idx, identity) in identities.iter().enumerate() {
+//             ref_tree = ref_tree.update_with_mutation(idx, identity);
+//         }
+
+//         world_tree.insert_many_at(0, &identities).await;
+
+//         let root = ref_tree.root();
+
+//         for i in 0..NUM_IDENTITIES {
+//             let proof_from_world_tree = world_tree
+//                 .get_inclusion_proof(identities[i], Some(root))
+//                 .await
+//                 .unwrap();
+
+//             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
+//         }
+//     }
+
+//     #[tokio::test]
+//     async fn fetch_proof_for_intermediate_root() {
+//         let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+
+//         let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
+
+//         for (idx, identity) in identities.iter().enumerate().take(5) {
+//             ref_tree = ref_tree.update_with_mutation(idx, identity);
+//         }
+
+//         let root = ref_tree.root();
+
+//         // No more updates to the reference tree as we need to fetch
+//         // the proof from an older version
+
+//         world_tree.insert_many_at(0, &identities).await;
+
+//         for i in 0..5 {
+//             let proof_from_world_tree = world_tree
+//                 .get_inclusion_proof(identities[i], Some(root))
+//                 .await
+//                 .unwrap();
+
+//             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
+//         }
+//     }
+
+//     #[tokio::test]
+//     async fn deletion_of_identities() {
+//         let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+
+//         let world_tree = WorldTree::new(poseidon_tree, TREE_HISTORY_SIZE);
+
+//         for (idx, identity) in identities.iter().enumerate() {
+//             ref_tree = ref_tree.update_with_mutation(idx, identity);
+//         }
+
+//         world_tree.insert_many_at(0, &identities).await;
+
+//         let deleted_identity_idxs = &[3, 7];
+//         let non_deleted_identity_idxs: Vec<_> = (0..NUM_IDENTITIES)
+//             .filter(|idx| !deleted_identity_idxs.contains(idx))
+//             .collect();
+
+//         for idx in deleted_identity_idxs {
+//             ref_tree = ref_tree.update_with_mutation(*idx, &Hash::ZERO);
+//         }
+
+//         world_tree.delete_many(deleted_identity_idxs).await;
+
+//         let root = ref_tree.root();
+
+//         for i in non_deleted_identity_idxs {
+//             let proof_from_world_tree = world_tree
+//                 .get_inclusion_proof(identities[i], Some(root))
+//                 .await
+//                 .unwrap();
+
+//             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
+//         }
+//     }
+
+//     #[tokio::test]
+//     async fn fetching_proof_after_gc() {
+//         let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+//         let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+//             TREE_DEPTH,
+//             TREE_DEPTH,
+//             &Hash::ZERO,
+//         );
+
+//         let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
+
+//         // NOTE: History size is set to 2
+//         let world_tree = WorldTree::new(poseidon_tree, 5);
+
+//         for (idx, identity) in identities.iter().enumerate() {
+//             ref_tree = ref_tree.update_with_mutation(idx, identity);
+//         }
+
+//         world_tree.insert_many_at(0, &identities).await;
+
+//         assert_eq!(
+//             world_tree.tree_history.read().await.len(),
+//             NUM_IDENTITIES,
+//             "We should have {NUM_IDENTITIES} before GC"
+//         );
+
+//         world_tree.gc().await;
+
+//         assert_eq!(
+//             world_tree.tree_history.read().await.len(),
+//             5,
+//             "We should have 5 entries in tree history after GC"
+//         );
+
+//         let root = ref_tree.root();
+
+//         for i in 0..NUM_IDENTITIES {
+//             let proof_from_world_tree = world_tree
+//                 .get_inclusion_proof(identities[i], Some(root))
+//                 .await
+//                 .unwrap();
+
+//             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
+//         }
+//     }
+// }

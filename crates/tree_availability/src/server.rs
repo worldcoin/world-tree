@@ -41,8 +41,8 @@ impl InclusionProof {
     }
 }
 
-pub async fn inclusion_proof(
-    State(world_tree): State<Arc<WorldTree>>,
+pub async fn inclusion_proof<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
     let inclusion_proof = world_tree
