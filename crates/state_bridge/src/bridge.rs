@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use ruint::Uint;
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 
 use ethers::{
     middleware::contract::abigen, providers::Middleware, types::H160,
 };
-use tokio::task::JoinHandle;
+use tokio::{select, task::JoinHandle};
 
 use crate::{error::StateBridgeError, root::Hash};
 
@@ -81,23 +81,37 @@ impl<M: Middleware> StateBridge<M> {
             let mut latest_bridged_root;
             let mut latest_root = Hash::ZERO;
 
+            let mut last_propagation: Instant = Instant::now();
+
             loop {
-                // Process all of the updates and get the latest root
-                //TODO: explain why we use try_recv and drain the channel from updates rather than just using recv
-                //TODO: we can maybe just notify across threads when the value is updated instead of using a channel,
-                //TODO: allowing us to always have the most recent value and avoiding the need to drain the channel
-                while let Ok(root) = root_rx.try_recv() {
-                    //TODO: Handle reorgs
-                    latest_root = root;
+                let sleep_time = relaying_period
+                    .saturating_sub(Instant::now() - last_propagation);
+
+                select! {
+                    root = root_rx.recv() => {
+                        match root {
+                            Ok(root) => {
+                                latest_root = root;
+                            }
+                            Err(_) => {
+                                break;
+                            }
+                        }
+                    }
+                    // will either be positive or zero if difference is negative
+                    _ = tokio::time::sleep(sleep_time) => {}
                 }
 
-                // Check if the latest root is different than on L2 and if so, update the root
                 latest_bridged_root = Uint::from_limbs(
                     bridged_world_id.latest_root().call().await?.0,
                 );
 
-                if latest_root != latest_bridged_root {
-                    // Propagate root and ensure tx inclusion
+                let time_since_last_propagation =
+                    Instant::now() - last_propagation;
+
+                if latest_root != latest_bridged_root
+                    && time_since_last_propagation > relaying_period
+                {
                     state_bridge
                         .propagate_root()
                         .send()
@@ -105,10 +119,10 @@ impl<M: Middleware> StateBridge<M> {
                         .confirmations(6usize) //TODO: make this a cli arg or default
                         .await?;
 
-                    // Sleep for the specified time interval
-                    tokio::time::sleep(relaying_period).await;
+                    last_propagation = Instant::now();
                 }
             }
+            Ok(())
         })
     }
 }
