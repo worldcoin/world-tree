@@ -2,12 +2,16 @@ pub mod abi;
 pub mod block_scanner;
 pub mod error;
 pub mod index_packing;
+pub mod server;
 pub mod tree;
 pub mod tree_updater;
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::{Json, Router};
 use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
@@ -15,6 +19,8 @@ use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 use tree_updater::TreeUpdater;
+
+use crate::server::inclusion_proof;
 
 // TODO: Change to a configurable parameter
 const TREE_HISTORY_SIZE: usize = 1000;
@@ -54,11 +60,14 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         }
     }
 
+    //TODO: maybe move this spawn function to the World Tree and then the tree avail service will only have one spawn function instead
+    //TODO: or maybe we can use a trait that will allow the service to extend an api like tas.server() which returns a builder and then we can call
+    //TODO: spawn on the server builder.
     pub async fn spawn(
         &self,
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let world_tree = self.world_tree.clone();
-        let tree_updater = self.tree_updater.clone();
+        let tree_updater: Arc<TreeUpdater<M>> = self.tree_updater.clone();
 
         tokio::spawn(async move {
             loop {
@@ -69,8 +78,42 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             }
         })
     }
+
+    //TODO: rename this, this function spawns the api service
+    pub async fn serve(
+        self,
+    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+        let handle = self.spawn().await;
+
+        let router = axum::Router::new()
+            .route(
+                "/inclusionProof",
+                axum::routing::post(Self::inclusion_proof),
+            )
+            .with_state(self.world_tree.clone());
+
+        todo!();
+    }
+
+    async fn inclusion_proof(
+        State(world_tree): State<Arc<WorldTree>>,
+        Json(inclusion_proof_request): Json<InclusionProofRequest>,
+    ) -> Result<
+        (StatusCode, Json<InclusionProofResponse>),
+        TreeAvailabilityError<M>,
+    > {
+        todo!();
+    }
 }
 
+pub struct InclusionProofRequest {
+    pub identity_commitment: Hash,
+    pub root: Hash,
+}
+
+pub struct InclusionProofResponse {
+    //TODO:
+}
 //TODO: implement the api trait
 
 #[cfg(test)]

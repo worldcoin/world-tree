@@ -8,7 +8,7 @@ edition = "2021"
 [workspace]
 members = [
   "crates/sequencer",
-  "crates/tree_state",
+  "crates/tree_availability",
   "crates/state_bridge",
   "crates/common"
 ]
@@ -26,5 +26,5 @@ path = "bin/state_bridge_service.rs"
 [[bin]]
 name = "tree-availability-service"
 path = "bin/tree_availability_service.rs"
-[dependencies]
+
 

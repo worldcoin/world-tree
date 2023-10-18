@@ -88,7 +88,10 @@ impl WorldTree {
         };
 
         let mut next = if history.is_empty() {
-            let tree = self.tree.read().await;
+            let tree: tokio::sync::RwLockReadGuard<
+                '_,
+                LazyMerkleTree<PoseidonHash, Canonical>,
+            > = self.tree.read().await;
             tree.update(*first_idx, &Hash::ZERO)
         } else {
             let (_, last_history_entry) = history.back().unwrap();
