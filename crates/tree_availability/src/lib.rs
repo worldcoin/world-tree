@@ -36,11 +36,15 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         world_tree_creation_block: u64,
         middleware: Arc<M>,
     ) -> Self {
+        dbg!("Creating new tree");
+
         let tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
             tree_depth,
             dense_prefix_depth,
             &Hash::ZERO,
         );
+
+        dbg!("Initializing new world tree");
 
         let world_tree = Arc::new(WorldTree::new(
             tree,
@@ -81,6 +85,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             Ok(())
         }));
 
+        dbg!("Syncing world tree to head");
         // Sync the world tree to the chain head
         self.world_tree
             .sync_to_head()
@@ -106,9 +111,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
+        dbg!("Spawning tree availability service");
         // Spawn a new task to keep the world tree synced to the chain head
         let world_tree_handles = self.spawn().await;
         handles.extend(world_tree_handles);
+
+        dbg!("Initializing router");
 
         // Initialize a new router and spawn the server
         let router = axum::Router::new()
@@ -120,6 +128,8 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port.unwrap_or_else(|| DEFAULT_PORT),
         );
+
+        dbg!("Spawning server");
 
         let server_handle = tokio::spawn(async move {
             axum::Server::bind(&address)

@@ -31,10 +31,9 @@ struct Opts {
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
+    dbg!("Parsed opts");
 
     let middleware = Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?);
-    // let world_tree_address = H160::from_str(&opts.address)?;
-
     let handles = TreeAvailabilityService::new(
         opts.tree_depth,
         opts.dense_prefix_depth,

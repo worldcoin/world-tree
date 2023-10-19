@@ -8,7 +8,8 @@ use axum::middleware;
 use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
 use ethers::providers::{FilterWatcher, Middleware, StreamExt};
-use ethers::types::{BlockNumber, Filter, Log, H160, U256};
+use ethers::types::{BlockNumber, Filter, Log, Transaction, H160, U256};
+use futures::stream::FuturesUnordered;
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
@@ -236,14 +237,36 @@ impl<M: Middleware> WorldTree<M> {
             .topic0(TreeChangedFilter::signature())
             .from_block(self.latest_synced_block);
 
+        dbg!("Fetching logs");
         let logs = self
             .middleware
             .get_logs(&filter)
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
-        for log in logs {
-            self.sync_from_log(log).await?;
+        let mut futures = FuturesUnordered::new();
+        //TODO: update this to use a throttle that can be set by the user
+        for logs in logs.chunks(20) {
+            for log in logs {
+                futures.push(self.middleware.get_transaction(
+                    log.transaction_hash.ok_or(
+                        TreeAvailabilityError::TransactionHashNotFound,
+                    )?,
+                ));
+            }
+
+            while let Some(transaction) = futures.next().await {
+                let transaction = transaction
+                    .map_err(TreeAvailabilityError::MiddlewareError)?
+                    .ok_or(TreeAvailabilityError::TransactionNotFound)?;
+
+                dbg!("syncing from tx");
+                self.sync_from_transaction(transaction).await?;
+                dbg!("finished from tx");
+            }
+
+            //TODO: use a better throttle
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
         Ok(())
@@ -253,53 +276,61 @@ impl<M: Middleware> WorldTree<M> {
         &self,
         log: Log,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        //TODO: use ok or error out, there should be a hash with the log
-        if let Some(tx_hash) = log.transaction_hash {
-            //TODO: use ok or error, there should be a block number with the log
-            let log_block_number =
-                log.block_number.expect("TODO: handle this error").as_u64();
+        let tx_hash = log
+            .transaction_hash
+            .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
 
-            //TODO: FIXME: This check will ensure that we don't process the same log twice, however if there were ever to be two TreeChanged
-            // events in the same block, this logic would ignore the second log. This should be updated.
-            if log_block_number < self.latest_synced_block {
-                return Ok(());
-            } else {
-                //TODO: only update if the block number is greater than the latest synced block, this still needs to be fixed though
-                //TODO: update this to use an atomic
-                // self.latest_synced_block = log_block_number;
-            }
+        let transaction = self
+            .middleware
+            .get_transaction(tx_hash)
+            .await
+            .map_err(TreeAvailabilityError::MiddlewareError)?
+            .ok_or(TreeAvailabilityError::MissingTransaction)?;
 
-            let transaction = self
-                .middleware
-                .get_transaction(tx_hash)
-                .await
-                .map_err(TreeAvailabilityError::MiddlewareError)?
-                .ok_or(TreeAvailabilityError::MissingTransaction)?;
+        self.sync_from_transaction(transaction).await?;
 
-            if let Ok(delete_identities_call) =
-                DeleteIdentitiesCall::decode(transaction.input.as_ref())
-            {
-                let indices = unpack_indices(
-                    delete_identities_call.packed_deletion_indices.as_ref(),
-                );
-                let indices: Vec<_> =
-                    indices.into_iter().map(|x| x as usize).collect();
+        Ok(())
+    }
 
-                self.delete_many(&indices).await;
-            } else if let Ok(register_identities_call) =
-                RegisterIdentitiesCall::decode(transaction.input.as_ref())
-            {
-                let start_index = register_identities_call.start_index;
-                let identities = register_identities_call.identity_commitments;
-                let identities: Vec<_> = identities
-                    .into_iter()
-                    .map(|u256: U256| Hash::from_limbs(u256.0))
-                    .collect();
+    pub async fn sync_from_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<(), TreeAvailabilityError<M>> {
+        // //TODO: FIXME: This check will ensure that we don't process the same log twice, however if there were ever to be two TreeChanged
+        // // events in the same block, this logic would ignore the second log. This should be updated.
+        // if log_block_number < self.latest_synced_block {
+        //     return Ok(());
+        // } else {
+        //     //TODO: only update if the block number is greater than the latest synced block, this still needs to be fixed though
+        //     //TODO: update this to use an atomic
+        //     // self.latest_synced_block = log_block_number;
+        // }
 
-                self.insert_many_at(start_index as usize, &identities).await;
-            } else {
-                return Err(TreeAvailabilityError::UnrecognizedTransaction);
-            }
+        dbg!(transaction.block_number.unwrap());
+
+        if let Ok(delete_identities_call) =
+            DeleteIdentitiesCall::decode(transaction.input.as_ref())
+        {
+            let indices = unpack_indices(
+                delete_identities_call.packed_deletion_indices.as_ref(),
+            );
+            let indices: Vec<_> =
+                indices.into_iter().map(|x| x as usize).collect();
+
+            self.delete_many(&indices).await;
+        } else if let Ok(register_identities_call) =
+            RegisterIdentitiesCall::decode(transaction.input.as_ref())
+        {
+            let start_index = register_identities_call.start_index;
+            let identities = register_identities_call.identity_commitments;
+            let identities: Vec<_> = identities
+                .into_iter()
+                .map(|u256: U256| Hash::from_limbs(u256.0))
+                .collect();
+
+            self.insert_many_at(start_index as usize, &identities).await;
+        } else {
+            return Err(TreeAvailabilityError::UnrecognizedTransaction);
         }
 
         Ok(())

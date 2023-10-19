@@ -15,6 +15,12 @@ where
     MissingTransaction,
     #[error("Unrecognized transaction")]
     UnrecognizedTransaction,
+    #[error("Transaction hash was not found")]
+    TransactionHashNotFound,
+    #[error("Block number was not found")]
+    BlockNumberNotFound,
+    #[error("Transaction was not found from hash")]
+    TransactionNotFound,
 
     // Third-party converted errors
     #[error("Middleware error")]

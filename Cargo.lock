@@ -4919,6 +4919,7 @@ dependencies = [
  "clap 4.4.6",
  "ethers",
  "eyre",
+ "futures",
  "hyper",
  "semaphore",
  "serde",

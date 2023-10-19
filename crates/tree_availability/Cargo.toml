@@ -27,4 +27,4 @@ eyre = "0.6.8"
 axum = "0.6.20"
 clap = "4.4.6"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
-
+futures = "0.3.28"
