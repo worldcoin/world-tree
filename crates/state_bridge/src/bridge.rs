@@ -78,10 +78,11 @@ impl<M: Middleware> StateBridge<M> {
         let relaying_period = self.relaying_period;
 
         tokio::spawn(async move {
-            let mut latest_bridged_root;
+            let mut latest_bridged_root: Uint<256, 4> = Hash::ZERO;
             let mut latest_root: Uint<256, 4> = Hash::ZERO;
 
             let mut last_propagation: Instant = Instant::now();
+            let mut time_since_last_propagation: Duration = relaying_period;
 
             loop {
                 // will either be positive or zero if difference is negative
@@ -103,24 +104,23 @@ impl<M: Middleware> StateBridge<M> {
                     _ = tokio::time::sleep(sleep_time) => {}
                 }
 
-                latest_bridged_root = Uint::from_limbs(
-                    bridged_world_id.latest_root().call().await?.0,
-                );
+                time_since_last_propagation = Instant::now() - last_propagation;
 
-                let time_since_last_propagation =
-                    Instant::now() - last_propagation;
+                if time_since_last_propagation > relaying_period {
+                    latest_bridged_root = Uint::from_limbs(
+                        bridged_world_id.latest_root().call().await?.0,
+                    );
 
-                if latest_root != latest_bridged_root
-                    && time_since_last_propagation > relaying_period
-                {
-                    state_bridge
-                        .propagate_root()
-                        .send()
-                        .await?
-                        .confirmations(6usize) //TODO: make this a cli arg or default
-                        .await?;
+                    if latest_root != latest_bridged_root {
+                        state_bridge
+                            .propagate_root()
+                            .send()
+                            .await?
+                            .confirmations(6usize) //TODO: make this a cli arg or default
+                            .await?;
 
-                    last_propagation = Instant::now();
+                        last_propagation = Instant::now();
+                    }
                 }
             }
             Ok(())
