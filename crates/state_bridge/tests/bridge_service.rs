@@ -1,5 +1,6 @@
 pub use std::time::Duration;
 
+use common::test_utilities::abi::RootAddedFilter;
 pub use ethers::abi::{AbiEncode, Address};
 pub use ethers::core::abi::Abi;
 pub use ethers::core::k256::ecdsa::SigningKey;
@@ -8,12 +9,13 @@ pub use ethers::prelude::{
     ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
     Signer, SignerMiddleware, Wallet,
 };
-pub use ethers::providers::Middleware;
+pub use ethers::providers::{Middleware, StreamExt};
 pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
 pub use ethers_solc::artifacts::Bytecode;
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
+use state_bridge::error::StateBridgeError;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
@@ -83,20 +85,58 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     mock_world_id.insert_root(latest_root).send().await?.await?;
 
-    let mut bridged_world_id_root =
-        mock_bridged_world_id.latest_root().call().await?;
+    let await_matching_root = tokio::spawn(async move {
+        let filter = mock_bridged_world_id.event::<RootAddedFilter>();
 
-    for _ in 0..20 {
-        if latest_root != bridged_world_id_root {
-            tokio::time::sleep(relaying_period / 5).await;
-            bridged_world_id_root =
-                mock_bridged_world_id.latest_root().call().await?;
-        } else {
-            break;
+        let mut event_stream = filter.stream().await?.with_meta();
+
+        // Listen to a stream of events, when a new event is received, update the root and block number
+        while let Some(Ok((event, _))) = event_stream.next().await {
+            let latest_bridged_root = event.root;
+
+            if latest_bridged_root == latest_root {
+                return Ok(latest_bridged_root);
+            }
         }
-    }
+
+        Err(eyre::eyre!(
+            "The root in the event stream did not match `latest_root`"
+        ))
+    });
+
+    let bridged_world_id_root = await_matching_root.await??;
 
     assert_eq!(latest_root, bridged_world_id_root);
+
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_no_state_bridge_relay_fails() -> eyre::Result<()> {
+    // we need anvil to be in scope in order for the middleware provider to not be dropped
+    #[allow(unused_variables)]
+    let MockChain {
+        mock_world_id,
+        middleware,
+        anvil,
+        ..
+    } = spawn_mock_chain().await?;
+
+    let world_id = IWorldIdIdentityManager::new(
+        mock_world_id.address(),
+        middleware.clone(),
+    );
+
+    let mut state_bridge_service = StateBridgeService::new(world_id)
+        .await
+        .expect("couldn't create StateBridgeService");
+
+    let error = state_bridge_service.spawn().await.unwrap_err();
+
+    assert!(
+        matches!(error, StateBridgeError::BridgesNotInitialized),
+        "Didn't error out as expected"
+    );
 
     Ok(())
 }
