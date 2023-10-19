@@ -14,6 +14,15 @@ members = [
 ]
 
 
+
+[dependencies]
+clap = {version = "4.4.6", features = ["derive"]}
+ethers = "2.0.10"
+eyre = "0.6.8"
+tokio = "1.33.0"
+tree_availability = { path = "crates/tree_availability" }
+
+
 [[bin]]
 name = "identity-sequencer"
 path = "bin/identity_sequencer_service.rs"

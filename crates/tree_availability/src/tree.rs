@@ -233,6 +233,7 @@ impl<M: Middleware> WorldTree<M> {
 
     // Sync the state of the tree to to the chain head
     pub async fn sync_to_head(&self) -> Result<(), TreeAvailabilityError<M>> {
+        //TODO: FIXME: we will likely need to step through this and not query such a big block range
         let filter = Filter::new()
             .address(self.address)
             .topic0(TreeChangedFilter::signature())
@@ -264,7 +265,7 @@ impl<M: Middleware> WorldTree<M> {
             if log_block_number < self.latest_synced_block {
                 return Ok(());
             } else {
-
+                //TODO: only update if the block number is greater than the latest synced block, this still needs to be fixed though
                 //TODO: update this to use an atomic
                 // self.latest_synced_block = log_block_number;
             }

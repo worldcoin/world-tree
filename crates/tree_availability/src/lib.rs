@@ -18,11 +18,10 @@ use tree::{Hash, PoseidonTree, WorldTree};
 use crate::abi::TreeChangedFilter;
 use crate::server::inclusion_proof;
 
-// TODO: Change to a configurable parameter and also set a default
-const TREE_HISTORY_SIZE: usize = 1000;
+const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
+//TODO: update the default port
 const DEFAULT_PORT: u16 = 8080;
-const DEFAULT_SOCKET_ADDR: SocketAddr =
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DEFAULT_PORT);
+//TODO: Should use stream instead of watch
 const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
@@ -33,6 +32,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     pub fn new(
         tree_depth: usize,
         dense_prefix_depth: usize,
+        tree_history_size: usize,
         world_tree_address: H160,
         world_tree_creation_block: u64,
         middleware: Arc<M>,
@@ -45,7 +45,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
         let world_tree = Arc::new(WorldTree::new(
             tree,
-            TREE_HISTORY_SIZE,
+            tree_history_size,
             world_tree_address,
             world_tree_creation_block,
             middleware,
@@ -103,7 +103,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
     pub async fn serve(
         self,
-        address: Option<SocketAddr>,
+        port: Option<u16>,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
@@ -116,7 +116,10 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .with_state(self.world_tree.clone());
 
-        let address = address.unwrap_or_else(|| DEFAULT_SOCKET_ADDR);
+        let address = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port.unwrap_or_else(|| DEFAULT_PORT),
+        );
 
         let server_handle = tokio::spawn(async move {
             axum::Server::bind(&address)
@@ -134,10 +137,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     }
 }
 
-//TODO: extend api and it returns endpoints and functions that are called from the endpoint? That way you can add the api extension to your api
-
-//TODO: implement the api trait
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -146,7 +145,7 @@ mod tests {
     use ethers::providers::{Provider, Ws};
     use ethers::types::H160;
 
-    use crate::TreeAvailabilityService;
+    use crate::{TreeAvailabilityService, DEFAULT_TREE_HISTORY_SIZE};
 
     //TODO: set world tree address as const for tests
 
@@ -162,6 +161,7 @@ mod tests {
         let tree_availability_service = TreeAvailabilityService::new(
             30,
             10,
+            DEFAULT_TREE_HISTORY_SIZE,
             world_tree_address,
             0,
             middleware,
