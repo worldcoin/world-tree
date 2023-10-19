@@ -194,7 +194,7 @@ impl<M: Middleware> WorldTree<M> {
         } else {
             let root = root.unwrap();
 
-            // If the root is the latest root, use the current version of the treee
+            // If the root is the latest root, use the current version of the tree
             if root == tree.root() {
                 return Some(InclusionProof::new(
                     root,
