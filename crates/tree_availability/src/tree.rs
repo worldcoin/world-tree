@@ -259,6 +259,8 @@ impl<M: Middleware> WorldTree<M> {
             let log_block_number =
                 log.block_number.expect("TODO: handle this error").as_u64();
 
+            //TODO: FIXME: this does not account for if a log has already been seen when syncing to head, the block number
+            // FIXME: will be the same but the log will have already been processed
             if log_block_number < self.latest_synced_block {
                 return Ok(());
             } else {
