@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::DerefMut;
 use std::sync::Arc;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use axum::middleware;
@@ -16,6 +15,7 @@ use semaphore::lazy_merkle_tree::{
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 
 use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
@@ -25,6 +25,8 @@ use crate::server::InclusionProof;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
+
+const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 /// An abstraction over a tree with a history of changes
 ///
@@ -227,6 +229,37 @@ impl<M: Middleware> WorldTree<M> {
         let idx = tree.leaves().position(|leaf| leaf == identity)?;
 
         Some(tree.proof(idx))
+    }
+
+    pub fn listen_for_updates(
+        &self,
+    ) -> (
+        tokio::sync::mpsc::Receiver<Log>,
+        JoinHandle<Result<(), TreeAvailabilityError<M>>>,
+    ) {
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Log>(100);
+
+        let filter = Filter::new()
+            .address(self.address)
+            .topic0(TreeChangedFilter::signature());
+        let middleware = self.middleware.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut stream = middleware
+                .watch(&filter)
+                .await
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .interval(STREAM_INTERVAL)
+                .stream();
+
+            while let Some(log) = stream.next().await {
+                tx.send(log).await?;
+            }
+
+            Ok(())
+        });
+
+        (rx, handle)
     }
 
     // Sync the state of the tree to to the chain head

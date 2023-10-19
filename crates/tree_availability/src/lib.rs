@@ -21,7 +21,6 @@ use crate::server::inclusion_proof;
 //TODO: update the default port
 const DEFAULT_PORT: u16 = 8080;
 //TODO: Should use stream instead of watch
-const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
     pub world_tree: Arc<WorldTree<M>>,
@@ -62,28 +61,9 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<Log>(100);
-        let middleware = self.world_tree.middleware.clone();
-
-        let filter = Filter::new()
-            .address(self.world_tree.address)
-            .topic0(TreeChangedFilter::signature());
-
+        let (mut rx, updates_handle) = self.world_tree.listen_for_updates();
         // Spawn a thread to listen to tree changed events with a buffer
-        handles.push(tokio::spawn(async move {
-            let mut stream = middleware
-                .watch(&filter)
-                .await
-                .map_err(TreeAvailabilityError::MiddlewareError)?
-                .interval(STREAM_INTERVAL)
-                .stream();
-
-            while let Some(log) = stream.next().await {
-                tx.send(log).await?;
-            }
-
-            Ok(())
-        }));
+        handles.push(updates_handle);
 
         dbg!("Syncing world tree to head");
         // Sync the world tree to the chain head
