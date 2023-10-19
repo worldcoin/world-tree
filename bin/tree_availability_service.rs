@@ -5,13 +5,15 @@ use std::sync::Arc;
 use clap::Parser;
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use tree_availability::TreeAvailabilityService;
 
 #[derive(Parser, Debug)]
 #[clap(name = "Tree Availability Service", about = "")]
 struct Opts {
     #[clap(short, long, help = "")]
-    tree_depth: usize,
+    tree_depth: usize, //TODO: we might be able to fetch tree depth on chain somewhere
     #[clap(short, long, help = "")]
     dense_prefix_depth: usize,
     #[clap(short, long, help = "")]
@@ -44,8 +46,9 @@ pub async fn main() -> eyre::Result<()> {
     .serve(opts.port)
     .await;
 
-    for handle in handles {
-        handle.await??;
+    let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
+    while let Some(result) = handles.next().await {
+        result??;
     }
 
     Ok(())

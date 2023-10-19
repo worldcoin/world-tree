@@ -18,7 +18,6 @@ use tree::{Hash, PoseidonTree, WorldTree};
 use crate::abi::TreeChangedFilter;
 use crate::server::inclusion_proof;
 
-const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
 //TODO: update the default port
 const DEFAULT_PORT: u16 = 8080;
 //TODO: Should use stream instead of watch
@@ -114,6 +113,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         // Initialize a new router and spawn the server
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
+            // .route("/verifyProof", axum::routing::post(verify_proof))
             .with_state(self.world_tree.clone());
 
         let address = SocketAddr::new(
@@ -145,30 +145,14 @@ mod tests {
     use ethers::providers::{Provider, Ws};
     use ethers::types::H160;
 
-    use crate::{TreeAvailabilityService, DEFAULT_TREE_HISTORY_SIZE};
+    use crate::TreeAvailabilityService;
+
+    const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
 
     //TODO: set world tree address as const for tests
 
-    async fn test_spawn_tree_availability_service() -> eyre::Result<()> {
-        let world_tree_address =
-            H160::from_str("0x78eC127A3716D447F4575E9c834d452E397EE9E1")?;
+    // #[tokio::test]
+    // async fn test_spawn_tree_availability_service() -> eyre::Result<()> {
 
-        let middleware = Arc::new(
-            Provider::<Ws>::connect(std::env::var("GOERLI_WS_ENDPOINT")?)
-                .await?,
-        );
-
-        let tree_availability_service = TreeAvailabilityService::new(
-            30,
-            10,
-            DEFAULT_TREE_HISTORY_SIZE,
-            world_tree_address,
-            0,
-            middleware,
-        );
-
-        let _handle = tree_availability_service.spawn().await;
-
-        Ok(())
-    }
+    // }
 }

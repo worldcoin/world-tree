@@ -2453,6 +2453,7 @@ dependencies = [
  "clap 4.4.6",
  "ethers",
  "eyre",
+ "futures",
  "tokio",
  "tree_availability",
 ]

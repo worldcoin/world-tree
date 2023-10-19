@@ -182,11 +182,7 @@ impl<M: Middleware> WorldTree<M> {
         identity: Hash,
         root: Option<Hash>,
     ) -> Option<InclusionProof> {
-        let tree_history = self.tree_history.read().await;
-        let tree: tokio::sync::RwLockReadGuard<
-            '_,
-            LazyMerkleTree<PoseidonHash, Canonical>,
-        > = self.tree.read().await;
+        let tree = self.tree.read().await;
 
         // If the root is not specified, use the latest root
         if root.is_none() {
@@ -206,6 +202,7 @@ impl<M: Middleware> WorldTree<M> {
                     None,
                 ));
             } else {
+                let tree_history = self.tree_history.read().await;
                 // Otherwise, search the tree history for the root and use the corresponding tree
                 for (_, prev_tree) in tree_history.iter() {
                     if prev_tree.root() == root {
@@ -256,12 +253,14 @@ impl<M: Middleware> WorldTree<M> {
         &self,
         log: Log,
     ) -> Result<(), TreeAvailabilityError<M>> {
+        //TODO: use ok or error out, there should be a hash with the log
         if let Some(tx_hash) = log.transaction_hash {
+            //TODO: use ok or error, there should be a block number with the log
             let log_block_number =
                 log.block_number.expect("TODO: handle this error").as_u64();
 
-            //TODO: FIXME: this does not account for if a log has already been seen when syncing to head, the block number
-            // FIXME: will be the same but the log will have already been processed
+            //TODO: FIXME: This check will ensure that we don't process the same log twice, however if there were ever to be two TreeChanged
+            // events in the same block, this logic would ignore the second log. This should be updated.
             if log_block_number < self.latest_synced_block {
                 return Ok(());
             } else {
