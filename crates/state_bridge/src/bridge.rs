@@ -79,11 +79,12 @@ impl<M: Middleware> StateBridge<M> {
 
         tokio::spawn(async move {
             let mut latest_bridged_root;
-            let mut latest_root = Hash::ZERO;
+            let mut latest_root: Uint<256, 4> = Hash::ZERO;
 
             let mut last_propagation: Instant = Instant::now();
 
             loop {
+                // will either be positive or zero if difference is negative
                 let sleep_time = relaying_period
                     .saturating_sub(Instant::now() - last_propagation);
 
@@ -98,7 +99,7 @@ impl<M: Middleware> StateBridge<M> {
                             }
                         }
                     }
-                    // will either be positive or zero if difference is negative
+
                     _ = tokio::time::sleep(sleep_time) => {}
                 }
 
