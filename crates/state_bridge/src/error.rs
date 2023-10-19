@@ -23,4 +23,6 @@ where
     RootSendError(#[from] tokio::sync::broadcast::error::SendError<Hash>),
     #[error("Could not send root through channel")]
     RecvError(#[from] tokio::sync::broadcast::error::RecvError),
+    #[error("No state bridge was added to WorldTreeRoot")]
+    BridgesNotInitialized,
 }

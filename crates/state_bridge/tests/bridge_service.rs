@@ -14,6 +14,7 @@ pub use ethers::utils::{Anvil, AnvilInstance};
 pub use ethers_solc::artifacts::Bytecode;
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
+use state_bridge::error::StateBridgeError;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
@@ -23,7 +24,9 @@ use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 use std::str::FromStr;
 
-use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
+use common::test_utilities::chain_mock::{
+    spawn_mock_chain, MockChain, TestMiddleware,
+};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CompiledContract {
@@ -97,6 +100,36 @@ pub async fn test_relay_root() -> eyre::Result<()> {
     }
 
     assert_eq!(latest_root, bridged_world_id_root);
+
+    Ok(())
+}
+
+#[tokio::test]
+pub async fn test_no_state_bridge_relay_fails() -> eyre::Result<()> {
+    // we need anvil to be in scope in order for the middleware provider to not be dropped
+    #[allow(unused_variables)]
+    let MockChain {
+        mock_world_id,
+        middleware,
+        anvil,
+        ..
+    } = spawn_mock_chain().await?;
+
+    let world_id = IWorldIdIdentityManager::new(
+        mock_world_id.address(),
+        middleware.clone(),
+    );
+
+    let mut state_bridge_service = StateBridgeService::new(world_id)
+        .await
+        .expect("couldn't create StateBridgeService");
+
+    let error = state_bridge_service.spawn().await.unwrap_err();
+
+    assert!(
+        matches!(error, StateBridgeError::BridgesNotInitialized),
+        "Didn't error out as expected"
+    );
 
     Ok(())
 }
