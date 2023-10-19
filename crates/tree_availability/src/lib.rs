@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::abi::TreeChangedFilter;
-use crate::server::inclusion_proof;
+use crate::server::{inclusion_proof, syncing};
 
 //TODO: update the default port
 const DEFAULT_PORT: u16 = 8080;
@@ -91,16 +91,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
-        dbg!("Spawning tree availability service");
-        // Spawn a new task to keep the world tree synced to the chain head
-        let world_tree_handles = self.spawn().await;
-        handles.extend(world_tree_handles);
-
         dbg!("Initializing router");
 
         // Initialize a new router and spawn the server
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
+            .route("/syncing", axum::routing::post(syncing))
             // .route("/verifyProof", axum::routing::post(verify_proof))
             .with_state(self.world_tree.clone());
 
@@ -122,6 +118,10 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         });
 
         handles.push(server_handle);
+
+        dbg!("Spawning tree availability service");
+        // Spawn a new task to keep the world tree synced to the chain head
+        handles.extend(self.spawn().await);
 
         handles
     }

@@ -40,4 +40,7 @@ where
 }
 
 #[derive(Error, Debug)]
-pub enum TreeError {}
+pub enum TreeError {
+    #[error("The world tree is not fully synced")]
+    TreeNotSynced,
+}

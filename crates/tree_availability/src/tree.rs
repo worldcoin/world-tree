@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::DerefMut;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +9,7 @@ use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
 use ethers::providers::{FilterWatcher, Middleware, StreamExt};
 use ethers::types::{BlockNumber, Filter, Log, Transaction, H160, U256};
-use futures::stream::FuturesUnordered;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
@@ -42,7 +43,8 @@ pub struct WorldTree<M: Middleware> {
     //       that way we can remove from the history entires associated with actual on-chain roots
     pub tree_history: RwLock<VecDeque<(TreeUpdate, PoseidonTree<Derived>)>>,
     pub address: H160,
-    pub latest_synced_block: u64, //TODO: revisit if we want to make this atomic
+    pub latest_synced_block: AtomicU64,
+    pub synced: AtomicBool,
     pub middleware: Arc<M>,
 }
 
@@ -64,7 +66,8 @@ impl<M: Middleware> WorldTree<M> {
             tree: RwLock::new(tree),
             tree_history: RwLock::new(VecDeque::new()),
             address,
-            latest_synced_block: creation_block,
+            latest_synced_block: AtomicU64::new(creation_block),
+            synced: AtomicBool::new(false),
             middleware,
         }
     }
@@ -237,7 +240,7 @@ impl<M: Middleware> WorldTree<M> {
         tokio::sync::mpsc::Receiver<Log>,
         JoinHandle<Result<(), TreeAvailabilityError<M>>>,
     ) {
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<Log>(100);
+        let (tx, rx) = tokio::sync::mpsc::channel::<Log>(100);
 
         let filter = Filter::new()
             .address(self.address)
@@ -268,7 +271,7 @@ impl<M: Middleware> WorldTree<M> {
         let filter = Filter::new()
             .address(self.address)
             .topic0(TreeChangedFilter::signature())
-            .from_block(self.latest_synced_block);
+            .from_block(self.latest_synced_block.load(Ordering::Relaxed));
 
         dbg!("Fetching logs");
         let logs = self
@@ -277,11 +280,13 @@ impl<M: Middleware> WorldTree<M> {
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
-        let mut futures = FuturesUnordered::new();
+        let mut futures = FuturesOrdered::new();
         //TODO: update this to use a throttle that can be set by the user
         for logs in logs.chunks(20) {
+            dbg!("getting txs");
+
             for log in logs {
-                futures.push(self.middleware.get_transaction(
+                futures.push_back(self.middleware.get_transaction(
                     log.transaction_hash.ok_or(
                         TreeAvailabilityError::TransactionHashNotFound,
                     )?,

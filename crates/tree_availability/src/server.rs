@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -17,6 +18,18 @@ use crate::tree::{Hash, WorldTree};
 pub struct InclusionProofRequest {
     pub identity_commitment: Hash,
     pub root: Option<Hash>,
+}
+
+impl InclusionProofRequest {
+    pub fn new(
+        identity_commitment: Hash,
+        root: Option<Hash>,
+    ) -> InclusionProofRequest {
+        Self {
+            identity_commitment,
+            root,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -45,11 +58,47 @@ pub async fn inclusion_proof<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    let inclusion_proof = world_tree
-        .get_inclusion_proof(req.identity_commitment, req.root)
-        .await;
+    if world_tree.synced.load(Ordering::Relaxed) {
+        let inclusion_proof = world_tree
+            .get_inclusion_proof(req.identity_commitment, req.root)
+            .await;
 
-    Ok((StatusCode::OK, inclusion_proof.into()))
+        Ok((StatusCode::OK, inclusion_proof.into()))
+    } else {
+        return Err(TreeError::TreeNotSynced);
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResponse {
+    pub synced: bool,
+    pub block_number: Option<u64>,
+}
+
+impl SyncResponse {
+    pub fn new(synced: bool, block_number: Option<u64>) -> SyncResponse {
+        Self {
+            synced,
+            block_number,
+        }
+    }
+}
+
+pub async fn syncing<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> (StatusCode, Json<SyncResponse>) {
+    if world_tree.synced.load(Ordering::Relaxed) {
+        let latest_synced_block =
+            Some(world_tree.latest_synced_block.load(Ordering::SeqCst));
+
+        (
+            StatusCode::OK,
+            SyncResponse::new(true, latest_synced_block).into(),
+        )
+    } else {
+        (StatusCode::OK, SyncResponse::new(false, None).into())
+    }
 }
 
 // //TODO: should this be more descriptive like verify zkp or something
