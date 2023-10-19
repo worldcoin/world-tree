@@ -63,8 +63,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Log>(100);
-        let tx_middleware = self.world_tree.middleware.clone();
-        let rx_middleware = tx_middleware.clone();
+        let middleware = self.world_tree.middleware.clone();
 
         let filter = Filter::new()
             .address(self.world_tree.address)
@@ -72,7 +71,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
         // Spawn a thread to listen to tree changed events with a buffer
         handles.push(tokio::spawn(async move {
-            let mut stream = tx_middleware
+            let mut stream = middleware
                 .watch(&filter)
                 .await
                 .expect("TODO: Handle/Propagate this error")
