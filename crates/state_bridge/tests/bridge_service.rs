@@ -1,5 +1,6 @@
 pub use std::time::Duration;
 
+use common::test_utilities::abi::RootAddedFilter;
 pub use ethers::abi::{AbiEncode, Address};
 pub use ethers::core::abi::Abi;
 pub use ethers::core::k256::ecdsa::SigningKey;
@@ -8,7 +9,7 @@ pub use ethers::prelude::{
     ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
     Signer, SignerMiddleware, Wallet,
 };
-pub use ethers::providers::Middleware;
+pub use ethers::providers::{Middleware, StreamExt};
 pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
 pub use ethers_solc::artifacts::Bytecode;
@@ -24,9 +25,7 @@ use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 use std::str::FromStr;
 
-use common::test_utilities::chain_mock::{
-    spawn_mock_chain, MockChain, TestMiddleware,
-};
+use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CompiledContract {
@@ -86,18 +85,26 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     mock_world_id.insert_root(latest_root).send().await?.await?;
 
-    let mut bridged_world_id_root =
-        mock_bridged_world_id.latest_root().call().await?;
+    let await_matching_root = tokio::spawn(async move {
+        let mut latest_bridged_root: U256;
 
-    for _ in 0..20 {
-        if latest_root != bridged_world_id_root {
-            tokio::time::sleep(relaying_period / 5).await;
-            bridged_world_id_root =
-                mock_bridged_world_id.latest_root().call().await?;
-        } else {
-            break;
+        let filter = mock_bridged_world_id.event::<RootAddedFilter>();
+
+        let mut event_stream = filter.stream().await?.with_meta();
+
+        // Listen to a stream of events, when a new event is received, update the root and block number
+        while let Some(Ok((event, _))) = event_stream.next().await {
+            latest_bridged_root = event.root;
+
+            if latest_bridged_root == latest_root {
+                return Ok(latest_bridged_root);
+            }
         }
-    }
+
+        Err(eyre::eyre!("Whatever"))
+    });
+
+    let bridged_world_id_root = await_matching_root.await??;
 
     assert_eq!(latest_root, bridged_world_id_root);
 
