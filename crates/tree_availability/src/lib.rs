@@ -12,12 +12,14 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::{Json, Router};
 use error::TreeAvailabilityError;
-use ethers::providers::Middleware;
-use ethers::types::H160;
+use ethers::contract::EthEvent;
+use ethers::providers::{Middleware, StreamExt};
+use ethers::types::{Filter, Log, H160};
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 
+use crate::abi::TreeChangedFilter;
 use crate::server::inclusion_proof;
 
 // TODO: Change to a configurable parameter and also set a default
@@ -57,23 +59,51 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
     pub async fn spawn(
         &self,
-    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        // self.world_tree.sync_to_head().await?;
+    ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
+        let mut handles = vec![];
 
-        let middleware = self.world_tree.middleware.clone();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Log>(100);
+        let tx_middleware = self.world_tree.middleware.clone();
+        let rx_middleware = tx_middleware.clone();
+
+        let filter = Filter::new()
+            .address(self.world_tree.address)
+            .topic0(TreeChangedFilter::signature());
+
+        // Spawn a thread to listen to tree changed events with a buffer
+        handles.push(tokio::spawn(async move {
+            let mut stream = tx_middleware
+                .watch(&filter)
+                .await
+                .expect("TODO: Handle/Propagate this error")
+                .stream();
+
+            while let Some(log) = stream.next().await {
+                tx.send(log)
+                    .await
+                    .expect("TODO: Handle/Propagate this error");
+            }
+
+            Ok(())
+        }));
+
+        // Sync the world tree to the chain head
+        self.world_tree
+            .sync_to_head()
+            .await
+            .expect("TODO: error handling");
+
         let world_tree = self.world_tree.clone();
 
-        tokio::spawn(async move {
-            //TODO: update this to be a stream listening to tree changed events or maybe to every block?
-
-            loop {
-                // world_tree.sync_to_head().await?;
-
-                //TODO: remove this and probably perpeturally just listen for new blocks after syncing to head initially
-                // Sleep a little to unblock the executor
-                tokio::time::sleep(Duration::from_secs(5)).await;
+        handles.push(tokio::spawn(async move {
+            while let Some(log) = rx.recv().await {
+                world_tree.sync_from_log(log).await?;
             }
-        })
+
+            Ok(())
+        }));
+
+        handles
     }
 
     pub async fn serve(

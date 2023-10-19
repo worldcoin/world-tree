@@ -1,6 +1,9 @@
+use clap::error;
 use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
+use ethers::types::Log;
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
 
 #[derive(Error, Debug)]
 pub enum TreeAvailabilityError<M>
@@ -26,6 +29,8 @@ where
     EthABIError(#[from] ethers::abi::Error),
     #[error(transparent)]
     HyperError(#[from] hyper::Error),
+    #[error(transparent)]
+    SendLogError(#[from] SendError<Log>),
 }
 
 #[derive(Error, Debug)]

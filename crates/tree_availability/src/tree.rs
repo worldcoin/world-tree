@@ -7,8 +7,8 @@ use std::time::Duration;
 use axum::middleware;
 use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
-use ethers::providers::{FilterWatcher, Middleware};
-use ethers::types::{BlockNumber, Filter, H160, U256};
+use ethers::providers::{FilterWatcher, Middleware, StreamExt};
+use ethers::types::{BlockNumber, Filter, Log, H160, U256};
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
@@ -64,19 +64,6 @@ impl<M: Middleware> WorldTree<M> {
             latest_synced_block: creation_block,
             middleware,
         }
-    }
-
-    //TODO: also with this approach, then you dont need to expose sync to head which is nice
-    pub async fn spawn(
-        &self,
-    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        //TODO: start stream in a task and buffer in a channel
-
-        //TODO: sync to head
-
-        //TODO: handle all events from stream
-
-        todo!()
     }
 
     pub async fn insert_many_at(
@@ -245,23 +232,11 @@ impl<M: Middleware> WorldTree<M> {
     }
 
     // Sync the state of the tree to to the chain head
-    pub async fn sync_to_head(
-        &self,
-        from_block: Option<u64>,
-        //TODO: I dont love this approach, but the idea here is if the from block is None, it would use the last synced block
-        //TODO: the benefit being, if there are no TreeChanged events for 1000 blocks, the from block could be the newest block with TreeChanged events
-        //TODO: which would save us from having to include the 1000 empty blocks in our call to the node. This does however introduce a footgun
-        //TODO: If someone uses a from block that skips over a block with TreeChanged event, this will cause issues.
-        //TODO: we could abstract this from the user and simply expose a spawn method that handles this logic under the hood
-    ) -> Result<(), TreeAvailabilityError<M>> {
-        let from_block = from_block.unwrap_or_else(|| self.latest_synced_block);
-
+    pub async fn sync_to_head(&self) -> Result<(), TreeAvailabilityError<M>> {
         let filter = Filter::new()
             .address(self.address)
             .topic0(TreeChangedFilter::signature())
-            .from_block(from_block);
-
-        //TODO: loop in intervals of n until you get to head
+            .from_block(self.latest_synced_block);
 
         let logs = self
             .middleware
@@ -270,40 +245,58 @@ impl<M: Middleware> WorldTree<M> {
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
         for log in logs {
-            if let Some(tx_hash) = log.transaction_hash {
-                let transaction = self
-                    .middleware
-                    .get_transaction(tx_hash)
-                    .await
-                    .map_err(TreeAvailabilityError::MiddlewareError)?
-                    .ok_or(TreeAvailabilityError::MissingTransaction)?;
+            self.sync_from_log(log).await?;
+        }
 
-                if let Ok(delete_identities_call) =
-                    DeleteIdentitiesCall::decode(transaction.input.as_ref())
-                {
-                    let indices = unpack_indices(
-                        delete_identities_call.packed_deletion_indices.as_ref(),
-                    );
-                    let indices: Vec<_> =
-                        indices.into_iter().map(|x| x as usize).collect();
+        Ok(())
+    }
 
-                    self.delete_many(&indices).await;
-                } else if let Ok(register_identities_call) =
-                    RegisterIdentitiesCall::decode(transaction.input.as_ref())
-                {
-                    let start_index = register_identities_call.start_index;
-                    let identities =
-                        register_identities_call.identity_commitments;
-                    let identities: Vec<_> = identities
-                        .into_iter()
-                        .map(|u256: U256| Hash::from_limbs(u256.0))
-                        .collect();
+    pub async fn sync_from_log(
+        &self,
+        log: Log,
+    ) -> Result<(), TreeAvailabilityError<M>> {
+        if let Some(tx_hash) = log.transaction_hash {
+            let log_block_number =
+                log.block_number.expect("TODO: handle this error").as_u64();
 
-                    self.insert_many_at(start_index as usize, &identities)
-                        .await;
-                } else {
-                    return Err(TreeAvailabilityError::UnrecognizedTransaction);
-                }
+            if log_block_number < self.latest_synced_block {
+                return Ok(());
+            } else {
+
+                //TODO: update this to use an atomic
+                // self.latest_synced_block = log_block_number;
+            }
+
+            let transaction = self
+                .middleware
+                .get_transaction(tx_hash)
+                .await
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .ok_or(TreeAvailabilityError::MissingTransaction)?;
+
+            if let Ok(delete_identities_call) =
+                DeleteIdentitiesCall::decode(transaction.input.as_ref())
+            {
+                let indices = unpack_indices(
+                    delete_identities_call.packed_deletion_indices.as_ref(),
+                );
+                let indices: Vec<_> =
+                    indices.into_iter().map(|x| x as usize).collect();
+
+                self.delete_many(&indices).await;
+            } else if let Ok(register_identities_call) =
+                RegisterIdentitiesCall::decode(transaction.input.as_ref())
+            {
+                let start_index = register_identities_call.start_index;
+                let identities = register_identities_call.identity_commitments;
+                let identities: Vec<_> = identities
+                    .into_iter()
+                    .map(|u256: U256| Hash::from_limbs(u256.0))
+                    .collect();
+
+                self.insert_many_at(start_index as usize, &identities).await;
+            } else {
+                return Err(TreeAvailabilityError::UnrecognizedTransaction);
             }
         }
 
