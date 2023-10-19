@@ -113,8 +113,8 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         // Spawn a new task to keep the world tree synced to the chain head
-        let world_tree_handle = self.spawn().await;
-        handles.push(world_tree_handle);
+        let world_tree_handles = self.spawn().await;
+        handles.extend(world_tree_handles);
 
         // Initialize a new router and spawn the server
         let router = axum::Router::new()
