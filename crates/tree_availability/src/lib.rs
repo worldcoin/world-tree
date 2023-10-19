@@ -1,5 +1,4 @@
 pub mod abi;
-pub mod block_scanner;
 pub mod error;
 pub mod server;
 pub mod tree;
@@ -8,9 +7,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum::{Json, Router};
 use error::TreeAvailabilityError;
 use ethers::contract::EthEvent;
 use ethers::providers::{Middleware, StreamExt};
@@ -27,6 +23,7 @@ const TREE_HISTORY_SIZE: usize = 1000;
 const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_SOCKET_ADDR: SocketAddr =
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DEFAULT_PORT);
+const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
     pub world_tree: Arc<WorldTree<M>>,
@@ -74,13 +71,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             let mut stream = middleware
                 .watch(&filter)
                 .await
-                .expect("TODO: Handle/Propagate this error")
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .interval(STREAM_INTERVAL)
                 .stream();
 
             while let Some(log) = stream.next().await {
-                tx.send(log)
-                    .await
-                    .expect("TODO: Handle/Propagate this error");
+                tx.send(log).await?;
             }
 
             Ok(())

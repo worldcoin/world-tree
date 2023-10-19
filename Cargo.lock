@@ -4887,6 +4887,7 @@ dependencies = [
  "clap 4.4.6",
  "ethers",
  "eyre",
+ "hyper",
  "semaphore",
  "serde",
  "serde_json",
