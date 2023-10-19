@@ -86,22 +86,22 @@ pub async fn test_relay_root() -> eyre::Result<()> {
     mock_world_id.insert_root(latest_root).send().await?.await?;
 
     let await_matching_root = tokio::spawn(async move {
-        let mut latest_bridged_root: U256;
-
         let filter = mock_bridged_world_id.event::<RootAddedFilter>();
 
         let mut event_stream = filter.stream().await?.with_meta();
 
         // Listen to a stream of events, when a new event is received, update the root and block number
         while let Some(Ok((event, _))) = event_stream.next().await {
-            latest_bridged_root = event.root;
+            let latest_bridged_root = event.root;
 
             if latest_bridged_root == latest_root {
                 return Ok(latest_bridged_root);
             }
         }
 
-        Err(eyre::eyre!("Whatever"))
+        Err(eyre::eyre!(
+            "The root in the event stream did not match `latest_root`"
+        ))
     });
 
     let bridged_world_id_root = await_matching_root.await??;
