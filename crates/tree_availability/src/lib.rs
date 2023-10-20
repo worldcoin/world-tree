@@ -1,7 +1,7 @@
 pub mod abi;
 pub mod error;
 pub mod server;
-pub mod tree;
+pub mod world_tree;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
@@ -14,7 +14,7 @@ use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Filter, Log, H160};
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
-use tree::{Hash, PoseidonTree, WorldTree};
+use world_tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::abi::TreeChangedFilter;
 use crate::server::{inclusion_proof, synced};
@@ -57,38 +57,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         Self { world_tree }
     }
 
-    pub async fn spawn(
-        &self,
-    ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
-        let mut handles = vec![];
-
-        let (mut rx, updates_handle) = self.world_tree.listen_for_updates();
-        // Spawn a thread to listen to tree changed events with a buffer
-        handles.push(updates_handle);
-
-        dbg!("Syncing world tree to head");
-        // Sync the world tree to the chain head
-        self.world_tree
-            .sync_to_head()
-            .await
-            .expect("TODO: error handling");
-
-        self.world_tree.synced.store(true, Ordering::Relaxed);
-
-        let world_tree = self.world_tree.clone();
-
-        // Handle updates from the buffered channel
-        handles.push(tokio::spawn(async move {
-            while let Some(log) = rx.recv().await {
-                world_tree.sync_from_log(log).await?;
-            }
-
-            Ok(())
-        }));
-
-        handles
-    }
-
     pub async fn serve(
         self,
         port: Option<u16>,
@@ -124,8 +92,9 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles.push(server_handle);
 
         dbg!("Spawning tree availability service");
+
         // Spawn a new task to keep the world tree synced to the chain head
-        handles.extend(self.spawn().await);
+        handles.extend(self.world_tree.spawn().await);
 
         handles
     }
