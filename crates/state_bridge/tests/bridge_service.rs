@@ -2,6 +2,7 @@ use std::str::FromStr;
 pub use std::time::Duration;
 
 use common::test_utilities::abi::RootAddedFilter;
+use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
 pub use ethers::abi::{AbiEncode, Address};
 pub use ethers::core::abi::Abi;
 pub use ethers::core::k256::ecdsa::SigningKey;
@@ -17,7 +18,6 @@ pub use ethers_solc::artifacts::Bytecode;
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
 use state_bridge::error::StateBridgeError;
-pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
 
@@ -25,8 +25,6 @@ use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
 use state_bridge::root::IWorldIdIdentityManager;
 use state_bridge::StateBridgeService;
 pub use tokio::spawn;
-pub use tokio::task::JoinHandle;
-pub use tracing::{error, info, instrument};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CompiledContract {
