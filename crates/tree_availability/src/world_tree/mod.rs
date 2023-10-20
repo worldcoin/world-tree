@@ -59,6 +59,9 @@ impl<M: Middleware> WorldTree<M> {
         let tree_data = self.tree_data.clone();
         let tree_updater = self.tree_updater.clone();
         tokio::spawn(async move {
+            tree_updater.sync_to_head(&tree_data).await?;
+            tree_updater.synced.store(true, Ordering::Relaxed);
+
             loop {
                 tree_updater.sync_to_head(&tree_data).await?;
 
