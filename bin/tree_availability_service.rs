@@ -31,7 +31,6 @@ struct Opts {
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
-    dbg!("Parsed opts");
 
     let middleware = Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?);
     let handles = TreeAvailabilityService::new(

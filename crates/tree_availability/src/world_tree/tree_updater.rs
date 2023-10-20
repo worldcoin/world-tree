@@ -76,8 +76,6 @@ impl<M: Middleware> TreeUpdater<M> {
         let mut futures = FuturesOrdered::new();
         //TODO: update this to use a throttle that can be set by the user
         for logs in logs.chunks(20) {
-            dbg!("getting txs");
-
             for log in logs {
                 futures.push_back(self.middleware.get_transaction(
                     log.transaction_hash.ok_or(
@@ -91,9 +89,7 @@ impl<M: Middleware> TreeUpdater<M> {
                     .map_err(TreeAvailabilityError::MiddlewareError)?
                     .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-                dbg!("syncing from tx");
                 self.sync_from_transaction(tree_data, transaction).await?;
-                dbg!("finished from tx");
             }
 
             //TODO: use a better throttle
@@ -139,8 +135,6 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
         transaction: Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        dbg!(transaction.block_number.unwrap());
-
         if let Ok(delete_identities_call) =
             DeleteIdentitiesCall::decode(transaction.input.as_ref())
         {

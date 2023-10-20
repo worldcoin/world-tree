@@ -37,8 +37,6 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     let server_handle = tokio::spawn(async move {
         let handles = tree_availability_service.serve(None).await;
 
-        dbg!("getting here");
-
         let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
         while let Some(result) = handles.next().await {
             result.expect("TODO: propagate this error")?;
