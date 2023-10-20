@@ -1,3 +1,4 @@
+pub mod block_scanner;
 pub mod tree_data;
 pub mod tree_updater;
 
@@ -54,34 +55,17 @@ impl<M: Middleware> WorldTree<M> {
 
     pub async fn spawn(
         &self,
-    ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
-        let mut handles = vec![];
-
-        let (mut rx, updates_handle) = self.tree_updater.listen_for_updates();
-        // Spawn a thread to listen to tree changed events with a buffer
-        handles.push(updates_handle);
-
-        dbg!("Syncing world tree to head");
-        // Sync the world tree to the chain head
-        self.tree_updater
-            .sync_to_head(&self.tree_data)
-            .await
-            .expect("TODO: error handling");
-
-        self.tree_updater.synced.store(true, Ordering::Relaxed);
-
+    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let tree_data = self.tree_data.clone();
         let tree_updater = self.tree_updater.clone();
-        // Handle updates from the buffered channel
-        handles.push(tokio::spawn(async move {
-            while let Some(log) = rx.recv().await {
-                tree_updater.sync_from_log(&tree_data, log).await?;
+        tokio::spawn(async move {
+            loop {
+                tree_updater.sync_to_head(&tree_data).await?;
+
+                // Sleep a little to unblock the executor
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
-
-            Ok(())
-        }));
-
-        handles
+        })
     }
 }
 

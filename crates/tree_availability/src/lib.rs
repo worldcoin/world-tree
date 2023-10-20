@@ -94,7 +94,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         dbg!("Spawning tree availability service");
 
         // Spawn a new task to keep the world tree synced to the chain head
-        handles.extend(self.world_tree.spawn().await);
+        handles.push(self.world_tree.spawn().await);
 
         handles
     }

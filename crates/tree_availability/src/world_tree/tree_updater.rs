@@ -18,6 +18,7 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
+use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
 use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
@@ -26,12 +27,15 @@ use crate::error::TreeAvailabilityError;
 use crate::server::InclusionProof;
 use crate::world_tree::Hash;
 
+// TODO: Change to a configurable parameter
+const SCANNING_WINDOW_SIZE: u64 = 100;
 const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct TreeUpdater<M: Middleware> {
     pub address: H160,
     pub latest_synced_block: AtomicU64,
     pub synced: AtomicBool,
+    block_scanner: BlockScanner<Arc<M>>,
     pub middleware: Arc<M>,
 }
 
@@ -41,6 +45,11 @@ impl<M: Middleware> TreeUpdater<M> {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
             synced: AtomicBool::new(false),
+            block_scanner: BlockScanner::new(
+                middleware.clone(),
+                SCANNING_WINDOW_SIZE,
+                creation_block,
+            ),
             middleware,
         }
     }
@@ -50,16 +59,17 @@ impl<M: Middleware> TreeUpdater<M> {
         &self,
         tree_data: &TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        //TODO: FIXME: we will likely need to step through this and not query such a big block range
-        let filter = Filter::new()
-            .address(self.address)
-            .topic0(TreeChangedFilter::signature())
-            .from_block(self.latest_synced_block.load(Ordering::Relaxed));
-
-        dbg!("Fetching logs");
         let logs = self
-            .middleware
-            .get_logs(&filter)
+            .block_scanner
+            .next(
+                Some(self.address.into()),
+                [
+                    Some(TreeChangedFilter::signature().into()),
+                    None,
+                    None,
+                    None,
+                ],
+            )
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
@@ -90,6 +100,16 @@ impl<M: Middleware> TreeUpdater<M> {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
+        let block_number = logs
+            .last()
+            .expect("Could not get last log")
+            .block_number
+            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
+            .as_u64();
+
+        self.latest_synced_block
+            .store(block_number, Ordering::Relaxed);
+
         Ok(())
     }
 
@@ -119,20 +139,6 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
         transaction: Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        //TODO: FIXME: This check will ensure that we are not processing transactions from the same block twice
-        //TODO: FIXME: this should be fine at the moment as we are only updating identities once per block, but if there were two
-        //TODO: FIXME: transactions that update the tree in a single block, this would break. We should find a different way to handle duplicate txs
-        let block_number = transaction
-            .block_number
-            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
-            .as_u64();
-        if block_number < self.latest_synced_block.load(Ordering::Relaxed) {
-            return Ok(());
-        } else {
-            self.latest_synced_block
-                .store(block_number, Ordering::Relaxed);
-        }
-
         dbg!(transaction.block_number.unwrap());
 
         if let Ok(delete_identities_call) =
@@ -163,37 +169,6 @@ impl<M: Middleware> TreeUpdater<M> {
         }
 
         Ok(())
-    }
-
-    pub fn listen_for_updates(
-        &self,
-    ) -> (
-        tokio::sync::mpsc::Receiver<Log>,
-        JoinHandle<Result<(), TreeAvailabilityError<M>>>,
-    ) {
-        let (tx, rx) = tokio::sync::mpsc::channel::<Log>(100);
-
-        let filter = Filter::new()
-            .address(self.address)
-            .topic0(TreeChangedFilter::signature());
-        let middleware = self.middleware.clone();
-
-        let handle = tokio::spawn(async move {
-            let mut stream = middleware
-                .watch(&filter)
-                .await
-                .map_err(TreeAvailabilityError::MiddlewareError)?
-                .interval(STREAM_INTERVAL)
-                .stream();
-
-            while let Some(log) = stream.next().await {
-                tx.send(log).await?;
-            }
-
-            Ok(())
-        });
-
-        (rx, handle)
     }
 }
 
