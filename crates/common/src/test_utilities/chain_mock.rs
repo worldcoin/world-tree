@@ -14,7 +14,7 @@ use ethers::utils::{Anvil, AnvilInstance};
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
 use super::TREE_DEPTH;
 
-type TestMiddleware = NonceManagerMiddleware<
+pub type TestMiddleware = NonceManagerMiddleware<
     SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
 >;
 

@@ -52,9 +52,15 @@ where
     }
 
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
-        //TODO: maybe check that the bridges vec is not empty otherwise, return an error
+        // if no state bridge initialized then there is no point in spawning
+        // the state bridge service as there'd be no receivers for new roots
+        if self.state_bridges.is_empty() {
+            return Err(StateBridgeError::BridgesNotInitialized);
+        }
 
-        //TODO: add a comment why we spawn this first
+        // We first instantiate the receivers on the state bridges
+        // so that the root sender doesn't yield an error when pushing roots
+        // through the channel
         for bridge in self.state_bridges.iter() {
             self.handles.push(
                 bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
