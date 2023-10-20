@@ -7,15 +7,13 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use std::sync::Arc;
 
-
 use error::TreeAvailabilityError;
 use ethers::contract::EthEvent;
-use ethers::providers::{Middleware};
-use ethers::types::{H160};
+use ethers::providers::Middleware;
+use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use world_tree::{Hash, PoseidonTree, WorldTree};
-
 
 use crate::server::{inclusion_proof, synced};
 
@@ -55,7 +53,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
     pub async fn serve(
         self,
-        port: Option<u16>,
+        port: u16,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
@@ -66,10 +64,8 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             // .route("/verifyProof", axum::routing::post(verify_proof))
             .with_state(self.world_tree.clone());
 
-        let address = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port.unwrap_or(DEFAULT_PORT),
-        );
+        let address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
         let server_handle = tokio::spawn(async move {
             axum::Server::bind(&address)
@@ -92,13 +88,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
 #[cfg(test)]
 mod tests {
-    
-    
-
-    
-    
-
-    
 
     const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
 

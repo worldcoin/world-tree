@@ -1,4 +1,3 @@
-
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -8,7 +7,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use hyper::StatusCode;
 use tree_availability::error::TreeAvailabilityError;
-use tree_availability::server::{InclusionProofRequest};
+use tree_availability::server::InclusionProofRequest;
 use tree_availability::world_tree::Hash;
 use tree_availability::TreeAvailabilityService;
 
@@ -35,7 +34,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Spawn the service in a separate task
     let server_handle = tokio::spawn(async move {
-        let handles = tree_availability_service.serve(None).await;
+        let handles = tree_availability_service.serve(8080).await;
 
         let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
         while let Some(result) = handles.next().await {
