@@ -10,7 +10,7 @@ use semaphore::poseidon_tree::Proof;
 use semaphore::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{TreeAvailabilityError, TreeError};
+use crate::error::{TreeError};
 use crate::world_tree::{Hash, WorldTree};
 
 #[derive(Serialize, Deserialize)]
@@ -66,7 +66,7 @@ pub async fn inclusion_proof<M: Middleware>(
 
         Ok((StatusCode::OK, inclusion_proof.into()))
     } else {
-        return Err(TreeError::TreeNotSynced);
+        Err(TreeError::TreeNotSynced)
     }
 }
 

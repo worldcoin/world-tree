@@ -1,22 +1,20 @@
-use std::collections::VecDeque;
-use std::ops::DerefMut;
+
+
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::middleware;
+
 use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
-use ethers::providers::{FilterWatcher, Middleware, StreamExt};
-use ethers::types::{BlockNumber, Filter, Log, Transaction, H160, U256};
-use futures::stream::{FuturesOrdered, FuturesUnordered};
-use semaphore::lazy_merkle_tree::{
-    Canonical, Derived, LazyMerkleTree, VersionMarker,
-};
-use semaphore::merkle_tree::Hasher;
-use semaphore::poseidon_tree::{PoseidonHash, Proof};
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
+use ethers::providers::{Middleware, StreamExt};
+use ethers::types::{Log, Transaction, H160, U256};
+use futures::stream::{FuturesOrdered};
+
+
+
+
+
 
 use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
@@ -24,7 +22,7 @@ use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
 };
 use crate::error::TreeAvailabilityError;
-use crate::server::InclusionProof;
+
 use crate::world_tree::Hash;
 
 // TODO: Change to a configurable parameter

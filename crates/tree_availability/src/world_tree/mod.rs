@@ -2,17 +2,13 @@ pub mod block_scanner;
 pub mod tree_data;
 pub mod tree_updater;
 
-use std::collections::VecDeque;
-use std::ops::DerefMut;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::providers::{FilterWatcher, Middleware, StreamExt};
-use ethers::types::{BlockNumber, Filter, Log, Transaction, H160, U256};
-use semaphore::lazy_merkle_tree::{
-    Canonical, Derived, LazyMerkleTree, VersionMarker,
-};
+use ethers::providers::Middleware;
+use ethers::types::H160;
+use semaphore::lazy_merkle_tree::{Canonical, LazyMerkleTree};
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::task::JoinHandle;
@@ -23,8 +19,6 @@ use crate::error::TreeAvailabilityError;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
-
-const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 /// An abstraction over a tree with a history of changes
 ///

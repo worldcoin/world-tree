@@ -1,13 +1,13 @@
 use std::collections::VecDeque;
 use std::ops::DerefMut;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+
+
+
 
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
-use semaphore::merkle_tree::Hasher;
+
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use tokio::sync::RwLock;
 
@@ -63,14 +63,14 @@ impl TreeData {
 
         let first_update = TreeUpdate {
             index: start_index,
-            value: first_identity.clone(),
+            value: *first_identity,
         };
         history.push_back((first_update, next.clone()));
 
         for (i, identity) in identities.iter().enumerate().skip(1) {
             let update = TreeUpdate {
                 index: start_index + i,
-                value: identity.clone(),
+                value: *identity,
             };
 
             next = next.update(start_index + i, identity);
@@ -81,7 +81,7 @@ impl TreeData {
     pub async fn delete_many(&self, delete_indices: &[usize]) {
         let mut history = self.tree_history.write().await;
 
-        let Some(first_idx) = delete_indices.get(0) else {
+        let Some(first_idx) = delete_indices.first() else {
             return;
         };
 
@@ -161,11 +161,11 @@ impl TreeData {
 
         // If the root is not specified, use the latest root
         if root.is_none() {
-            return Some(InclusionProof::new(
+            Some(InclusionProof::new(
                 tree.root(),
                 Self::proof(&tree, identity)?,
                 None,
-            ));
+            ))
         } else {
             let root = root.unwrap();
 
@@ -183,7 +183,7 @@ impl TreeData {
                     if prev_tree.root() == root {
                         return Some(InclusionProof::new(
                             root,
-                            Self::proof(&prev_tree, identity)?,
+                            Self::proof(prev_tree, identity)?,
                             None,
                         ));
                     }

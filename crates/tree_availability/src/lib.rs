@@ -4,19 +4,19 @@ pub mod server;
 pub mod world_tree;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::Ordering;
+
 use std::sync::Arc;
-use std::time::Duration;
+
 
 use error::TreeAvailabilityError;
 use ethers::contract::EthEvent;
-use ethers::providers::{Middleware, StreamExt};
-use ethers::types::{Filter, Log, H160};
+use ethers::providers::{Middleware};
+use ethers::types::{H160};
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
-use crate::abi::TreeChangedFilter;
+
 use crate::server::{inclusion_proof, synced};
 
 //TODO: update the default port
@@ -68,7 +68,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
         let address = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port.unwrap_or_else(|| DEFAULT_PORT),
+            port.unwrap_or(DEFAULT_PORT),
         );
 
         let server_handle = tokio::spawn(async move {
@@ -92,13 +92,13 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-    use std::sync::Arc;
+    
+    
 
-    use ethers::providers::{Provider, Ws};
-    use ethers::types::H160;
+    
+    
 
-    use crate::TreeAvailabilityService;
+    
 
     const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
 

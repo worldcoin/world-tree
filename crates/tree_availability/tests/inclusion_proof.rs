@@ -1,4 +1,4 @@
-use core::panic;
+
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use hyper::StatusCode;
 use tree_availability::error::TreeAvailabilityError;
-use tree_availability::server::{InclusionProof, InclusionProofRequest};
+use tree_availability::server::{InclusionProofRequest};
 use tree_availability::world_tree::Hash;
 use tree_availability::TreeAvailabilityService;
 
