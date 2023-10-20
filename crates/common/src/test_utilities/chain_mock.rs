@@ -12,7 +12,6 @@ use ethers::types::{Uint8, H256, U256};
 use ethers::utils::{Anvil, AnvilInstance};
 
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
-
 use super::TREE_DEPTH;
 
 type TestMiddleware = NonceManagerMiddleware<

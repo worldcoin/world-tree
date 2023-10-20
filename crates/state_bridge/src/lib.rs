@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use bridge::StateBridge;
 use error::StateBridgeError;
-use ethers::{providers::Middleware, types::H160};
+use ethers::providers::Middleware;
+use ethers::types::H160;
 use root::{IWorldIdIdentityManager, WorldTreeRoot};
-
 use tokio::task::JoinHandle;
 
 pub struct StateBridgeService<M: Middleware + 'static> {

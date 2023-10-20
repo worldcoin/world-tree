@@ -3,7 +3,6 @@ pub mod server;
 pub mod world_tree;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
 use std::sync::Arc;
 
 use error::TreeAvailabilityError;

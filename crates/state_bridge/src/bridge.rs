@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
+use ethers::middleware::contract::abigen;
+use ethers::providers::Middleware;
+use ethers::types::H160;
 use ruint::Uint;
+use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
-use ethers::{
-    middleware::contract::abigen, providers::Middleware, types::H160,
-};
-use tokio::task::JoinHandle;
-
-use crate::{error::StateBridgeError, root::Hash};
+use crate::error::StateBridgeError;
+use crate::root::Hash;
 
 abigen!(
     IStateBridge,

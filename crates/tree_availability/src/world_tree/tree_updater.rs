@@ -14,7 +14,6 @@ use super::abi::{
 use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
 use crate::error::TreeAvailabilityError;
-
 use crate::world_tree::Hash;
 
 // TODO: Change to a configurable parameter
