@@ -189,3 +189,21 @@ pub fn unpack_indices(packed: &[u8]) -> Vec<u32> {
 
     indices
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pack_indices() {
+        let indices = vec![1, 2, 3, 4, 5, 6, 7, 8];
+
+        let packed = pack_indices(&indices);
+
+        assert_eq!(packed.len(), 32);
+
+        let unpacked = unpack_indices(&packed);
+
+        assert_eq!(unpacked, indices);
+    }
+}
