@@ -10,7 +10,7 @@ use semaphore::poseidon_tree::Proof;
 use semaphore::Field;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{TreeError};
+use crate::error::TreeError;
 use crate::world_tree::{Hash, WorldTree};
 
 #[derive(Serialize, Deserialize)]
@@ -104,23 +104,6 @@ pub async fn synced<M: Middleware>(
         )
     }
 }
-
-// //TODO: should this be more descriptive like verify zkp or something
-// async fn verify_proof<M: Middleware>(
-//     State(world_tree): State<Arc<WorldTree<M>>>, //TODO: we can probably remove this, we only need tree depth
-//     Json(verify_proof_request): Json<VerifyProofRequest>,
-// ) -> Result<(StatusCode, Json<VerifyProofResponse>), Error> {
-//     let result = app
-//         .verify_semaphore_proof(
-//             &verify_semaphore_proof_request,
-//             &verify_semaphore_proof_query,
-//         )
-//         .await?;
-
-//     let result = result.hide_processed_status();
-
-//     Ok((result.to_response_code(), Json(result)))
-// }
 
 impl TreeError {
     fn to_status_code(&self) -> StatusCode {

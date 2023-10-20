@@ -1,4 +1,3 @@
-pub mod abi;
 pub mod error;
 pub mod server;
 pub mod world_tree;
@@ -16,10 +15,6 @@ use tokio::task::JoinHandle;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::server::{inclusion_proof, synced};
-
-//TODO: update the default port
-const DEFAULT_PORT: u16 = 8080;
-//TODO: Should use stream instead of watch
 
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
     pub world_tree: Arc<WorldTree<M>>,
@@ -87,14 +82,4 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 }
 
 #[cfg(test)]
-mod tests {
-
-    const DEFAULT_TREE_HISTORY_SIZE: usize = 10;
-
-    //TODO: set world tree address as const for tests
-
-    // #[tokio::test]
-    // async fn test_spawn_tree_availability_service() -> eyre::Result<()> {
-
-    // }
-}
+mod tests {}

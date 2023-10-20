@@ -1,3 +1,4 @@
+pub mod abi;
 pub mod block_scanner;
 pub mod tree_data;
 pub mod tree_updater;
