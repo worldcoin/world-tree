@@ -19,7 +19,6 @@ use crate::world_tree::Hash;
 
 // TODO: Change to a configurable parameter
 const SCANNING_WINDOW_SIZE: u64 = 100;
-const STREAM_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct TreeUpdater<M: Middleware> {
     pub address: H160,
@@ -95,27 +94,6 @@ impl<M: Middleware> TreeUpdater<M> {
 
         self.latest_synced_block
             .store(block_number, Ordering::Relaxed);
-
-        Ok(())
-    }
-
-    pub async fn sync_from_log(
-        &self,
-        tree_data: &TreeData,
-        log: Log,
-    ) -> Result<(), TreeAvailabilityError<M>> {
-        let tx_hash = log
-            .transaction_hash
-            .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
-
-        let transaction = self
-            .middleware
-            .get_transaction(tx_hash)
-            .await
-            .map_err(TreeAvailabilityError::MiddlewareError)?
-            .ok_or(TreeAvailabilityError::MissingTransaction)?;
-
-        self.sync_from_transaction(tree_data, transaction).await?;
 
         Ok(())
     }
