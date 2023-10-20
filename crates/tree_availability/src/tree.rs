@@ -334,15 +334,19 @@ impl<M: Middleware> WorldTree<M> {
         &self,
         transaction: Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        // //TODO: FIXME: This check will ensure that we don't process the same log twice, however if there were ever to be two TreeChanged
-        // // events in the same block, this logic would ignore the second log. This should be updated.
-        // if log_block_number < self.latest_synced_block {
-        //     return Ok(());
-        // } else {
-        //     //TODO: only update if the block number is greater than the latest synced block, this still needs to be fixed though
-        //     //TODO: update this to use an atomic
-        //     // self.latest_synced_block = log_block_number;
-        // }
+        //TODO: FIXME: This check will ensure that we are not processing transactions from the same block twice
+        //TODO: FIXME: this should be fine at the moment as we are only updating identities once per block, but if there were two
+        //TODO: FIXME: transactions that update the tree in a single block, this would break. We should find a different way to handle duplicate txs
+        let block_number = transaction
+            .block_number
+            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
+            .as_u64();
+        if block_number < self.latest_synced_block.load(Ordering::Relaxed) {
+            return Ok(());
+        } else {
+            self.latest_synced_block
+                .store(block_number, Ordering::Relaxed);
+        }
 
         dbg!(transaction.block_number.unwrap());
 

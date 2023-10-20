@@ -4,6 +4,7 @@ pub mod server;
 pub mod tree;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +17,7 @@ use tokio::task::JoinHandle;
 use tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::abi::TreeChangedFilter;
-use crate::server::{inclusion_proof, syncing};
+use crate::server::{inclusion_proof, synced};
 
 //TODO: update the default port
 const DEFAULT_PORT: u16 = 8080;
@@ -72,8 +73,11 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             .await
             .expect("TODO: error handling");
 
+        self.world_tree.synced.store(true, Ordering::Relaxed);
+
         let world_tree = self.world_tree.clone();
 
+        // Handle updates from the buffered channel
         handles.push(tokio::spawn(async move {
             while let Some(log) = rx.recv().await {
                 world_tree.sync_from_log(log).await?;
@@ -96,7 +100,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         // Initialize a new router and spawn the server
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            .route("/syncing", axum::routing::post(syncing))
+            .route("/synced", axum::routing::post(synced))
             // .route("/verifyProof", axum::routing::post(verify_proof))
             .with_state(self.world_tree.clone());
 

@@ -85,19 +85,18 @@ impl SyncResponse {
     }
 }
 
-pub async fn syncing<M: Middleware>(
+pub async fn synced<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
 ) -> (StatusCode, Json<SyncResponse>) {
     if world_tree.synced.load(Ordering::Relaxed) {
+        (StatusCode::OK, SyncResponse::new(true, None).into())
+    } else {
         let latest_synced_block =
             Some(world_tree.latest_synced_block.load(Ordering::SeqCst));
-
         (
             StatusCode::OK,
-            SyncResponse::new(true, latest_synced_block).into(),
+            SyncResponse::new(false, latest_synced_block).into(),
         )
-    } else {
-        (StatusCode::OK, SyncResponse::new(false, None).into())
     }
 }
 

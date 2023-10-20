@@ -1,5 +1,6 @@
 use core::panic;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
+use std::sync::Arc;
 
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
@@ -21,18 +22,20 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     let world_tree_creation_block = 9888280;
 
+    let tree_availability_service = TreeAvailabilityService::new(
+        30,
+        10,
+        10,
+        world_tree_address,
+        world_tree_creation_block,
+        middleware,
+    );
+
+    let world_tree = tree_availability_service.world_tree.clone();
+
     // Spawn the service in a separate task
     let server_handle = tokio::spawn(async move {
-        let handles = TreeAvailabilityService::new(
-            30,
-            10,
-            10,
-            world_tree_address,
-            world_tree_creation_block,
-            middleware,
-        )
-        .serve(None)
-        .await;
+        let handles = tree_availability_service.serve(None).await;
 
         dbg!("getting here");
 
@@ -44,21 +47,25 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         Ok::<(), TreeAvailabilityError<_>>(())
     });
 
-    // Wait a bit for the server to actually start
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    // Wait for the tree to be synced
+    loop {
+        if world_tree.synced.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
 
     // Send a request to get an inclusion proof
     let client = reqwest::Client::new();
     let response = client
         .post("http://127.0.0.1:8080/inclusionProof")
         .json(&InclusionProofRequest {
-            identity_commitment: Hash::from(0x01),
+            identity_commitment: Hash::from(0x01), //TODO: update to use a commitment in the tree
             root: None,
         })
         .send()
         .await?;
-
-    panic!("checking here");
 
     // Check response
     assert_eq!(response.status(), StatusCode::OK);
