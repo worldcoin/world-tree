@@ -22,7 +22,7 @@ pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
 
 use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
-use state_bridge::root::IWorldIdIdentityManager;
+use state_bridge::root::IWorldIDIdentityManager;
 use state_bridge::StateBridgeService;
 pub use tokio::spawn;
 
@@ -32,6 +32,8 @@ struct CompiledContract {
     bytecode: Bytecode,
 }
 
+// test that spawns a mock anvil chain, deploys world id contracts, instantiates a `StateBridgeService`
+// and propagates a root in order to see if the `StateBridgeService` works as intended.
 #[tokio::test]
 pub async fn test_relay_root() -> eyre::Result<()> {
     // we need anvil to be in scope in order for the middleware provider to not be dropped
@@ -47,7 +49,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     let relaying_period = std::time::Duration::from_secs(5);
 
-    let world_id = IWorldIdIdentityManager::new(
+    let world_id = IWorldIDIdentityManager::new(
         mock_world_id.address(),
         middleware.clone(),
     );
@@ -121,7 +123,7 @@ pub async fn test_no_state_bridge_relay_fails() -> eyre::Result<()> {
         ..
     } = spawn_mock_chain().await?;
 
-    let world_id = IWorldIdIdentityManager::new(
+    let world_id = IWorldIDIdentityManager::new(
         mock_world_id.address(),
         middleware.clone(),
     );

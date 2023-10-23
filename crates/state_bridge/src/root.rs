@@ -13,16 +13,23 @@ use tokio::task::JoinHandle;
 
 use crate::error::StateBridgeError;
 
+// Creates the ABI for the WorldIDIdentityManager interface
 abigen!(
-    IWorldIdIdentityManager,
+    IWorldIDIdentityManager,
     r#"[
         function latestRoot() external returns (uint256)
         event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
     ]"#;
 );
 
+/// `WorldTreeRoot` is the struct that has a `WorldIDIdentityManager` interface
+/// and sends the latest roots to a channel so that the `StateBridgeService` can
+/// consume them. It listens to `TreeChanged` events on `WorldIDIdentityManager` in
+/// order to update its internal state.
 pub struct WorldTreeRoot<M: Middleware + 'static> {
-    pub world_id_identity_manager: IWorldIdIdentityManager<M>,
+    /// `WorldIDIdentityManager` contract interface
+    pub world_id_identity_manager: IWorldIDIdentityManager<M>,
+    /// channel to send the latest roots to the `StateBridge`
     pub root_tx: tokio::sync::broadcast::Sender<Hash>,
 }
 
@@ -30,8 +37,15 @@ impl<M> WorldTreeRoot<M>
 where
     M: Middleware,
 {
+    /// `WorldTreeRoot` constructor
+    ///
+    /// ### Args
+    /// `world_id_identity_manager`:`IWorldIDIdentityManager\<M\>` - `WorldIDIdentityManager` interface
+    ///
+    /// ### Output
+    /// `WorldTreeRoot` Result
     pub async fn new(
-        world_id_identity_manager: IWorldIdIdentityManager<M>,
+        world_id_identity_manager: IWorldIDIdentityManager<M>,
     ) -> Result<Self, StateBridgeError<M>> {
         let (root_tx, _) = tokio::sync::broadcast::channel::<Hash>(1000);
 
@@ -41,13 +55,22 @@ where
         })
     }
 
+    /// `WorldTreeRoot` constructor from address and middleware
+    ///
+    /// ### Args
+    /// `world_id_identity_manager`:`IWorldIDIdentityManager\<M\>` - `WorldIDIdentityManager` interface
+    /// `world_tree_address`: `H160` - `WorldIDIdentityManager` contract address
+    /// `middleware`: `Arc\<M\>` - Middleware provider (ethers)
+    ///
+    /// ### Output
+    /// `WorldTreeRoot` Result
     pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
         let (root_tx, _) = tokio::sync::broadcast::channel::<Hash>(1000);
 
-        let world_id_identity_manager = IWorldIdIdentityManager::new(
+        let world_id_identity_manager = IWorldIDIdentityManager::new(
             world_tree_address,
             middleware.clone(),
         );
@@ -58,11 +81,15 @@ where
         })
     }
 
+    /// Spawns the `WorldTreeRoot` task which will fetch the latest root in the `WorldIDIdentityManager`
+    /// [merkle tree root](https://github.com/worldcoin/world-id-contracts/blob/852790da8f348d6a2dbb58d1e29123a644f4aece/src/WorldIDIdentityManagerImplV1.sol#L63) every single time the
+    /// tree is updated by a batch insertion or batch deletion operation.
     pub async fn spawn(&self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
         let root_tx = self.root_tx.clone();
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         tokio::spawn(async move {
+            // event emitted when insertions or deletions on the merkle tree have taken place
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
 
             let mut event_stream = filter.stream().await?.with_meta();
@@ -100,7 +127,7 @@ mod tests {
             ..
         } = spawn_mock_chain().await?;
 
-        let world_id = IWorldIdIdentityManager::new(
+        let world_id = IWorldIDIdentityManager::new(
             mock_world_id.address(),
             middleware.clone(),
         );
