@@ -19,15 +19,24 @@ pub type TestMiddleware = NonceManagerMiddleware<
     SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
 >;
 
+/// Creates an `Anvil` node with all the World ID contracts necessary
+/// to mock a production World ID on-chain deployment
 pub struct MockChain<M: Middleware> {
+    /// Anvil node running the EVM locally for testing
     pub anvil: AnvilInstance,
+    /// private key for the deployer wallet
     pub private_key: H256,
+    /// `MockStateBridge` contract
     pub mock_state_bridge: MockStateBridge<M>,
+    /// `MockWorldIDIdentityManager` contract
     pub mock_world_id: MockWorldID<M>,
+    /// `MockBridgedWorldID` contract
     pub mock_bridged_world_id: MockBridgedWorldID<M>,
+    /// Middleware provider
     pub middleware: Arc<TestMiddleware>,
 }
 
+/// Spawns an anvil local chain with all World ID contracts deployed on it
 pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
     let chain = Anvil::new().block_time(2u64).spawn();
 
