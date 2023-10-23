@@ -2413,11 +2413,12 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 name = "identity-sequencer"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "clap 4.4.6",
+ "common",
  "derive",
  "ethers",
+ "eyre",
  "hex-literal 0.4.1",
  "serde",
  "state_bridge",

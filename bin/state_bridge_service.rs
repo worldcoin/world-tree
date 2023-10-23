@@ -49,7 +49,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
     match args.command {
@@ -107,7 +107,7 @@ async fn spawn_state_bridge_service(
     bridged_world_id_addresses: Vec<H160>,
     relaying_period: Duration,
     block_confirmations: usize,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     let provider = Provider::<Http>::try_from(rpc_url)
         .expect("failed to initialize Http provider");
 
@@ -158,4 +158,22 @@ async fn spawn_state_bridge_service(
         .expect("failed to spawn a state bridge service");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
+
+    #[tokio::test]
+    async fn test_state_bridge_cli() -> eyre::Result<()> {
+        let MockChain {
+            anvil,
+            mock_world_id,
+            mock_state_bridge,
+            mock_bridged_world_id,
+            middleware,
+        } = spawn_mock_chain().await?;
+
+        Ok(())
+    }
 }
