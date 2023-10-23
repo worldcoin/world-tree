@@ -84,10 +84,12 @@ impl<M: Middleware> StateBridge<M> {
         let block_confirmations = self.block_confirmations;
 
         tokio::spawn(async move {
+            #[allow(unused_assignments)]
             let mut latest_bridged_root: Uint<256, 4> = Hash::ZERO;
             let mut latest_root: Uint<256, 4> = Hash::ZERO;
 
             let mut last_propagation: Instant = Instant::now();
+            #[allow(unused_assignments)]
             let mut time_since_last_propagation: Duration = relaying_period;
 
             loop {
@@ -97,14 +99,8 @@ impl<M: Middleware> StateBridge<M> {
 
                 select! {
                     root = root_rx.recv() => {
-                        match root {
-                            Ok(root) => {
-                                latest_root = root;
-                            }
-                            Err(_) => {
-                                break;
-                            }
-                        }
+
+                        latest_root = root?;
                     }
 
                     _ = tokio::time::sleep(sleep_time) => {}
@@ -129,7 +125,6 @@ impl<M: Middleware> StateBridge<M> {
                     }
                 }
             }
-            Ok(())
         })
     }
 }

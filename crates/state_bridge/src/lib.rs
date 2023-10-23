@@ -120,7 +120,7 @@ where
     /// ### Arguments
     ///
     /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
-    /// `middleware`:`Arc\<M\>`` - Middleware provider (ethers)
+    /// `middleware`:`Arc\<M\>` - Middleware provider
     ///
     /// ### Output
     ///

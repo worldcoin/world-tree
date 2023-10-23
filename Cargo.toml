@@ -19,10 +19,17 @@ ethers = "2.0.10"
 eyre = "0.6.8"
 futures = "0.3.28"
 reqwest = "0.11.22"
+serde = { version = "1.0.189", features = ["derive"] }
 tokio = { version = "1.33.0", features = ["full"]}
+toml = "0.8.4"
 tree_availability = { path = "crates/tree_availability" }
+state_bridge = {path = "crates/state_bridge"}
 
 
 [[bin]]
 name = "tree-availability-service"
 path = "bin/tree_availability_service.rs"
+
+[[bin]]
+name = "state-bridge-service"
+path = "bin/state_bridge_service.rs"
