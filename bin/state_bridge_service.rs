@@ -23,15 +23,26 @@ struct Args {
     command: Command,
 }
 
-/// Supported commands by the state bridge service CLI
+/// The state bridge service propagates roots according to the specified relaying_period
+/// by calling the propagateRoot() method on each specified World ID StateBridge. The state
+/// bridge service will also make sure that it doesn't propagate roots that have already been propagated
+/// and that have finalized on the `BridgedWorldID` side.
 #[derive(Subcommand, Debug)]
 #[clap(rename_all = "snake_case")]
 enum Command {
-    /// Spawns the state bridge service which will periodically call `propagateRoot()`
+    /// Spawns the state bridge service which will periodically call `propagateRoot()`.
+    ///  The config parameter is the TOML file path to the configuration file for spawning the state bridge service.
     Spawn { config: PathBuf },
 }
 
-/// TOML file structure for state bridge service parameters
+/// The config TOML file defines all the necessary parameters to spawn a state bridge service.
+/// rpc_url - HTTP rpc url for an Ethereum node (string)
+/// private_key - pk to an address that will call the propagateRoot() method on the StateBridge contract (string)
+/// world_id_address - WorldIDIdentityManager contract address (string)
+/// world_id_state_bridge_addresses - List of StateBridge contract addresses (strings)
+/// bridged_world_id_addresses - List of BridgedWorldID contract addresses (strings)
+/// relaying_period:  propagateRoot() call period time in seconds (u64)
+/// block_confirmations - Number of block confirmations required for the propagateRoot call on the StateBridge contract (optional number)
 #[derive(Deserialize, Serialize)]
 struct Config {
     /// RPC URL for the HTTP provider
