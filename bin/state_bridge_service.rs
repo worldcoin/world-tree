@@ -23,6 +23,15 @@ struct Args {
     command: Command,
 }
 
+/// Supported commands by the state bridge service CLI
+#[derive(Subcommand, Debug)]
+#[clap(rename_all = "snake_case")]
+enum Command {
+    /// Spawns the state bridge service which will periodically call `propagateRoot()`
+    Spawn { config: PathBuf },
+}
+
+/// TOML file structure for state bridge service parameters
 #[derive(Deserialize, Serialize)]
 struct Config {
     /// RPC URL for the HTTP provider
@@ -40,12 +49,6 @@ struct Config {
     /// Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
     /// contract
     block_confirmations: Option<usize>,
-}
-
-#[derive(Subcommand, Debug)]
-#[clap(rename_all = "snake_case")]
-enum Command {
-    Spawn { config: PathBuf },
 }
 
 #[tokio::main]
@@ -169,13 +172,13 @@ mod tests {
     async fn test_deserialize_toml() -> eyre::Result<()> {
         let config: Config = toml::from_str(
             r#"
-            rpc_url: "127.0.0.1:8545"
-            private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
-            world_id_address: "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
-            world_id_state_bridge_addresses: ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
-            bridged_world_id_addresses: ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
-            relaying_period: 5
-            block_confirmations: 6
+            rpc_url = "127.0.0.1:8545"
+            private_key = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+            world_id_address = "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+            world_id_state_bridge_addresses = ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
+            bridged_world_id_addresses = ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
+            relaying_period = 5
+            block_confirmations = 6
             "#)
         .expect("couldn't deserialize toml-encoded string");
 
