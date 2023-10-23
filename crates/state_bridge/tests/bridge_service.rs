@@ -45,7 +45,6 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         mock_world_id,
         middleware,
         anvil,
-        ..
     } = spawn_mock_chain().await?;
 
     let relaying_period = std::time::Duration::from_secs(5);

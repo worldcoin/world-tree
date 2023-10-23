@@ -26,5 +26,16 @@ path = "bin/state_bridge_service.rs"
 [[bin]]
 name = "tree-availability-service"
 path = "bin/tree_availability_service.rs"
+
 [dependencies]
+anyhow = "1.0.75"
+chrono = "0.4.31"
+clap = { version = "4.4.6", features = ["derive"] }
+derive = "1.0.0"
+ethers = { version = "2.0.10", features = ["openssl", "rustls", "ipc"] }
+hex-literal = "0.4.1"
+serde = "1.0.189"
+state_bridge = {path = "crates/state_bridge"}
+tokio = { version = "1.33.0", features = ["full"] }
+toml = "0.8.2"
 
