@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
 use ethers::middleware::Middleware;
-use ethers::{providers::StreamExt, types::H160};
+use ethers::providers::StreamExt;
+use ethers::types::H160;
 use ruint::Uint;
-use semaphore::{merkle_tree::Hasher, poseidon_tree::PoseidonHash};
+use semaphore::merkle_tree::Hasher;
+use semaphore::poseidon_tree::PoseidonHash;
 
 pub type Hash = <PoseidonHash as Hasher>::Hash;
-use crate::error::StateBridgeError;
 use ethers::prelude::abigen;
 use tokio::task::JoinHandle;
+
+use crate::error::StateBridgeError;
 
 // Creates the ABI for the WorldIDIdentityManager interface
 abigen!(
@@ -107,10 +110,11 @@ where
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
     use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
     use ethers::types::U256;
     use tokio::time::Duration;
+
+    use super::*;
 
     #[tokio::test]
     async fn listen_and_propagate_root() -> eyre::Result<()> {
