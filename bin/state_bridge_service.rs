@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
-use std::{any, fs, io::ErrorKind, path::PathBuf, str::FromStr, sync::Arc};
+use std::{fs, io::ErrorKind, path::PathBuf, sync::Arc};
 
 use ethers::{
     prelude::{
         Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
-        SignerMiddleware, Wallet, H160,
+        SignerMiddleware, H160,
     },
     providers::Middleware,
 };
@@ -25,13 +25,20 @@ struct Args {
 
 #[derive(Deserialize, Serialize)]
 struct Config {
+    /// RPC URL for the HTTP provider
     rpc_url: String,
+    /// Private key to use for the middleware signer
     private_key: String,
+    /// `WorldIDIdentityManager` contract address
     world_id_address: H160,
+    /// List of `StateBridge` contract addresses
     world_id_state_bridge_addresses: Vec<H160>,
+    /// List of `BridgedWorldID` contract addresses
     bridged_world_id_addresses: Vec<H160>,
+    /// `propagateRoot()` call period time in seconds
     relaying_period: u64,
-
+    /// Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
+    /// contract
     block_confirmations: Option<usize>,
 }
 
@@ -138,6 +145,7 @@ async fn spawn_state_bridge_service(
             state_bridge_interface,
             bridged_world_id_interface,
             relaying_period,
+            block_confirmations,
         )
         .unwrap();
 

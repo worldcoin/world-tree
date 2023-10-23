@@ -32,6 +32,7 @@ pub struct StateBridge<M: Middleware + 'static> {
     pub state_bridge: IStateBridge<M>,
     pub bridged_world_id: IBridgedWorldID<M>,
     pub relaying_period: Duration,
+    pub block_confirmations: usize,
 }
 
 impl<M: Middleware> StateBridge<M> {
@@ -39,11 +40,13 @@ impl<M: Middleware> StateBridge<M> {
         state_bridge: IStateBridge<M>,
         bridged_world_id: IBridgedWorldID<M>,
         relaying_period: Duration,
+        block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
             state_bridge,
             bridged_world_id,
             relaying_period,
+            block_confirmations,
         })
     }
 
@@ -53,6 +56,7 @@ impl<M: Middleware> StateBridge<M> {
         bridged_world_id_address: H160,
         derived_middleware: Arc<M>,
         relaying_period: Duration,
+        block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
         let state_bridge =
             IStateBridge::new(bridge_address, canonical_middleware);
@@ -66,6 +70,7 @@ impl<M: Middleware> StateBridge<M> {
             state_bridge,
             bridged_world_id,
             relaying_period,
+            block_confirmations,
         })
     }
 
@@ -76,6 +81,7 @@ impl<M: Middleware> StateBridge<M> {
         let bridged_world_id = self.bridged_world_id.clone();
         let state_bridge = self.state_bridge.clone();
         let relaying_period = self.relaying_period;
+        let block_confirmations = self.block_confirmations;
 
         tokio::spawn(async move {
             let mut latest_bridged_root: Uint<256, 4> = Hash::ZERO;
@@ -116,7 +122,7 @@ impl<M: Middleware> StateBridge<M> {
                             .propagate_root()
                             .send()
                             .await?
-                            .confirmations(6usize) //TODO: make this a cli arg or default
+                            .confirmations(block_confirmations)
                             .await?;
 
                         last_propagation = Instant::now();
