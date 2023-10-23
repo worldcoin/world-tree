@@ -8,35 +8,21 @@ edition = "2021"
 [workspace]
 members = [
   "crates/sequencer",
-  "crates/tree_state",
+  "crates/tree_availability",
   "crates/state_bridge",
   "crates/common"
 ]
 
-
-[[bin]]
-name = "identity-sequencer"
-path = "bin/identity_sequencer_service.rs"
-
-[[bin]]
-name = "state-bridge-service"
-path = "bin/state_bridge_service.rs"
+[dependencies]
+clap = {version = "4.4.6", features = ["derive"]}
+ethers = "2.0.10"
+eyre = "0.6.8"
+futures = "0.3.28"
+reqwest = "0.11.22"
+tokio = { version = "1.33.0", features = ["full"]}
+tree_availability = { path = "crates/tree_availability" }
 
 
 [[bin]]
 name = "tree-availability-service"
 path = "bin/tree_availability_service.rs"
-
-[dependencies]
-chrono = "0.4.31"
-clap = { version = "4.4.6", features = ["derive"] }
-derive = "1.0.0"
-ethers = { version = "2.0.10", features = ["openssl", "rustls", "ipc"] }
-hex-literal = "0.4.1"
-serde = "1.0.189"
-state_bridge = {path = "crates/state_bridge"}
-common = {path = "crates/common"}
-tokio = { version = "1.33.0", features = ["full"] }
-toml = "0.8.2"
-eyre = "0.6.8"
-
