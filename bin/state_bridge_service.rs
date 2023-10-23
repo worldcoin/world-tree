@@ -162,17 +162,58 @@ async fn spawn_state_bridge_service(
 
 #[cfg(test)]
 mod tests {
-    use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
+    use super::{Config, H160};
+    use std::str::FromStr;
 
     #[tokio::test]
-    async fn test_state_bridge_cli() -> eyre::Result<()> {
-        let MockChain {
-            anvil,
-            mock_world_id,
-            mock_state_bridge,
-            mock_bridged_world_id,
-            middleware,
-        } = spawn_mock_chain().await?;
+    async fn test_deserialize_toml() -> eyre::Result<()> {
+        let config: Config = toml::from_str(
+            r#"
+            rpc_url: "127.0.0.1:8545"
+            private_key: "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+            world_id_address: "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+            world_id_state_bridge_addresses: ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
+            bridged_world_id_addresses: ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"]
+            relaying_period: 5
+            block_confirmations: 6
+            "#)
+        .expect("couldn't deserialize toml-encoded string");
+
+        assert_eq!(
+            config.rpc_url,
+            String::from("127.0.0.1:8545"),
+            "RPC didn't match"
+        );
+        assert_eq!(config.private_key, String::from("4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"), "private key didn't match");
+        assert_eq!(
+            config.world_id_address,
+            H160::from_str("0x3f0BF744bb79A0b919f7DED73724ec20c43572B9")
+                .unwrap(),
+            "World ID address didn't match"
+        );
+        assert_eq!(
+            config.world_id_state_bridge_addresses,
+            Vec::from([H160::from_str(
+                "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+            )
+            .unwrap()])
+        );
+        assert_eq!(
+            config.bridged_world_id_addresses,
+            Vec::from([H160::from_str(
+                "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+            )
+            .unwrap()])
+        );
+        assert_eq!(
+            config.block_confirmations.unwrap(),
+            6usize,
+            "block confirmations didn't match"
+        );
+        assert_eq!(
+            config.relaying_period, 5u64,
+            "relaying period didn't match"
+        );
 
         Ok(())
     }
