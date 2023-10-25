@@ -198,7 +198,8 @@ mod tests {
             bridge_configs = [
                 [
                     "Optimism",
-                    "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9","0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
+                    "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
+                    "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
                     "127.0.0.1:8545",
                 ]
             ]
