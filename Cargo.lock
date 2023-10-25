@@ -4940,6 +4940,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap 4.4.6",
+ "common",
  "ethers",
  "eyre",
  "futures",
