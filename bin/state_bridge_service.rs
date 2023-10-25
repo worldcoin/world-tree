@@ -8,9 +8,10 @@ use ethers::{
     },
     providers::Middleware,
 };
+use metrics::counter;
 use serde::{Deserialize, Serialize};
 use state_bridge::{
-    bridge::{IBridgedWorldID, IStateBridge, StateBridge},
+    bridge::{self, IBridgedWorldID, IStateBridge, StateBridge},
     root::IWorldIDIdentityManager,
     StateBridgeService,
 };
@@ -33,6 +34,14 @@ struct Options {
 type StateBridgeAddress = H160;
 type BridgedWorldIDAddress = H160;
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+struct BridgeConfig {
+    name: String,
+    state_bridge_address: StateBridgeAddress,
+    bridged_world_id_address: BridgedWorldIDAddress,
+    bridged_rpc_url: String,
+}
+
 /// The config TOML file defines all the necessary parameters to spawn a state bridge service.
 /// rpc_url - HTTP rpc url for an Ethereum node (string)
 /// private_key - pk to an address that will call the propagateRoot() method on the StateBridge contract (string)
@@ -43,14 +52,14 @@ type BridgedWorldIDAddress = H160;
 /// block_confirmations - Number of block confirmations required for the propagateRoot call on the StateBridge contract (optional number)
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct Config {
-    /// RPC URL for the HTTP provider
+    /// RPC URL for the HTTP provider (World ID IdentityManager)
     rpc_url: String,
     /// Private key to use for the middleware signer
     private_key: String,
     /// `WorldIDIdentityManager` contract address
     world_id_address: H160,
     /// List of `StateBridge` and `BridgedWorldID` pair addresses
-    bridge_pair_addresses: Vec<(StateBridgeAddress, BridgedWorldIDAddress)>,
+    bridge_configs: Vec<BridgeConfig>,
     /// `propagateRoot()` call period time in seconds
     relaying_period: u64,
     /// Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
@@ -76,7 +85,7 @@ async fn main() -> eyre::Result<()> {
         rpc_url,
         config.private_key,
         config.world_id_address,
-        config.bridge_pair_addresses,
+        config.bridge_configs,
         relaying_period,
         block_confirmations,
     )
@@ -89,7 +98,7 @@ async fn spawn_state_bridge_service(
     rpc_url: String,
     private_key: String,
     world_id_address: H160,
-    bridge_pair_addresses: Vec<(StateBridgeAddress, BridgedWorldIDAddress)>,
+    bridge_configs: Vec<BridgeConfig>,
     relaying_period: Duration,
     block_confirmations: usize,
 ) -> eyre::Result<()> {
@@ -115,14 +124,39 @@ async fn spawn_state_bridge_service(
         .await
         .expect("couldn't create StateBridgeService");
 
-    for (state_bridge_address, bridged_world_id_address) in
-        bridge_pair_addresses
-    {
-        let state_bridge_interface =
-            IStateBridge::new(state_bridge_address, middleware.clone());
+    for bridge_config in bridge_configs {
+        let BridgeConfig {
+            name,
+            state_bridge_address,
+            bridged_world_id_address,
+            bridged_rpc_url,
+        } = bridge_config;
 
-        let bridged_world_id_interface =
-            IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
+        let bridged_provider = Provider::<Http>::try_from(bridged_rpc_url)
+            .expect("failed to initialize Http provider");
+
+        let chain_id = bridged_provider.get_chainid().await?.as_u64();
+
+        let wallet = private_key
+            .parse::<LocalWallet>()
+            .expect("couldn't instantiate wallet from private key")
+            .with_chain_id(chain_id);
+        let wallet_address = wallet.address();
+
+        let bridged_middleware =
+            SignerMiddleware::new(bridged_provider, wallet);
+        let bridged_middleware =
+            NonceManagerMiddleware::new(bridged_middleware, wallet_address);
+        let bridged_middleware = Arc::new(bridged_middleware);
+
+        let state_bridge_interface: IStateBridge<
+            NonceManagerMiddleware<SignerMiddleware<Provider<Http>, _>>,
+        > = IStateBridge::new(state_bridge_address, middleware.clone());
+
+        let bridged_world_id_interface = IBridgedWorldID::new(
+            bridged_world_id_address,
+            bridged_middleware.clone(),
+        );
 
         let state_bridge = StateBridge::new(
             state_bridge_interface,
@@ -133,6 +167,8 @@ async fn spawn_state_bridge_service(
         .unwrap();
 
         state_bridge_service.add_state_bridge(state_bridge);
+
+        println!("Added {} to the state-bridge-service", name);
     }
 
     state_bridge_service
@@ -140,11 +176,15 @@ async fn spawn_state_bridge_service(
         .await
         .expect("failed to spawn a state bridge service");
 
+    counter!("state_bridge_service_bin.spawned_state_bridge", 1);
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::BridgeConfig;
+
     use super::{Config, H160};
     use std::str::FromStr;
 
@@ -155,9 +195,13 @@ mod tests {
             rpc_url = "127.0.0.1:8545"
             private_key = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
             world_id_address = "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
-            bridge_pair_addresses = [
-                ["0x3f0BF744bb79A0b919f7DED73724ec20c43572B9","0x4f0BF744bb79A0b919f7DED73724ec20c43572B9"]
+            bridge_configs = [
+                [
+                    "Optimism",
+                    "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9","0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
+                    "127.0.0.1:8545",
                 ]
+            ]
             relaying_period = 5
             block_confirmations = 6
             "#)
@@ -175,13 +219,20 @@ mod tests {
                 .unwrap(),
             "World ID address didn't match"
         );
-        let bridge_pair_addresses: Vec<(H160, H160)> = vec![(
-            H160::from_str("0x3f0BF744bb79A0b919f7DED73724ec20c43572B9")
-                .unwrap(),
-            H160::from_str("0x4f0BF744bb79A0b919f7DED73724ec20c43572B9")
-                .unwrap(),
-        )];
-        assert_eq!(config.bridge_pair_addresses, bridge_pair_addresses);
+        let bridged_configs: Vec<BridgeConfig> = vec![BridgeConfig {
+            name: "Optimism".to_string(),
+            state_bridge_address: H160::from_str(
+                "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
+            )
+            .unwrap(),
+            bridged_world_id_address: H160::from_str(
+                "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
+            )
+            .unwrap(),
+            bridged_rpc_url: "127.0.0.1:8545".to_string(),
+        }];
+
+        assert_eq!(config.bridge_configs, bridged_configs);
         assert_eq!(
             config.block_confirmations.unwrap(),
             6usize,
