@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ethers::middleware::Middleware;
 use ethers::providers::StreamExt;
 use ethers::types::H160;
+use metrics::{counter, describe_counter, increment_counter};
 use ruint::Uint;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -89,6 +90,11 @@ where
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         tokio::spawn(async move {
+            describe_counter!(
+                "state-bridge-service.world_id_roots_received",
+                "ho"
+            );
+            counter!("state-bridge-service.world_id_roots_received", 0);
             // event emitted when insertions or deletions on the merkle tree have taken place
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
 
@@ -98,6 +104,8 @@ where
             while let Some(Ok((event, _))) = event_stream.next().await {
                 // Send it through the tx, you can convert ethers U256 to ruint with Uint::from_limbs()
                 root_tx.send(Uint::from_limbs(event.post_root.0))?;
+
+                increment_counter!("state-bridge-service.roots_received");
             }
 
             Ok(())

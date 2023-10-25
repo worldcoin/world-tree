@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::ops::DerefMut;
 
+use metrics::counter;
 use semaphore::lazy_merkle_tree::{
     Canonical, Derived, LazyMerkleTree, VersionMarker,
 };
@@ -72,6 +73,8 @@ impl TreeData {
             next = next.update(start_index + i, identity);
             history.push_back((update, next.clone()));
         }
+
+        counter!("tree-availability-service.processed_insertion_batches", 1)
     }
 
     pub async fn delete_many(&self, delete_indices: &[usize]) {
@@ -108,6 +111,7 @@ impl TreeData {
             next = next.update(*idx, &Hash::ZERO);
             history.push_back((update, next.clone()));
         }
+        counter!("tree-availability-service.processed_deletion_batches", 1);
     }
 
     /// Garbage collects the tree history
@@ -177,6 +181,10 @@ impl TreeData {
                 // Otherwise, search the tree history for the root and use the corresponding tree
                 for (_, prev_tree) in tree_history.iter() {
                     if prev_tree.root() == root {
+                        counter!(
+                            "tree-availability-service.inclusion_proofs_served",
+                            1
+                        );
                         return Some(InclusionProof::new(
                             root,
                             Self::proof(prev_tree, identity)?,

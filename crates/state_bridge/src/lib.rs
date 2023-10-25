@@ -75,6 +75,7 @@ use bridge::StateBridge;
 use error::StateBridgeError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
+use metrics::{counter, gauge};
 use root::{IWorldIDIdentityManager, WorldTreeRoot};
 use tokio::task::JoinHandle;
 
@@ -151,6 +152,10 @@ where
     /// knows where to propagate roots to
     pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {
         self.state_bridges.push(state_bridge);
+        counter!(
+            "state_bridge_service.state_bridge_count",
+            self.state_bridges.len() as u64
+        );
     }
 
     /// Spawns the `StateBridgeService`

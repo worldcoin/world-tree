@@ -7,6 +7,7 @@ use ethers::contract::EthEvent;
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
+use metrics::counter;
 
 use super::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
@@ -93,6 +94,8 @@ impl<M: Middleware> TreeUpdater<M> {
 
         self.latest_synced_block
             .store(block_number, Ordering::Relaxed);
+
+        counter!("tree-availability-service.synced_tree_to_head", 1);
 
         Ok(())
     }

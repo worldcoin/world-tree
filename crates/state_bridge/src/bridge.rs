@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use metrics::{counter, describe_counter, increment_counter};
 use ruint::Uint;
 use tokio::time::{Duration, Instant};
 
@@ -92,6 +93,10 @@ impl<M: Middleware> StateBridge<M> {
             #[allow(unused_assignments)]
             let mut time_since_last_propagation: Duration = relaying_period;
 
+            describe_counter!("state-bridge-service.root_successfully_propagated", "Counts how many times we have called propagateRoot() on the StateBridge contract");
+
+            counter!("state-bridge-service.root_successfully_propagated", 0);
+
             loop {
                 // will either be positive or zero if difference is negative
                 let sleep_time = relaying_period
@@ -120,6 +125,10 @@ impl<M: Middleware> StateBridge<M> {
                             .await?
                             .confirmations(block_confirmations)
                             .await?;
+
+                        increment_counter!(
+                            "state-bridge-service.root_successfully_propagated"
+                        );
 
                         last_propagation = Instant::now();
                     }
