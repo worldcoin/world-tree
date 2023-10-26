@@ -61,38 +61,50 @@ impl<M: Middleware> TreeUpdater<M> {
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
-        let mut futures = FuturesOrdered::new();
-        //TODO: update this to use a throttle that can be set by the user
-        for logs in logs.chunks(20) {
-            for log in logs {
-                futures.push_back(self.middleware.get_transaction(
-                    log.transaction_hash.ok_or(
-                        TreeAvailabilityError::TransactionHashNotFound,
-                    )?,
-                ));
+        if !logs.is_empty() {
+            let mut futures = FuturesOrdered::new();
+            //TODO: update this to use a throttle that can be set by the user
+            for logs in logs.chunks(20) {
+                for log in logs {
+                    futures.push_back(self.middleware.get_transaction(
+                        log.transaction_hash.ok_or(
+                            TreeAvailabilityError::TransactionHashNotFound,
+                        )?,
+                    ));
+                }
+
+                while let Some(transaction) = futures.next().await {
+                    let transaction = transaction
+                        .map_err(TreeAvailabilityError::MiddlewareError)?
+                        .ok_or(TreeAvailabilityError::TransactionNotFound)?;
+
+                    self.sync_from_transaction(tree_data, transaction).await?;
+                }
+
+                //TODO: use a better throttle
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
 
-            while let Some(transaction) = futures.next().await {
-                let transaction = transaction
-                    .map_err(TreeAvailabilityError::MiddlewareError)?
-                    .ok_or(TreeAvailabilityError::TransactionNotFound)?;
+            let block_number = logs
+                .last()
+                .expect("Could not get last log")
+                .block_number
+                .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
+                .as_u64();
 
-                self.sync_from_transaction(tree_data, transaction).await?;
-            }
+            self.latest_synced_block
+                .store(block_number, Ordering::Relaxed);
+        } else {
+            let block_number = self
+                .middleware
+                .get_block_number()
+                .await
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .as_u64();
 
-            //TODO: use a better throttle
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            self.latest_synced_block
+                .store(block_number, Ordering::Relaxed);
         }
-
-        let block_number = logs
-            .last()
-            .expect("Could not get last log")
-            .block_number
-            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
-            .as_u64();
-
-        self.latest_synced_block
-            .store(block_number, Ordering::Relaxed);
 
         Ok(())
     }

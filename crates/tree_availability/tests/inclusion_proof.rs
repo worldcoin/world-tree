@@ -2,12 +2,13 @@ use std::str::FromStr;
 
 use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
 use ethers::abi::Uint;
+use ethers::providers::Middleware;
 use ethers::types::U256;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use hyper::StatusCode;
 use tree_availability::error::TreeAvailabilityError;
-use tree_availability::server::InclusionProofRequest;
+use tree_availability::server::{InclusionProof, InclusionProofRequest};
 use tree_availability::world_tree::Hash;
 use tree_availability::TreeAvailabilityService;
 
@@ -76,6 +77,10 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         U256::from_str("0x1484814b74243a07930c6af61079f94eefd843efe95e2388d9d49956cfacf3ab")?,
     ];
 
+    let world_tree_address = mock_world_id.address();
+    let world_tree_creation_block =
+        middleware.get_block_number().await?.as_u64();
+
     mock_world_id
         .register_identities(
             mock_insertion_proof,
@@ -90,12 +95,10 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     let world_tree_address = mock_world_id.address();
 
-    let world_tree_creation_block = 0;
-
     let tree_availability_service = TreeAvailabilityService::new(
-        30,
-        10,
-        10,
+        5,
+        1,
+        0,
         world_tree_address,
         world_tree_creation_block,
         middleware,
@@ -133,7 +136,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     let response = client
         .post("http://127.0.0.1:8080/inclusionProof")
         .json(&InclusionProofRequest {
-            identity_commitment: Hash::from(0x01), //TODO: update to use a commitment in the tree
+            identity_commitment: Hash::from(0x01),
             root: None,
         })
         .send()
@@ -141,8 +144,9 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Check response
     assert_eq!(response.status(), StatusCode::OK);
-    // let proof: Option<InclusionProof> = response.json().await?;
-    // assert!(proof.is_some());
+
+    let proof: Option<InclusionProof> = response.json().await?;
+    assert!(proof.is_some());
 
     // Cleanup: Shutdown the server task
     server_handle.abort();
