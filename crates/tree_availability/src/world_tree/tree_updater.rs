@@ -134,6 +134,8 @@ impl<M: Middleware> TreeUpdater<M> {
                 .map(|u256: U256| Hash::from_limbs(u256.0))
                 .collect();
 
+            dbg!(&identities);
+
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;

@@ -39,7 +39,10 @@ impl<M: Middleware> WorldTree<M> {
         middleware: Arc<M>,
     ) -> Self {
         Self {
-            tree_data: Arc::new(TreeData::new(tree, tree_history_size)),
+            tree_data: Arc::new(TreeData::new(
+                tree.derived(),
+                tree_history_size,
+            )),
             tree_updater: Arc::new(TreeUpdater::new(
                 address,
                 creation_block,
