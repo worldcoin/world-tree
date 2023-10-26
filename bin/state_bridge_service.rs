@@ -2,20 +2,21 @@ use clap::Parser;
 use std::{fs, path::PathBuf, sync::Arc};
 
 use ethers::{
+    abi::Address,
     prelude::{
         Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
         SignerMiddleware, H160,
     },
     providers::Middleware,
 };
-use metrics::counter;
 use serde::{Deserialize, Serialize};
 use state_bridge::{
-    bridge::{self, IBridgedWorldID, IStateBridge, StateBridge},
+    bridge::{IBridgedWorldID, IStateBridge, StateBridge},
     root::IWorldIDIdentityManager,
     StateBridgeService,
 };
 use std::time::Duration;
+use tracing::info;
 
 /// The state bridge service propagates roots according to the specified relaying_period by
 /// calling the propagateRoot() method on each specified World ID StateBridge. The state bridge
@@ -31,14 +32,32 @@ struct Options {
     config: PathBuf,
 }
 
-type StateBridgeAddress = H160;
-type BridgedWorldIDAddress = H160;
+/// Converts a u64 into a Duration using Duration::from_secs
+mod duration_seconds {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Duration, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        s.serialize_u64(duration.as_secs())
+    }
+
+    pub fn deserialize<'de, D>(d: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let secs = u64::deserialize(d)?;
+        Ok(Duration::from_secs(secs))
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 struct BridgeConfig {
     name: String,
-    state_bridge_address: StateBridgeAddress,
-    bridged_world_id_address: BridgedWorldIDAddress,
+    state_bridge_address: Address,
+    bridged_world_id_address: Address,
     bridged_rpc_url: String,
 }
 
@@ -61,10 +80,16 @@ struct Config {
     /// List of `StateBridge` and `BridgedWorldID` pair addresses
     bridge_configs: Vec<BridgeConfig>,
     /// `propagateRoot()` call period time in seconds
-    relaying_period: u64,
+    #[serde(with = "duration_seconds")]
+    relaying_period_seconds: Duration,
     /// Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
     /// contract
-    block_confirmations: Option<usize>,
+    #[serde(default = "default_block_confirmations")]
+    block_confirmations: usize,
+}
+
+fn default_block_confirmations() -> usize {
+    1usize
 }
 
 #[tokio::main]
@@ -73,20 +98,18 @@ async fn main() -> eyre::Result<()> {
 
     let contents = fs::read_to_string(&options.config)?;
 
-    let config: Config = toml::from_str(&contents).unwrap();
+    let config: Config = toml::from_str(&contents)?;
 
     let rpc_url = config.rpc_url;
 
-    let relaying_period: Duration = Duration::from_secs(config.relaying_period);
-
-    let block_confirmations = config.block_confirmations.unwrap_or(1);
+    let block_confirmations = config.block_confirmations;
 
     spawn_state_bridge_service(
         rpc_url,
         config.private_key,
         config.world_id_address,
         config.bridge_configs,
-        relaying_period,
+        config.relaying_period_seconds,
         block_confirmations,
     )
     .await?;
@@ -120,9 +143,8 @@ async fn spawn_state_bridge_service(
     let world_id_interface =
         IWorldIDIdentityManager::new(world_id_address, middleware.clone());
 
-    let mut state_bridge_service = StateBridgeService::new(world_id_interface)
-        .await
-        .expect("couldn't create StateBridgeService");
+    let mut state_bridge_service =
+        StateBridgeService::new(world_id_interface).await?;
 
     for bridge_config in bridge_configs {
         let BridgeConfig {
@@ -149,9 +171,8 @@ async fn spawn_state_bridge_service(
             NonceManagerMiddleware::new(bridged_middleware, wallet_address);
         let bridged_middleware = Arc::new(bridged_middleware);
 
-        let state_bridge_interface: IStateBridge<
-            NonceManagerMiddleware<SignerMiddleware<Provider<Http>, _>>,
-        > = IStateBridge::new(state_bridge_address, middleware.clone());
+        let state_bridge_interface =
+            IStateBridge::new(state_bridge_address, middleware.clone());
 
         let bridged_world_id_interface = IBridgedWorldID::new(
             bridged_world_id_address,
@@ -163,20 +184,13 @@ async fn spawn_state_bridge_service(
             bridged_world_id_interface,
             relaying_period,
             block_confirmations,
-        )
-        .unwrap();
+        )?;
 
         state_bridge_service.add_state_bridge(state_bridge);
-
-        println!("Added {} to the state-bridge-service", name);
+        info!("Added a bridge to {} to the state-bridge-service", name);
     }
 
-    state_bridge_service
-        .spawn()
-        .await
-        .expect("failed to spawn a state bridge service");
-
-    counter!("state_bridge_service_bin.spawned_state_bridge", 1);
+    state_bridge_service.spawn().await?;
 
     Ok(())
 }
@@ -186,7 +200,7 @@ mod tests {
     use crate::BridgeConfig;
 
     use super::{Config, H160};
-    use std::str::FromStr;
+    use std::{str::FromStr, time::Duration};
 
     #[tokio::test]
     async fn test_deserialize_toml() -> eyre::Result<()> {
@@ -203,8 +217,7 @@ mod tests {
                     "127.0.0.1:8545",
                 ]
             ]
-            relaying_period = 5
-            block_confirmations = 6
+            relaying_period_seconds = 5
             "#)
         .expect("couldn't deserialize toml-encoded string");
 
@@ -234,13 +247,14 @@ mod tests {
         }];
 
         assert_eq!(config.bridge_configs, bridged_configs);
+        // assert it uses serde default 1 block confirmation
         assert_eq!(
-            config.block_confirmations.unwrap(),
-            6usize,
+            config.block_confirmations, 1usize,
             "block confirmations didn't match"
         );
         assert_eq!(
-            config.relaying_period, 5u64,
+            config.relaying_period_seconds,
+            Duration::from_secs(5u64),
             "relaying period didn't match"
         );
 

@@ -25,6 +25,7 @@ toml = "0.8.4"
 tree_availability = { path = "crates/tree_availability" }
 state_bridge = {path = "crates/state_bridge"}
 metrics = "0.21.1"
+tracing = "0.1.40"
 
 
 [[bin]]
