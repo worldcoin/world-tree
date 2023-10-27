@@ -5,11 +5,11 @@ use std::time::Duration;
 use ethers::abi::AbiDecode;
 use ethers::contract::EthEvent;
 use ethers::providers::{Middleware, StreamExt};
-use ethers::types::{Bytes, Log, Selector, Transaction, H160, U256};
+use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
 
 use super::abi::{
-    DeleteIdentitiesCall, IWorldIDIdentityManager, RegisterIdentitiesCall,
+    DeleteIdentitiesCall, RegisterIdentitiesCall,
     TreeChangedFilter, DELETE_IDENTITIES_SELECTOR,
     REGISTER_IDENTITIES_SELECTOR,
 };

@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
-use std::fmt::format;
-use std::ops::DerefMut;
+
+
 
 use semaphore::lazy_merkle_tree::{
-    Canonical, Derived, LazyMerkleTree, VersionMarker,
+    Canonical, Derived, VersionMarker,
 };
-use semaphore::poseidon_tree::{PoseidonHash, Proof};
+use semaphore::poseidon_tree::{Proof};
 use tokio::sync::RwLock;
 
 use super::{Hash, PoseidonTree};

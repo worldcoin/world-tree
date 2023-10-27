@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use ethers::providers::Middleware;
-use semaphore::poseidon_tree::{Branch, PoseidonHash, Proof};
+use semaphore::poseidon_tree::{Branch, Proof};
 use semaphore::Field;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
