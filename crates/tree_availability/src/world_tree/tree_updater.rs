@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ethers::abi::AbiDecode;
+use ethers::contract::EthCall;
 use ethers::contract::EthEvent;
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Selector, Transaction, H160, U256};
@@ -10,7 +11,6 @@ use futures::stream::FuturesOrdered;
 
 use super::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
-    DELETE_IDENTITIES_SELECTOR, REGISTER_IDENTITIES_SELECTOR,
 };
 use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
@@ -103,7 +103,7 @@ impl<M: Middleware> TreeUpdater<M> {
         let function_selector = Selector::try_from(&calldata[0..4])
             .expect("Transaction data does not contain a function selector");
 
-        if function_selector == REGISTER_IDENTITIES_SELECTOR {
+        if function_selector == RegisterIdentitiesCall::selector() {
             let register_identities_call =
                 RegisterIdentitiesCall::decode(calldata.as_ref())?;
 
@@ -117,7 +117,7 @@ impl<M: Middleware> TreeUpdater<M> {
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;
-        } else if function_selector == DELETE_IDENTITIES_SELECTOR {
+        } else if function_selector == DeleteIdentitiesCall::selector() {
             let delete_identities_call =
                 DeleteIdentitiesCall::decode(calldata.as_ref())?;
 

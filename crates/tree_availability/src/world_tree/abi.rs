@@ -1,9 +1,6 @@
 use ethers::middleware::contract::abigen;
 use ethers::types::Selector;
 
-pub const REGISTER_IDENTITIES_SELECTOR: Selector = [34, 23, 178, 17];
-pub const DELETE_IDENTITIES_SELECTOR: Selector = [234, 16, 251, 190];
-
 abigen!(
     IWorldIDIdentityManager,
     r#"[
