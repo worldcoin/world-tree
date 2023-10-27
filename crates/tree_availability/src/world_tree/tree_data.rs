@@ -1,11 +1,7 @@
 use std::collections::VecDeque;
 
-
-
-use semaphore::lazy_merkle_tree::{
-    Canonical, Derived, VersionMarker,
-};
-use semaphore::poseidon_tree::{Proof};
+use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
+use semaphore::poseidon_tree::Proof;
 use tokio::sync::RwLock;
 
 use super::{Hash, PoseidonTree};
@@ -38,6 +34,8 @@ impl TreeData {
         start_index: usize,
         identities: &[Hash],
     ) {
+        self.cache_tree_history().await;
+
         let mut tree = self.tree.write().await;
         for (i, identity) in identities.iter().enumerate() {
             *tree = tree.update(start_index + i, identity);
@@ -46,6 +44,7 @@ impl TreeData {
 
     pub async fn delete_many(&self, delete_indices: &[usize]) {
         self.cache_tree_history().await;
+
         let mut tree = self.tree.write().await;
 
         for idx in delete_indices.iter() {
@@ -54,13 +53,15 @@ impl TreeData {
     }
 
     pub async fn cache_tree_history(&self) {
-        let mut tree_history = self.tree_history.write().await;
+        if self.tree_history_size > 0 {
+            let mut tree_history = self.tree_history.write().await;
 
-        if tree_history.len() == self.tree_history_size {
-            tree_history.pop_back();
+            if tree_history.len() == self.tree_history_size {
+                tree_history.pop_back();
+            }
+
+            tree_history.push_front(self.tree.read().await.clone());
         }
-
-        tree_history.push_front(self.tree.read().await.clone());
     }
 
     /// Fetches the inclusion proof of the provided identity at the given root hash
