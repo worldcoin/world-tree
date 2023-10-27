@@ -15,7 +15,7 @@ ethers = { version = "2.0.10", features = [
     "openssl",
 ] }
 eyre = "0.6.8"
-futures = "0.3.28"
+futures = "0.3.29"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 metrics = "0.21.1"
 semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
