@@ -36,7 +36,6 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         mock_world_id,
         middleware,
         anvil,
-        ..
     } = spawn_mock_chain().await?;
 
     let relaying_period = std::time::Duration::from_secs(5);
@@ -62,9 +61,15 @@ pub async fn test_relay_root() -> eyre::Result<()> {
     let bridged_world_id =
         IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
 
-    let state_bridge =
-        StateBridge::new(state_bridge, bridged_world_id, relaying_period)
-            .unwrap();
+    let block_confirmations: usize = 6usize;
+
+    let state_bridge = StateBridge::new(
+        state_bridge,
+        bridged_world_id,
+        relaying_period,
+        block_confirmations,
+    )
+    .unwrap();
 
     state_bridge_service.add_state_bridge(state_bridge);
 

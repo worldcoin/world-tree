@@ -1,5 +1,4 @@
 use ethers::middleware::contract::abigen;
-use ethers::types::Selector;
 
 abigen!(
     IWorldIDIdentityManager,
