@@ -59,12 +59,12 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --locked --features "mimalloc" --all-targets
+          args: --locked --all-targets
       - name: Check docs
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --locked --features "mimalloc" --no-deps --document-private-items
+          args: --locked --no-deps --document-private-items
 
   test:
     name: Test
