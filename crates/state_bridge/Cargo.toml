@@ -2,21 +2,11 @@
 name = "state_bridge"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = "1.0.188"
-serde_json = "1.0.107"
-semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
-    "depth_20",
-] }
-thiserror = "1.0.49"
-tracing = "0.1.37"
+anyhow = "1.0.75"
 chrono = { version = "0.4.31", features = ["serde"] } # TODO: maybe remove this
-tokio = {version = "1.32.0", features = ["sync","test-util","macros"]}
-take_mut = "0.2.2"
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
 ethers = { version = "2.0.10", features = [
     "abigen",
     "ws",
@@ -24,10 +14,19 @@ ethers = { version = "2.0.10", features = [
     "rustls",
     "openssl",
 ] }
-ruint = "1.10.1"
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
 eyre = "0.6.8"
-anyhow = "1.0.75"
 hex = "0.4.3"
+ruint = "1.10.1"
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
+    "depth_20",
+] }
+serde = "1.0.188"
+serde_json = "1.0.107"
+take_mut = "0.2.2"
+thiserror = "1.0.49"
+tokio = { version = "1.32.0", features = ["sync","test-util","macros"] }
+tracing = "0.1.37"
 
 [dev-dependencies]
-common = {path = "../common"}
+common = { path = "../common" }
