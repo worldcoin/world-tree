@@ -76,6 +76,3 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles
     }
 }
-
-#[cfg(test)]
-mod tests {}
