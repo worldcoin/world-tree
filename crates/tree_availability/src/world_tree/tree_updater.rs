@@ -3,8 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ethers::abi::AbiDecode;
-use ethers::contract::EthCall;
-use ethers::contract::EthEvent;
+use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
