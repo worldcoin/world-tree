@@ -7,7 +7,7 @@ use ethers::types::{
 
 pub struct BlockScanner<M> {
     middleware: M,
-    current_block: AtomicU64,
+    pub current_block: AtomicU64,
     window_size: u64,
 }
 
@@ -43,6 +43,8 @@ where
         let from_block = current_block;
         let to_block = latest_block.min(from_block + self.window_size);
 
+        tracing::info!("Scanning from {} to {}", current_block, latest_block);
+
         let next_current_block = to_block + 1;
 
         let from_block = Some(BlockNumber::Number(from_block.into()));
@@ -62,6 +64,8 @@ where
 
         self.current_block
             .store(next_current_block, Ordering::SeqCst);
+
+        tracing::info!("Current block updated to {next_current_block}");
 
         Ok(logs)
     }

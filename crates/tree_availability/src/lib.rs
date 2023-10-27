@@ -51,6 +51,8 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
+        tracing::info!("Iniitalizing axum server on port {port}");
+
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
@@ -60,10 +62,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
         let server_handle = tokio::spawn(async move {
+            tracing::info!("Spawning server");
             axum::Server::bind(&address)
                 .serve(router.into_make_service())
                 .await
                 .map_err(TreeAvailabilityError::HyperError)?;
+            tracing::info!("Server spawned");
 
             Ok(())
         });

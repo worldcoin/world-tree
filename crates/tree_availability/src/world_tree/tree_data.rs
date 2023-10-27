@@ -57,10 +57,23 @@ impl TreeData {
             let mut tree_history = self.tree_history.write().await;
 
             if tree_history.len() == self.tree_history_size {
-                tree_history.pop_back();
+                let historical_tree = tree_history
+                    .pop_back()
+                    .expect("Tree history length should be > 0");
+
+                tracing::info!(
+                    "Popping tree from history with root {}",
+                    historical_tree.root()
+                );
             }
 
-            tree_history.push_front(self.tree.read().await.clone());
+            let updated_tree = self.tree.read().await.clone();
+            tracing::info!(
+                "Pushing tree to history with root {}",
+                updated_tree.root()
+            );
+
+            tree_history.push_front(updated_tree);
         }
     }
 
@@ -75,18 +88,13 @@ impl TreeData {
     ) -> Option<InclusionProof> {
         let tree = self.tree.read().await;
 
-        // If the root is not specified, use the latest root
-        if root.is_none() {
-            Some(InclusionProof::new(
-                tree.root(),
-                Self::proof(&tree, identity)?,
-                None,
-            ))
-        } else {
-            let root = root.unwrap();
-
+        if let Some(root) = root {
             // If the root is the latest root, use the current version of the tree
             if root == tree.root() {
+                tracing::info!(
+                    "Getting inclusion proof for {identity} at latest root"
+                );
+
                 return Some(InclusionProof::new(
                     root,
                     Self::proof(&tree, identity)?,
@@ -94,9 +102,13 @@ impl TreeData {
                 ));
             } else {
                 let tree_history = self.tree_history.read().await;
-                // // Otherwise, search the tree history for the root and use the corresponding tree
+                // Otherwise, search the tree history for the root and use the corresponding tree
                 for prev_tree in tree_history.iter() {
                     if prev_tree.root() == root {
+                        tracing::info!(
+                            "Getting inclusion proof for {identity} at root {root}"
+                        );
+
                         return Some(InclusionProof::new(
                             root,
                             Self::proof(prev_tree, identity)?,
@@ -106,7 +118,20 @@ impl TreeData {
                 }
             }
 
+            //TODO: should return an error if the tree root is specified but not in history
+            tracing::info!("Could not get inclusion proof for {identity} at {root}. Root not in tree history.");
             None
+        } else {
+            tracing::info!(
+                "Getting inclusion proof for {identity} at latest root"
+            );
+
+            // If the root is not specified, return a proof at the latest root
+            Some(InclusionProof::new(
+                tree.root(),
+                Self::proof(&tree, identity)?,
+                None,
+            ))
         }
     }
 

@@ -47,6 +47,8 @@ impl<M: Middleware> TreeUpdater<M> {
         &self,
         tree_data: &TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
+        tracing::info!("Syncing tree to chain head");
+
         let logs = self
             .block_scanner
             .next(
@@ -62,19 +64,22 @@ impl<M: Middleware> TreeUpdater<M> {
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
         if logs.is_empty() {
+            tracing::info!("No `TreeChanged` events found within block range");
             return Ok(());
         }
 
         let mut futures = FuturesOrdered::new();
 
-        //TODO: update this to use a throttle that can be set by the user
+        //TODO: update this to use a throttle that can be set by the user, however this is likely only going to result in one log per query
         for logs in logs.chunks(20) {
             for log in logs {
-                futures.push_back(self.middleware.get_transaction(
-                    log.transaction_hash.ok_or(
-                        TreeAvailabilityError::TransactionHashNotFound,
-                    )?,
-                ));
+                let tx_hash = log
+                    .transaction_hash
+                    .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
+
+                tracing::info!("Getting transaction for {tx_hash}");
+
+                futures.push_back(self.middleware.get_transaction(tx_hash));
             }
 
             while let Some(transaction) = futures.next().await {
@@ -97,12 +102,16 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
         transaction: &Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
+        tracing::info!("Syncing from transaction {}", transaction.hash);
+
         let calldata = &transaction.input;
 
         let function_selector = Selector::try_from(&calldata[0..4])
             .expect("Transaction data does not contain a function selector");
 
         if function_selector == RegisterIdentitiesCall::selector() {
+            tracing::info!("Decoding registerIdentities calldata");
+
             let register_identities_call =
                 RegisterIdentitiesCall::decode(calldata.as_ref())?;
 
@@ -113,10 +122,14 @@ impl<M: Middleware> TreeUpdater<M> {
                 .map(|u256: U256| Hash::from_limbs(u256.0))
                 .collect();
 
+            tracing::info!(?start_index, ?identities);
+
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;
         } else if function_selector == DeleteIdentitiesCall::selector() {
+            tracing::info!("Decoding deleteIdentities calldata");
+
             let delete_identities_call =
                 DeleteIdentitiesCall::decode(calldata.as_ref())?;
 
