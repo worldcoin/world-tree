@@ -2455,6 +2455,7 @@ dependencies = [
  "eyre",
  "futures",
  "reqwest",
+ "semaphore",
  "tokio",
  "tree_availability",
 ]
