@@ -9,9 +9,8 @@ use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
 
 use super::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall,
-    TreeChangedFilter, DELETE_IDENTITIES_SELECTOR,
-    REGISTER_IDENTITIES_SELECTOR,
+    DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
+    DELETE_IDENTITIES_SELECTOR, REGISTER_IDENTITIES_SELECTOR,
 };
 use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;

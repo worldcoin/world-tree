@@ -17,14 +17,13 @@ pub use ethers::utils::{Anvil, AnvilInstance};
 pub use ethers_solc::artifacts::Bytecode;
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
-use state_bridge::error::StateBridgeError;
-pub use tokio::task::JoinHandle;
-pub use tracing::{error, info, instrument};
-
 use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
+use state_bridge::error::StateBridgeError;
 use state_bridge::root::IWorldIDIdentityManager;
 use state_bridge::StateBridgeService;
 pub use tokio::spawn;
+pub use tokio::task::JoinHandle;
+pub use tracing::{error, info, instrument};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct CompiledContract {
