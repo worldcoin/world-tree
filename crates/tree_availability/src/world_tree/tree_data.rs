@@ -38,8 +38,6 @@ impl TreeData {
         start_index: usize,
         identities: &[Hash],
     ) {
-        self.cache_tree_history().await;
-
         let mut tree = self.tree.write().await;
         for (i, identity) in identities.iter().enumerate() {
             *tree = tree.update(start_index + i, identity);
@@ -78,11 +76,6 @@ impl TreeData {
 
         // If the root is not specified, use the latest root
         if root.is_none() {
-            dbg!(tree.root());
-            for leaf in tree.leaves().into_iter() {
-                dbg!(leaf);
-            }
-
             Some(InclusionProof::new(
                 tree.root(),
                 Self::proof(&tree, identity)?,
