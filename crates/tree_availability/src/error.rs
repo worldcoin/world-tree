@@ -9,7 +9,6 @@ pub enum TreeAvailabilityError<M>
 where
     M: Middleware + 'static,
 {
-    // Internal errors
     #[error("Missing transaction on log")]
     MissingTransaction,
     #[error("Unrecognized transaction")]
@@ -20,8 +19,8 @@ where
     BlockNumberNotFound,
     #[error("Transaction was not found from hash")]
     TransactionNotFound,
-
-    // Third-party converted errors
+    #[error("Unrecognized function selector")]
+    UnrecognizedFunctionSelector,
     #[error("Middleware error")]
     MiddlewareError(<M as Middleware>::Error),
     #[error("Provider error")]
