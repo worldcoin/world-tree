@@ -137,7 +137,7 @@ mod tests {
     fn initialize_tree_data(
         tree_depth: usize,
         tree_history_size: usize,
-        num_identities: usize
+        num_identities: usize,
     ) -> (TreeData, PoseidonTree<Canonical>, Vec<Hash>) {
         let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
             tree_depth,
@@ -159,8 +159,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_inclusion_proof() {
-        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
-        
+        let (tree_data, mut ref_tree, identities) =
+            initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
+
         tree_data.insert_many_at(0, &identities).await;
 
         for (idx, identity) in identities.iter().enumerate() {
@@ -187,8 +188,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_inclusion_proof_for_intermediate_root() {
-        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
-
+        let (tree_data, mut ref_tree, identities) =
+            initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
 
         for (idx, identity) in identities.iter().enumerate().take(5) {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
@@ -215,7 +216,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tree_history_capacity() {
-        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
+        let (tree_data, _, identities) =
+            initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
 
         // Apply an update to the tree one identity at a time to apply all changes to the tree history cache
         for (idx, identity) in identities.into_iter().enumerate() {
@@ -231,8 +233,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_inclusion_proof_after_deletions() {
-        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
-        
+        let (tree_data, mut ref_tree, identities) =
+            initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
+
         // Apply all identity updates to the ref tree and test tree
         for (idx, identity) in identities.iter().enumerate() {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
@@ -266,8 +269,9 @@ mod tests {
 
         // Ensure that an inclusion proof cannot be generated for deleted identities
         for i in deleted_identity_idxs {
-            let proof_from_world_tree =
-            tree_data.get_inclusion_proof(identities[*i], Some(root)).await;
+            let proof_from_world_tree = tree_data
+                .get_inclusion_proof(identities[*i], Some(root))
+                .await;
 
             assert!(proof_from_world_tree.is_none());
         }
