@@ -63,15 +63,7 @@ impl<M: Middleware> TreeUpdater<M> {
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
         if logs.is_empty() {
-            let block_number = self
-                .middleware
-                .get_block_number()
-                .await
-                .map_err(TreeAvailabilityError::MiddlewareError)?
-                .as_u64();
-
-            self.latest_synced_block
-                .store(block_number, Ordering::Relaxed);
+            return Ok(());
         }
 
         let mut futures = FuturesOrdered::new();
@@ -97,16 +89,6 @@ impl<M: Middleware> TreeUpdater<M> {
             //TODO: use a better throttle
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-
-        let block_number = logs
-            .last()
-            .expect("Could not get last log")
-            .block_number
-            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
-            .as_u64();
-
-        self.latest_synced_block
-            .store(block_number, Ordering::Relaxed);
 
         Ok(())
     }
