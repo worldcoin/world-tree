@@ -26,11 +26,14 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 /// In our data model the `tree` is the oldest available tree.
 /// The entires in `tree_history` represent new additions to the tree.
 pub struct WorldTree<M: Middleware> {
+    /// All the leaves of the tree and their corresponding root hash
     pub tree_data: Arc<TreeData>,
+    /// The object in charge of syncing the tree from calldata
     pub tree_updater: Arc<TreeUpdater<M>>,
 }
 
 impl<M: Middleware> WorldTree<M> {
+    /// Constructor
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,

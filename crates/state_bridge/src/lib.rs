@@ -8,7 +8,30 @@
 //!
 //! #### CLI
 //!
-//! TODO: specify how to run the state bridge service as a command-line utility
+//! Create a state_bridge_service.toml file which will hold the configuration parameters for the state bridge
+//! service. You can use the example in the test as a template:
+//!
+//! ```toml
+//! rpc_url = "127.0.0.1:8545"
+//! private_key = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+//! world_id_address = "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+//! bridge_configs = [
+//!     [
+//!         "Optimism",
+//!         # StateBridge Address
+//!         "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
+//!         # BridgedWorldID Address
+//!         "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
+//!         "127.0.0.1:8545",
+//!     ]
+//! ]
+//! relaying_period_seconds = 5
+//! ```
+//!
+//! ```bash
+//! cargo build --bin state-bridge-service --release
+//! ./target/release/state-bridge-service --config <CONFIG>
+//! ```
 //!
 //! #### Library
 //! In order to launch a `StateBridgeService` as a library you can use the following example from the [`bridge_service.rs`](https://github.com/worldcoin/identity-sequencer/blob/359f0fe3ec62b18d6f569d8ad31967c048401fa1/crates/state_bridge/tests/bridge_service.rs#L37) test file as a guide.

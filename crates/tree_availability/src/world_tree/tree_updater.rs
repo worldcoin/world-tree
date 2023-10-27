@@ -19,15 +19,25 @@ use crate::world_tree::Hash;
 // TODO: Change to a configurable parameter
 const SCANNING_WINDOW_SIZE: u64 = 100;
 
+/// The `TreeUpdater` holds the necessary data to be able to sync the World ID tree
+/// from Ethereum calldata and events emitted by the `WorldIDIdentityManager` contracts
 pub struct TreeUpdater<M: Middleware> {
+    /// `address`: `WorldIDIdentityManager` contract address
     pub address: H160,
     pub latest_synced_block: AtomicU64,
+    /// `synced`: has the updater finished syncing up to the latest canonical onchain tree
     pub synced: AtomicBool,
+    /// `block_scanner`: utility tool to parse calldata and events
     block_scanner: BlockScanner<Arc<M>>,
+    /// `middleware`: provider
     pub middleware: Arc<M>,
 }
 
 impl<M: Middleware> TreeUpdater<M> {
+    /// Constructor
+    /// `address`: `WorldIDIdentityManager` contract address
+    /// `creation_block`: The block height of the `WorldIDIdentityManager` contract deployment
+    /// `middleware`: provider
     pub fn new(address: H160, creation_block: u64, middleware: Arc<M>) -> Self {
         Self {
             address,
@@ -42,7 +52,8 @@ impl<M: Middleware> TreeUpdater<M> {
         }
     }
 
-    // Sync the state of the tree to to the chain head
+    /// Sync the state of the tree to to the chain head
+    /// `tree_data`: Data structure holding the tree's currently synced state
     pub async fn sync_to_head(
         &self,
         tree_data: &TreeData,
@@ -92,6 +103,9 @@ impl<M: Middleware> TreeUpdater<M> {
         Ok(())
     }
 
+    /// Syncs the tree data from a provided onchain transaction
+    /// `tree_data`: Data structure holding the tree's currently synced state
+    /// `transaction`: onchain transaction object
     pub async fn sync_from_transaction(
         &self,
         tree_data: &TreeData,
@@ -135,6 +149,8 @@ impl<M: Middleware> TreeUpdater<M> {
     }
 }
 
+/// Converts an array of indices into a tightly packed vector of bytes
+/// `indices`: array of 32 bit integers that represent the position of identity commitments in the `WorldTree`
 pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     let mut packed = Vec::with_capacity(indices.len() * 4);
 
@@ -145,6 +161,8 @@ pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     packed
 }
 
+/// Converts a packed array of bytes into a vector of 32 bit integers
+/// `packed`: packed indices holding the positions of identity commitments in the `WorldTree`
 pub fn unpack_indices(packed: &[u8]) -> Vec<u32> {
     let mut indices = Vec::with_capacity(packed.len() / 4);
 

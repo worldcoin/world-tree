@@ -7,17 +7,28 @@ use tokio::sync::RwLock;
 use super::{Hash, PoseidonTree};
 use crate::server::InclusionProof;
 
+/// The `TreeData` structure represents the in-memory representation of the tree as well as its historic
+/// versions up to `tree_history_size`
 pub struct TreeData {
+    /// Tree holding all leaves
     pub tree: RwLock<PoseidonTree<Derived>>,
+    /// Number of most recent historical roots `WorldTree` keeps to be able to serve proofs for
     pub tree_history_size: usize,
+    /// Array of derived trees for each historical root
     pub tree_history: RwLock<VecDeque<PoseidonTree<Derived>>>, //TODO: make a note that the latest is at the front
 }
+/// Defines how the tree changed
 pub struct TreeUpdate {
+    /// TODO: docs
     pub index: usize,
+    /// New hash of the tree
     pub value: Hash,
 }
 
 impl TreeData {
+    /// Constructor
+    /// `tree`: Canonical in-memory tree
+    /// `tree_history_size`: Number of most recent historical roots that the `WorldTree` can serve proofs for
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,
@@ -29,6 +40,9 @@ impl TreeData {
         }
     }
 
+    /// Inserts identities at a given starting index
+    /// `start_index`: Index at which to start inserting identity commitments
+    /// `identities`: Identity commitments
     pub async fn insert_many_at(
         &self,
         start_index: usize,
@@ -42,6 +56,8 @@ impl TreeData {
         }
     }
 
+    /// Deletes identity commitments in the `WorldTree` at the specified indices
+    /// `delete_indices`: positions of the identity commitments in the tree to be deleted
     pub async fn delete_many(&self, delete_indices: &[usize]) {
         self.cache_tree_history().await;
 
@@ -52,6 +68,8 @@ impl TreeData {
         }
     }
 
+    /// Caches the historical tree representations in memory in order for the `WorldTree` to be able to serve
+    /// proofs against their roots
     pub async fn cache_tree_history(&self) {
         if self.tree_history_size != 0 {
             let mut tree_history = self.tree_history.write().await;
@@ -66,6 +84,8 @@ impl TreeData {
 
     /// Fetches the inclusion proof of the provided identity at the given root hash
     ///
+    /// `identity`: Identity commitment to fetch the inclusion proof for
+    /// `root`: The root against which the `WorldTree` will serve the inclusion proof against
     /// Returns None if the provided root hash is not in the latest one or is not present in tree history
     /// or if the identity is not present in the tree
     pub async fn get_inclusion_proof(
@@ -110,6 +130,9 @@ impl TreeData {
         }
     }
 
+    /// Returns an inclusion proof for a given identity commitment in the specified tree
+    /// `tree`: The `WorldTree` (canonical or derived) to fetch the inclusion proof against
+    /// `identity`: Identity commitment to create the inclusion proof for
     fn proof<V: VersionMarker>(
         tree: &PoseidonTree<V>,
         identity: Hash,
