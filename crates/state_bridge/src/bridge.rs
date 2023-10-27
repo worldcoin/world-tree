@@ -84,11 +84,8 @@ impl<M: Middleware> StateBridge<M> {
         let block_confirmations = self.block_confirmations;
 
         tokio::spawn(async move {
-            let mut latest_bridged_root;
             let mut latest_root = Hash::ZERO;
-
             let mut last_propagation = Instant::now();
-            let mut time_since_last_propagation;
 
             loop {
                 // will either be positive or zero if difference is negative
@@ -104,10 +101,11 @@ impl<M: Middleware> StateBridge<M> {
                     _ = tokio::time::sleep(sleep_time) => {}
                 }
 
-                time_since_last_propagation = Instant::now() - last_propagation;
+                let time_since_last_propagation =
+                    Instant::now() - last_propagation;
 
                 if time_since_last_propagation > relaying_period {
-                    latest_bridged_root = Uint::from_limbs(
+                    let latest_bridged_root = Uint::from_limbs(
                         bridged_world_id.latest_root().call().await?.0,
                     );
 
