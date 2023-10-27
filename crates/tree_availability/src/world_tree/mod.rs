@@ -23,7 +23,7 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// An abstraction over a tree with a history of changes
 ///
-/// In our data model the `tree` is the oldest available tree.
+/// In our data model the `tree` is the oldest available tree. \
 /// The entires in `tree_history` represent new additions to the tree.
 pub struct WorldTree<M: Middleware> {
     /// All the leaves of the tree and their corresponding root hash

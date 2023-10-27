@@ -124,15 +124,8 @@ impl<M> StateBridgeService<M>
 where
     M: Middleware,
 {
-    /// constructor for the `StateBridgeService`
-    ///
-    /// ### Arguments
-    ///
-    /// `world_tree`:`IWorldID ` - interface to the `WorldIDIdentityManager`
-    ///
-    /// ### Output
-    ///
-    /// `Result<StateBridgeService, StateBridgeError<M>>`
+    /// ### Constructor for the `StateBridgeService` \
+    /// `world_tree`:`IWorldID ` - interface to the `WorldIDIdentityManager` \
     pub async fn new(
         world_tree: IWorldIDIdentityManager<M>,
     ) -> Result<Self, StateBridgeError<M>> {
@@ -143,16 +136,9 @@ where
         })
     }
 
-    /// constructor for the `StateBridgeService`
-    ///
-    /// ### Arguments
-    ///
-    /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
-    /// `middleware`:`Arc\<M\>` - Middleware provider
-    ///
-    /// ### Output
-    ///
-    /// `Result<StateBridgeService, StateBridgeError<M>>`
+    /// Constructor for the `StateBridgeService` \
+    /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager` \
+    /// `middleware`:`Arc\<M\>` - Middleware provider \
     pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
@@ -168,30 +154,26 @@ where
     }
 
     /// Adds a state bridge to the list of state bridges the service will use
-    /// to propagate roots on chain to their destination chains
-    ///
-    /// ### Args
-    ///
-    /// `state_bridge`: `StateBridge<M>` - state bridge contract interface with provider
-    ///
+    /// to propagate roots on chain to their destination chains. \
+    /// `state_bridge`: `StateBridge<M>` - state bridge contract interface with provider\
     /// ### Notes
     /// Needs to be called before the spawn function so that the `StateBridgeService`
-    /// knows where to propagate roots to
+    /// knows where to propagate roots to.
     pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {
         self.state_bridges.push(state_bridge);
     }
 
-    /// Spawns the `StateBridgeService`
+    /// Spawns the `StateBridgeService`.
     pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
         // if no state bridge initialized then there is no point in spawning
-        // the state bridge service as there'd be no receivers for new roots
+        // the state bridge service as there'd be no receivers for new roots.
         if self.state_bridges.is_empty() {
             return Err(StateBridgeError::BridgesNotInitialized);
         }
 
         // We first instantiate the receivers on the state bridges
         // so that the root sender doesn't yield an error when pushing roots
-        // through the channel
+        // through the channel.
         for bridge in self.state_bridges.iter() {
             self.handles.push(
                 bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
