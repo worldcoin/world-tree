@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
-use ethers::abi::{FunctionExt, Uint};
 use ethers::providers::Middleware;
 use ethers::types::U256;
 use futures::stream::FuturesUnordered;
@@ -16,7 +15,7 @@ use tree_availability::TreeAvailabilityService;
 async fn test_inclusion_proof() -> eyre::Result<()> {
     // Initialize a new mock tree
     let MockChain {
-        anvil,
+        anvil: _anvil,
         middleware,
         mock_world_id,
         ..
@@ -26,7 +25,6 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     let identity_commitments =
         vec![U256::from(1), U256::from(2), U256::from(3)];
 
-    let world_tree_address = mock_world_id.address();
     let world_tree_creation_block =
         middleware.get_block_number().await?.as_u64();
 
