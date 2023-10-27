@@ -38,6 +38,7 @@ impl InclusionProofRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
+    //TODO: Implement `Deserialize` for Proof within semaphore-rs instead of using `deserialize_with`
     #[serde(deserialize_with = "deserialize_proof")]
     pub proof: Proof,
     pub message: Option<String>,
