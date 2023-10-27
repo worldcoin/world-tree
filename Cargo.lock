@@ -1639,7 +1639,7 @@ dependencies = [
  "ethers-middleware",
  "ethers-providers",
  "ethers-signers",
- "ethers-solc 2.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethers-solc",
 ]
 
 [[package]]
@@ -1880,37 +1880,6 @@ dependencies = [
  "dirs",
  "dunce",
  "ethers-core 2.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "glob",
- "home",
- "md-5",
- "num_cpus",
- "once_cell",
- "path-slash",
- "rayon",
- "regex",
- "semver 1.0.19",
- "serde",
- "serde_json",
- "solang-parser",
- "svm-rs",
- "thiserror",
- "tiny-keccak",
- "tokio",
- "tracing",
- "walkdir",
- "yansi",
-]
-
-[[package]]
-name = "ethers-solc"
-version = "2.0.10"
-source = "git+https://github.com/gakonst/ethers-rs#1d4a11231dc3c2b3c231b42e4864100c1f09ca64"
-dependencies = [
- "cfg-if",
- "const-hex",
- "dirs",
- "dunce",
- "ethers-core 2.0.10 (git+https://github.com/gakonst/ethers-rs)",
  "glob",
  "home",
  "md-5",
@@ -4454,7 +4423,6 @@ dependencies = [
  "chrono",
  "common",
  "ethers",
- "ethers-solc 2.0.10 (git+https://github.com/gakonst/ethers-rs)",
  "eyre",
  "hex",
  "ruint",

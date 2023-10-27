@@ -14,7 +14,6 @@ pub use ethers::prelude::{
 pub use ethers::providers::{Middleware, StreamExt};
 pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
-pub use ethers_solc::artifacts::Bytecode;
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
 use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
@@ -24,12 +23,6 @@ use state_bridge::StateBridgeService;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
-
-#[derive(Deserialize, Serialize, Debug)]
-struct CompiledContract {
-    abi: Abi,
-    bytecode: Bytecode,
-}
 
 // test that spawns a mock anvil chain, deploys world id contracts, instantiates a `StateBridgeService`
 // and propagates a root in order to see if the `StateBridgeService` works as intended.
