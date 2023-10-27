@@ -53,7 +53,7 @@ impl TreeData {
     }
 
     pub async fn cache_tree_history(&self) {
-        if self.tree_history_size > 0 {
+        if self.tree_history_size != 0 {
             let mut tree_history = self.tree_history.write().await;
 
             if tree_history.len() == self.tree_history_size {
@@ -199,7 +199,7 @@ mod tests {
         // Then you can apply the remaining updates
         tree_data.insert_many_at(5, &identities[5..]).await;
 
-        for (i, identity) in identities.iter().enumerate().take(5) {
+        for (i, _identity) in identities.iter().enumerate().take(5) {
             let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
                 .await
@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_inclusion_proof_after_deletions() {
+    async fn test_get_inclusion_proof_after_deletions() {
         let (tree_data, mut ref_tree, identities) =
             initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
 

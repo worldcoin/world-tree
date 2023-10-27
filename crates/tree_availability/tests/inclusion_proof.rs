@@ -26,7 +26,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         vec![U256::from(1), U256::from(2), U256::from(3)];
 
     let world_tree_creation_block =
-        middleware.get_block_number().await?.as_u64();
+        middleware.get_block_number().await?.as_u64() - 1;
 
     mock_world_id
         .register_identities(
@@ -57,7 +57,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     let tree_availability_service = TreeAvailabilityService::new(
         3,
         1,
-        0,
+        5,
         world_tree_address,
         world_tree_creation_block,
         middleware,
