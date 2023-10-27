@@ -170,9 +170,10 @@ mod tests {
 
         let root = ref_tree.root();
 
-        for i in 0..NUM_IDENTITIES {
+        for (i, identity) in identities.iter().enumerate().take(NUM_IDENTITIES)
+        {
             let proof_from_world_tree = tree_data
-                .get_inclusion_proof(identities[i], Some(root))
+                .get_inclusion_proof(*identity, Some(root))
                 .await
                 .unwrap();
 
@@ -198,7 +199,7 @@ mod tests {
         // Then you can apply the remaining updates
         tree_data.insert_many_at(5, &identities[5..]).await;
 
-        for i in 0..5 {
+        for (i, identity) in identities.iter().enumerate().take(5) {
             let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
                 .await
@@ -215,7 +216,7 @@ mod tests {
 
         // Apply an update to the tree one identity at a time to apply all changes to the tree history cache
         for (idx, identity) in identities.into_iter().enumerate() {
-            tree_data.insert_many_at(idx, &vec![identity]).await;
+            tree_data.insert_many_at(idx, &[identity]).await;
         }
 
         // The tree history should not be larger than the tree history size

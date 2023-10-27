@@ -44,7 +44,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     mock_world_id
         .delete_identities(
             [U256::zero(); 8],
-            pack_indices(&vec![1]).into(),
+            pack_indices(&[1]).into(),
             U256::zero(),
             U256::zero(),
         )
