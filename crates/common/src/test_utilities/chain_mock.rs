@@ -12,7 +12,8 @@ use ethers::types::{Uint8, U256};
 use ethers::utils::{Anvil, AnvilInstance};
 
 use super::abi::{MockBridgedWorldID, MockStateBridge, MockWorldID};
-use super::TREE_DEPTH;
+
+pub const TREE_DEPTH: u8 = 30;
 
 pub type TestMiddleware = NonceManagerMiddleware<
     SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,

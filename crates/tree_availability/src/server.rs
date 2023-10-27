@@ -6,9 +6,11 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
 use ethers::providers::Middleware;
-use semaphore::poseidon_tree::Proof;
+use semaphore::poseidon_tree::{Branch, Proof};
 use semaphore::Field;
-use serde::{Deserialize, Serialize};
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 
 use crate::error::TreeError;
 use crate::world_tree::{Hash, WorldTree};
@@ -32,10 +34,12 @@ impl InclusionProofRequest {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
+    //TODO: Implement `Deserialize` for Proof within semaphore-rs instead of using `deserialize_with`
+    #[serde(deserialize_with = "deserialize_proof")]
     pub proof: Proof,
     pub message: Option<String>,
 }
@@ -51,6 +55,25 @@ impl InclusionProof {
             proof,
             message,
         }
+    }
+}
+
+fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Value = Deserialize::deserialize(deserializer)?;
+    if let Value::Array(array) = value {
+        let mut branches = vec![];
+        for value in array {
+            let branch = serde_json::from_value::<Branch>(value)
+                .map_err(serde::de::Error::custom)?;
+            branches.push(branch);
+        }
+
+        Ok(semaphore::merkle_tree::Proof(branches))
+    } else {
+        Err(D::Error::custom("Expected an array"))
     }
 }
 

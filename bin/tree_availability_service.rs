@@ -11,7 +11,7 @@ use tree_availability::TreeAvailabilityService;
 #[clap(name = "Tree Availability Service", about = "")]
 struct Opts {
     #[clap(long, help = "Depth of the World Tree")]
-    tree_depth: usize, //TODO: we might be able to fetch tree depth on chain somewhere
+    tree_depth: usize,
     #[clap(
         long,
         help = "Quantity of recent tree changes to cache. This allows inclusion proof requests to specify a historical root"

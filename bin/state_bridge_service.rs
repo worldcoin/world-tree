@@ -1,21 +1,19 @@
-use clap::Parser;
-use std::{fs, path::PathBuf, sync::Arc};
-
-use ethers::{
-    abi::Address,
-    prelude::{
-        Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
-        SignerMiddleware, H160,
-    },
-    providers::Middleware,
-};
-use serde::{Deserialize, Serialize};
-use state_bridge::{
-    bridge::{IBridgedWorldID, IStateBridge, StateBridge},
-    root::IWorldIDIdentityManager,
-    StateBridgeService,
-};
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+
+use clap::Parser;
+use ethers::abi::Address;
+use ethers::prelude::{
+    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
+    SignerMiddleware, H160,
+};
+use ethers::providers::Middleware;
+use serde::{Deserialize, Serialize};
+use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
+use state_bridge::root::IWorldIDIdentityManager;
+use state_bridge::StateBridgeService;
 use tracing::info;
 
 /// The state bridge service propagates roots according to the specified relaying_period by
@@ -34,8 +32,9 @@ struct Options {
 
 /// Converts a u64 into a Duration using Duration::from_secs
 mod duration_seconds {
-    use serde::{Deserialize, Deserializer, Serializer};
     use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(duration: &Duration, s: S) -> Result<S::Ok, S::Error>
     where
@@ -197,10 +196,11 @@ async fn spawn_state_bridge_service(
 
 #[cfg(test)]
 mod tests {
-    use crate::BridgeConfig;
+    use std::str::FromStr;
+    use std::time::Duration;
 
     use super::{Config, H160};
-    use std::{str::FromStr, time::Duration};
+    use crate::BridgeConfig;
 
     #[tokio::test]
     async fn test_deserialize_toml() -> eyre::Result<()> {
