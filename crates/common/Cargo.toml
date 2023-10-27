@@ -13,4 +13,4 @@ ethers = { version = "2.0.10", features = [
 ] }
 eyre = "0.6.8"
 serde = "1.0.189"
-tracing = "0.1.39"
+tracing = "0.1.40"
