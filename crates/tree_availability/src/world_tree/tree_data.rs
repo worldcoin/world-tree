@@ -132,35 +132,43 @@ mod tests {
 
     const TREE_DEPTH: usize = 10;
     const NUM_IDENTITIES: usize = 10;
+    const TREE_HISTORY_SIZE: usize = 5;
 
-    const TREE_HISTORY_SIZE: usize = 10;
+    fn initialize_tree_data(
+        tree_depth: usize,
+        tree_history_size: usize,
+        num_identities: usize
+    ) -> (TreeData, PoseidonTree<Canonical>, Vec<Hash>) {
+        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+            tree_depth,
+            tree_depth,
+            &Hash::ZERO,
+        );
+        let ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
+            tree_depth,
+            tree_depth,
+            &Hash::ZERO,
+        );
+
+        let identities: Vec<_> = (0..num_identities).map(Hash::from).collect();
+
+        let tree: TreeData = TreeData::new(poseidon_tree, tree_history_size);
+
+        (tree, ref_tree, identities)
+    }
 
     #[tokio::test]
     async fn test_get_inclusion_proof() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        // NOTE: History size is set to 2
-        let tree: TreeData = TreeData::new(poseidon_tree, 5);
-
-        tree.insert_many_at(0, &identities).await;
+        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
+        
+        tree_data.insert_many_at(0, &identities).await;
 
         for (idx, identity) in identities.iter().enumerate() {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
         }
 
         assert_eq!(
-            tree.tree_history.read().await.len(),
+            tree_data.tree_history.read().await.len(),
             1,
             "We should have 1 entry in tree history"
         );
@@ -168,7 +176,7 @@ mod tests {
         let root = ref_tree.root();
 
         for i in 0..NUM_IDENTITIES {
-            let proof_from_world_tree = tree
+            let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
                 .await
                 .unwrap();
@@ -179,21 +187,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_inclusion_proof_for_intermediate_root() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
+        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
 
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        let world_tree = TreeData::new(poseidon_tree, TREE_HISTORY_SIZE);
 
         for (idx, identity) in identities.iter().enumerate().take(5) {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
@@ -201,18 +196,15 @@ mod tests {
 
         let root = ref_tree.root();
 
-        // No more updates to the reference tree as we need to fetch
-        // the proof from an older version
+        // Since the tree state is cached to tree history before a sequence of updates, we need to apply the first 5 updates to
+        // ensure that the intermediate root is in the tree history
+        tree_data.insert_many_at(0, &identities[0..5]).await;
 
-        //TODO: do first update
-
-        //TODO: then do second, otherwise, we dont actually have this root in root history, so you need to update to 5 and then the rest
-
-        world_tree.insert_many_at(0, &identities[0..5]).await;
-        world_tree.insert_many_at(5, &identities[5..]).await;
+        // Then you can apply the remaining updates
+        tree_data.insert_many_at(5, &identities[5..]).await;
 
         for i in 0..5 {
-            let proof_from_world_tree = world_tree
+            let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
                 .await
                 .unwrap();
@@ -221,47 +213,50 @@ mod tests {
         }
     }
 
-    //TODO: test to test overflow
+    #[tokio::test]
+    async fn test_tree_history_capacity() {
+        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
+
+        // Apply an update to the tree one identity at a time to apply all changes to the tree history cache
+        for (idx, identity) in identities.into_iter().enumerate() {
+            tree_data.insert_many_at(idx, &vec![identity]).await;
+        }
+
+        // The tree history should not be larger than the tree history size
+        assert_eq!(
+            tree_data.tree_history.read().await.len(),
+            tree_data.tree_history_size,
+        );
+    }
 
     #[tokio::test]
     async fn test_inclusion_proof_after_deletions() {
-        let poseidon_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let mut ref_tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            TREE_DEPTH,
-            TREE_DEPTH,
-            &Hash::ZERO,
-        );
-
-        let identities: Vec<_> = (0..NUM_IDENTITIES).map(Hash::from).collect();
-
-        let tree = TreeData::new(poseidon_tree, TREE_HISTORY_SIZE);
-
+        let (tree_data, ref_tree, identities) = initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES)
+        
+        // Apply all identity updates to the ref tree and test tree
         for (idx, identity) in identities.iter().enumerate() {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
         }
 
-        tree.insert_many_at(0, &identities).await;
+        tree_data.insert_many_at(0, &identities).await;
 
+        // Initialize a vector of indices to delete
         let deleted_identity_idxs = &[3, 7];
         let non_deleted_identity_idxs: Vec<_> = (0..NUM_IDENTITIES)
             .filter(|idx| !deleted_identity_idxs.contains(idx))
             .collect();
 
+        // Delete the identities at the specified indices for the ref tree and test tree
         for idx in deleted_identity_idxs {
             ref_tree = ref_tree.update_with_mutation(*idx, &Hash::ZERO);
         }
-
-        tree.delete_many(deleted_identity_idxs).await;
+        tree_data.delete_many(deleted_identity_idxs).await;
 
         let root = ref_tree.root();
 
+        // Ensure that an inclusion proof can be generated for all identities that were not deleted
         for i in non_deleted_identity_idxs {
-            let proof_from_world_tree = tree
+            let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
                 .await
                 .unwrap();
@@ -269,9 +264,10 @@ mod tests {
             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
         }
 
+        // Ensure that an inclusion proof cannot be generated for deleted identities
         for i in deleted_identity_idxs {
             let proof_from_world_tree =
-                tree.get_inclusion_proof(identities[*i], Some(root)).await;
+            tree_data.get_inclusion_proof(identities[*i], Some(root)).await;
 
             assert!(proof_from_world_tree.is_none());
         }
