@@ -21,6 +21,8 @@
 //! // (or use a third party service like Alchemy)
 //! // you can instantiate your own variables by providing the right addresses
 //! // and a middleware (implements ethers::middleware::Middleware).
+//! #[tokio::test]
+//! async fn doc_example() -> eyre::Result<()> {
 //! let MockChain {
 //!        mock_state_bridge,
 //!        mock_bridged_world_id,
@@ -42,6 +44,8 @@
 //!    let state_bridge_address = mock_state_bridge.address();
 //!
 //!    let bridged_world_id_address = mock_bridged_world_id.address();
+//!    
+//!    let block_confirmations = 6;
 //!
 //!    let mut state_bridge_service = StateBridgeService::new(world_id)
 //!        .await
@@ -54,7 +58,7 @@
 //!        IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
 //!
 //!    let state_bridge =
-//!        StateBridge::new(state_bridge, bridged_world_id, relaying_period)
+//!        StateBridge::new(state_bridge, bridged_world_id, relaying_period, block_confirmations)
 //!            .unwrap();
 //!
 //!    state_bridge_service.add_state_bridge(state_bridge);
@@ -63,6 +67,7 @@
 //!        .spawn()
 //!        .await
 //!        .expect("failed to spawn a state bridge service");
+//! }
 //! ```
 //!
 pub mod bridge;
@@ -120,7 +125,7 @@ where
     /// ### Arguments
     ///
     /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
-    /// `middleware`:`Arc\<M\>`` - Middleware provider (ethers)
+    /// `middleware`:`Arc\<M\>` - Middleware provider
     ///
     /// ### Output
     ///

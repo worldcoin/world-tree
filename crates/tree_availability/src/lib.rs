@@ -54,7 +54,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
-            // .route("/verifyProof", axum::routing::post(verify_proof))
             .with_state(self.world_tree.clone());
 
         let address =
@@ -65,7 +64,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
                 .serve(router.into_make_service())
                 .await
                 .map_err(TreeAvailabilityError::HyperError)?;
-            // .with_graceful_shutdown(await_shutdown());
 
             Ok(())
         });
@@ -78,6 +76,3 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles
     }
 }
-
-#[cfg(test)]
-mod tests {}

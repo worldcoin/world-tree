@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
+use ethers::middleware::contract::abigen;
+use ethers::providers::Middleware;
+use ethers::types::H160;
 use ruint::Uint;
+use tokio::select;
+use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
-use ethers::{
-    middleware::contract::abigen, providers::Middleware, types::H160,
-};
-use tokio::{select, task::JoinHandle};
-
-use crate::{error::StateBridgeError, root::Hash};
+use crate::error::StateBridgeError;
+use crate::root::Hash;
 
 abigen!(
     IStateBridge,
@@ -32,6 +33,7 @@ pub struct StateBridge<M: Middleware + 'static> {
     pub state_bridge: IStateBridge<M>,
     pub bridged_world_id: IBridgedWorldID<M>,
     pub relaying_period: Duration,
+    pub block_confirmations: usize,
 }
 
 impl<M: Middleware> StateBridge<M> {
@@ -39,11 +41,13 @@ impl<M: Middleware> StateBridge<M> {
         state_bridge: IStateBridge<M>,
         bridged_world_id: IBridgedWorldID<M>,
         relaying_period: Duration,
+        block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
             state_bridge,
             bridged_world_id,
             relaying_period,
+            block_confirmations,
         })
     }
 
@@ -53,6 +57,7 @@ impl<M: Middleware> StateBridge<M> {
         bridged_world_id_address: H160,
         derived_middleware: Arc<M>,
         relaying_period: Duration,
+        block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
         let state_bridge =
             IStateBridge::new(bridge_address, canonical_middleware);
@@ -66,6 +71,7 @@ impl<M: Middleware> StateBridge<M> {
             state_bridge,
             bridged_world_id,
             relaying_period,
+            block_confirmations,
         })
     }
 
@@ -76,13 +82,11 @@ impl<M: Middleware> StateBridge<M> {
         let bridged_world_id = self.bridged_world_id.clone();
         let state_bridge = self.state_bridge.clone();
         let relaying_period = self.relaying_period;
+        let block_confirmations = self.block_confirmations;
 
         tokio::spawn(async move {
-            let mut latest_bridged_root: Uint<256, 4> = Hash::ZERO;
-            let mut latest_root: Uint<256, 4> = Hash::ZERO;
-
-            let mut last_propagation: Instant = Instant::now();
-            let mut time_since_last_propagation: Duration = relaying_period;
+            let mut latest_root = Hash::ZERO;
+            let mut last_propagation = Instant::now();
 
             loop {
                 // will either be positive or zero if difference is negative
@@ -91,23 +95,18 @@ impl<M: Middleware> StateBridge<M> {
 
                 select! {
                     root = root_rx.recv() => {
-                        match root {
-                            Ok(root) => {
-                                latest_root = root;
-                            }
-                            Err(_) => {
-                                break;
-                            }
-                        }
+
+                        latest_root = root?;
                     }
 
                     _ = tokio::time::sleep(sleep_time) => {}
                 }
 
-                time_since_last_propagation = Instant::now() - last_propagation;
+                let time_since_last_propagation =
+                    Instant::now() - last_propagation;
 
                 if time_since_last_propagation > relaying_period {
-                    latest_bridged_root = Uint::from_limbs(
+                    let latest_bridged_root = Uint::from_limbs(
                         bridged_world_id.latest_root().call().await?.0,
                     );
 
@@ -116,14 +115,13 @@ impl<M: Middleware> StateBridge<M> {
                             .propagate_root()
                             .send()
                             .await?
-                            .confirmations(6usize) //TODO: make this a cli arg or default
+                            .confirmations(block_confirmations)
                             .await?;
 
                         last_propagation = Instant::now();
                     }
                 }
             }
-            Ok(())
         })
     }
 }

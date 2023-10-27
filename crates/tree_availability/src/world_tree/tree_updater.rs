@@ -1,11 +1,11 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 use std::time::Duration;
 
 use ethers::abi::AbiDecode;
-use ethers::contract::EthEvent;
+use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
-use ethers::types::{Log, Transaction, H160, U256};
+use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
 
 use super::abi::{
@@ -61,7 +61,12 @@ impl<M: Middleware> TreeUpdater<M> {
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
+        if logs.is_empty() {
+            return Ok(());
+        }
+
         let mut futures = FuturesOrdered::new();
+
         //TODO: update this to use a throttle that can be set by the user
         for logs in logs.chunks(20) {
             for log in logs {
@@ -77,22 +82,12 @@ impl<M: Middleware> TreeUpdater<M> {
                     .map_err(TreeAvailabilityError::MiddlewareError)?
                     .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-                self.sync_from_transaction(tree_data, transaction).await?;
+                self.sync_from_transaction(tree_data, &transaction).await?;
             }
 
             //TODO: use a better throttle
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-
-        let block_number = logs
-            .last()
-            .expect("Could not get last log")
-            .block_number
-            .ok_or(TreeAvailabilityError::BlockNumberNotFound)?
-            .as_u64();
-
-        self.latest_synced_block
-            .store(block_number, Ordering::Relaxed);
 
         Ok(())
     }
@@ -100,21 +95,17 @@ impl<M: Middleware> TreeUpdater<M> {
     pub async fn sync_from_transaction(
         &self,
         tree_data: &TreeData,
-        transaction: Transaction,
+        transaction: &Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
-        if let Ok(delete_identities_call) =
-            DeleteIdentitiesCall::decode(transaction.input.as_ref())
-        {
-            let indices = unpack_indices(
-                delete_identities_call.packed_deletion_indices.as_ref(),
-            );
-            let indices: Vec<_> =
-                indices.into_iter().map(|x| x as usize).collect();
+        let calldata = &transaction.input;
 
-            tree_data.delete_many(&indices).await;
-        } else if let Ok(register_identities_call) =
-            RegisterIdentitiesCall::decode(transaction.input.as_ref())
-        {
+        let function_selector = Selector::try_from(&calldata[0..4])
+            .expect("Transaction data does not contain a function selector");
+
+        if function_selector == RegisterIdentitiesCall::selector() {
+            let register_identities_call =
+                RegisterIdentitiesCall::decode(calldata.as_ref())?;
+
             let start_index = register_identities_call.start_index;
             let identities = register_identities_call.identity_commitments;
             let identities: Vec<_> = identities
@@ -125,8 +116,19 @@ impl<M: Middleware> TreeUpdater<M> {
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;
+        } else if function_selector == DeleteIdentitiesCall::selector() {
+            let delete_identities_call =
+                DeleteIdentitiesCall::decode(calldata.as_ref())?;
+
+            let indices = unpack_indices(
+                delete_identities_call.packed_deletion_indices.as_ref(),
+            );
+            let indices: Vec<_> =
+                indices.into_iter().map(|x| x as usize).collect();
+
+            tree_data.delete_many(&indices).await;
         } else {
-            return Err(TreeAvailabilityError::UnrecognizedTransaction);
+            return Err(TreeAvailabilityError::UnrecognizedFunctionSelector);
         }
 
         Ok(())
