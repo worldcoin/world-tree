@@ -4957,7 +4957,6 @@ name = "tree_availability"
 version = "0.1.0"
 dependencies = [
  "axum",
- "clap 4.4.7",
  "common",
  "ethers",
  "eyre",
