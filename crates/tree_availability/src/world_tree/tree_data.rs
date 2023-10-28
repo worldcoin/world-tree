@@ -38,7 +38,9 @@ impl TreeData {
 
         let mut tree = self.tree.write().await;
         for (i, identity) in identities.iter().enumerate() {
-            *tree = tree.update(start_index + i, identity);
+            let idx = start_index + i;
+            *tree = tree.update(idx, identity);
+            tracing::info!("Inserted {identity} at idx {idx}");
         }
     }
 
@@ -49,6 +51,7 @@ impl TreeData {
 
         for idx in delete_indices.iter() {
             *tree = tree.update(*idx, &Hash::ZERO);
+            tracing::info!("Deleting identity at idx {idx}");
         }
     }
 

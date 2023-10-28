@@ -1,5 +1,3 @@
-mod middleware;
-
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
