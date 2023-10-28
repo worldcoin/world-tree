@@ -11,7 +11,7 @@ pub struct BlockScanner<M> {
     middleware: M,
     /// The block from which to start parsing a given event
     current_block: AtomicU64,
-    /// TODO: doc
+    /// Event window
     window_size: u64,
 }
 
@@ -33,7 +33,9 @@ where
     }
 
     /// Returns a list of specified events that were emitted by a given smart contract address
+    ///
     /// `address`: Address of the contract that we want to listen to events in
+    ///
     /// `topics`: The topics of the events the `BlockScanner` will listen to and parse
     pub async fn next(
         &self,

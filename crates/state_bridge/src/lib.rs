@@ -125,6 +125,7 @@ where
     M: Middleware,
 {
     /// ### Constructor for the `StateBridgeService`
+    ///
     /// `world_tree`:`IWorldID ` - interface to the `WorldIDIdentityManager`
     pub async fn new(
         world_tree: IWorldIDIdentityManager<M>,
@@ -137,7 +138,9 @@ where
     }
 
     /// Constructor for the `StateBridgeService`
+    ///
     /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
+    ///
     /// `middleware`:`Arc<M>` - Middleware provider
     pub async fn new_from_parts(
         world_tree_address: H160,
@@ -155,8 +158,11 @@ where
 
     /// Adds a state bridge to the list of state bridges the service will use
     /// to propagate roots on chain to their destination chains.
+    ///
     /// `state_bridge`: `StateBridge<M>` - state bridge contract interface with provider
+    ///
     /// ### Notes
+    ///
     /// Needs to be called before the spawn function so that the `StateBridgeService`
     /// knows where to propagate roots to.
     pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {

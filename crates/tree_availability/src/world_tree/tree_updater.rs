@@ -35,8 +35,11 @@ pub struct TreeUpdater<M: Middleware> {
 
 impl<M: Middleware> TreeUpdater<M> {
     /// Constructor
+    ///
     /// `address`: `WorldIDIdentityManager` contract address
+    ///
     /// `creation_block`: The block height of the `WorldIDIdentityManager` contract deployment
+    ///
     /// `middleware`: provider
     pub fn new(address: H160, creation_block: u64, middleware: Arc<M>) -> Self {
         Self {
@@ -53,6 +56,7 @@ impl<M: Middleware> TreeUpdater<M> {
     }
 
     /// Sync the state of the tree to to the chain head
+    ///
     /// `tree_data`: Data structure holding the tree's currently synced state
     pub async fn sync_to_head(
         &self,
@@ -104,7 +108,9 @@ impl<M: Middleware> TreeUpdater<M> {
     }
 
     /// Syncs the tree data from a provided onchain transaction
+    ///
     /// `tree_data`: Data structure holding the tree's currently synced state
+    ///
     /// `transaction`: onchain transaction object
     pub async fn sync_from_transaction(
         &self,

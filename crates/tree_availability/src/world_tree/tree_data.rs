@@ -19,7 +19,6 @@ pub struct TreeData {
 }
 /// Defines how the tree changed
 pub struct TreeUpdate {
-    /// TODO: docs
     pub index: usize,
     /// New hash of the tree
     pub value: Hash,
@@ -27,7 +26,9 @@ pub struct TreeUpdate {
 
 impl TreeData {
     /// Constructor
+    ///
     /// `tree`: Canonical in-memory tree
+    ///
     /// `tree_history_size`: Number of most recent historical roots that the `WorldTree` can serve proofs for
     pub fn new(
         tree: PoseidonTree<Canonical>,
@@ -41,7 +42,9 @@ impl TreeData {
     }
 
     /// Inserts identities at a given starting index.  
+    ///
     /// `start_index`: Index at which to start inserting identity commitments
+    ///
     /// `identities`: Identity commitments
     pub async fn insert_many_at(
         &self,
@@ -57,6 +60,7 @@ impl TreeData {
     }
 
     /// Deletes identity commitments in the `WorldTree` at the specified indices.
+    ///
     /// `delete_indices`: positions of the identity commitments in the tree to be deleted
     pub async fn delete_many(&self, delete_indices: &[usize]) {
         self.cache_tree_history().await;
@@ -85,6 +89,7 @@ impl TreeData {
     /// Fetches the inclusion proof of the provided identity at the given root hash
     ///
     /// `identity`: Identity commitment to fetch the inclusion proof for
+    ///
     /// `root`: The root against which the `WorldTree` will serve the inclusion proof against
     ///
     /// Returns None if the provided root hash is not in the latest one or is not present in tree history
@@ -132,7 +137,9 @@ impl TreeData {
     }
 
     /// Returns an inclusion proof for a given identity commitment in the specified tree
+    ///
     /// `tree`: The `WorldTree` (canonical or derived) to fetch the inclusion proof against
+    ///
     /// `identity`: Identity commitment to create the inclusion proof for
     fn proof<V: VersionMarker>(
         tree: &PoseidonTree<V>,
