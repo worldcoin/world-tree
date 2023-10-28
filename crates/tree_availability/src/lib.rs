@@ -17,13 +17,13 @@
 //! # Build the binary
 //! cargo build --bin tree-availability-service --release
 //! # Run the command
-//! ./target/release/tree-availability-service  \
-//!  --tree-depth <TREE_DEPTH>                  \
-//!  --tree-history-size <TREE_HISTORY_SIZE>    \
-//!  --dense-prefix-depth <DENSE_PREFIX_DEPTH>  \
-//!  --address <ADDRESS>                        \
-//!  --creation-block <CREATION_BLOCK>          \
-//!  --rpc-endpoint <RPC_ENDPOINT>              \
+//! ./target/release/tree-availability-service  
+//!  --tree-depth <TREE_DEPTH>                  
+//!  --tree-history-size <TREE_HISTORY_SIZE>    
+//!  --dense-prefix-depth <DENSE_PREFIX_DEPTH>  
+//!  --address <ADDRESS>                        
+//!  --creation-block <CREATION_BLOCK>          
+//!  --rpc-endpoint <RPC_ENDPOINT>              
 //! ```
 //!
 //! #### Library

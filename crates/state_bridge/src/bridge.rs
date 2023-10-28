@@ -43,10 +43,10 @@ pub struct StateBridge<M: Middleware + 'static> {
 }
 
 impl<M: Middleware> StateBridge<M> {
-    /// Constructor \
-    /// `state_bridge`: `StateBridge` contract interface \
-    /// `bridged_world_id`: `BridgedWorldID` contract interface \
-    /// `relaying_period`: Time in between `propagateRoot()` calls \
+    /// Constructor
+    /// `state_bridge`: `StateBridge` contract interface
+    /// `bridged_world_id`: `BridgedWorldID` contract interface
+    /// `relaying_period`: Time in between `propagateRoot()` calls
     /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized
     pub fn new(
         state_bridge: IStateBridge<M>,
@@ -62,13 +62,13 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
-    /// Constructor with address and middleware \
-    /// `bridge_address`: `StateBridge` contract address \
-    /// `canonical_middleware`: middleware for the chain where the `StateBridge` is deployed \
-    /// `bridged_world_id_address`: `BridgedWorldID` contract address \
-    /// `derived_middleware`: middleware for the chain where the `BridgedWorldID` is deployed \
-    /// `relaying_period`: Time in between `propagateRoot()` calls \
-    /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized \
+    /// Constructor with address and middleware
+    /// `bridge_address`: `StateBridge` contract address
+    /// `canonical_middleware`: middleware for the chain where the `StateBridge` is deployed
+    /// `bridged_world_id_address`: `BridgedWorldID` contract address
+    /// `derived_middleware`: middleware for the chain where the `BridgedWorldID` is deployed
+    /// `relaying_period`: Time in between `propagateRoot()` calls
+    /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized
     pub fn new_from_parts(
         bridge_address: H160,
         canonical_middleware: Arc<M>,
@@ -93,7 +93,7 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
-    /// Spawns the `StateBridge` which listens to the `WorldRoot` `TreeChanged` events for new roots to propagate. \
+    /// Spawns the `StateBridge` which listens to the `WorldRoot` `TreeChanged` events for new roots to propagate.
     /// `root_rx`: The root receiver that listens to the `WorldRoot` root sender
     pub async fn spawn(
         &self,

@@ -32,9 +32,9 @@ where
         }
     }
 
-    /// Returns a list of specified events that were emitted by a given smart contract address \
-    /// `address`: Address of the contract that we want to listen to events in \
-    /// `topics`: The topics of the events the `BlockScanner` will listen to and parse \
+    /// Returns a list of specified events that were emitted by a given smart contract address
+    /// `address`: Address of the contract that we want to listen to events in
+    /// `topics`: The topics of the events the `BlockScanner` will listen to and parse
     pub async fn next(
         &self,
         address: Option<ValueOrArray<Address>>,

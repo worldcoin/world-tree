@@ -37,8 +37,8 @@ impl<M> WorldTreeRoot<M>
 where
     M: Middleware,
 {
-    /// `WorldTreeRoot` constructor \
-    /// `world_id_identity_manager`:`IWorldIDIdentityManager\<M\>` - `WorldIDIdentityManager` interface
+    /// `WorldTreeRoot` constructor
+    /// `world_id_identity_manager`:`IWorldIDIdentityManager<M>` - `WorldIDIdentityManager` interface
     pub async fn new(
         world_id_identity_manager: IWorldIDIdentityManager<M>,
     ) -> Result<Self, StateBridgeError<M>> {
@@ -50,10 +50,10 @@ where
         })
     }
 
-    /// `WorldTreeRoot` constructor from address and middleware \
-    /// `world_id_identity_manager`:`IWorldIDIdentityManager\<M\>` - `WorldIDIdentityManager` interface \
-    /// `world_tree_address`: `H160` - `WorldIDIdentityManager` contract address \
-    /// `middleware`: `Arc\<M\>` - Middleware provider (ethers) \
+    /// `WorldTreeRoot` constructor from address and middleware
+    /// `world_id_identity_manager`:`IWorldIDIdentityManager<M>` - `WorldIDIdentityManager` interface
+    /// `world_tree_address`: `H160` - `WorldIDIdentityManager` contract address
+    /// `middleware`: `Arc<M>` - Middleware provider (ethers)
     pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
