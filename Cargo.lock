@@ -956,8 +956,12 @@ version = "0.1.0"
 dependencies = [
  "ethers",
  "eyre",
+ "metrics",
+ "opentelemetry",
+ "opentelemetry-datadog",
  "serde",
  "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
@@ -2393,16 +2397,12 @@ dependencies = [
  "ethers",
  "eyre",
  "futures",
- "metrics",
- "opentelemetry",
- "opentelemetry-datadog",
  "reqwest",
  "serde",
  "state_bridge",
  "tokio",
  "toml 0.8.5",
  "tracing",
- "tracing-opentelemetry",
  "tree_availability",
 ]
 
