@@ -24,6 +24,7 @@ state_bridge = { path = "crates/state_bridge" }
 tokio = { version = "1.33.0", features = ["full"] }
 toml = "0.8.4"
 tracing = "0.1.40"
+tracing-opentelemetry = "0.21.0"
 tree_availability = { path = "crates/tree_availability" }
 
 [[bin]]
