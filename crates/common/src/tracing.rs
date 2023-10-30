@@ -1,5 +1,5 @@
-use tracing::{error, Level, Span, Subscriber};
-use tracing_opentelemetry::{OpenTelemetryLayer, OpenTelemetrySpanExt};
+use tracing::{Level};
+use tracing_opentelemetry::{OpenTelemetrySpanExt};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
