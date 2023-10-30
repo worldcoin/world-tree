@@ -956,9 +956,11 @@ version = "0.1.0"
 dependencies = [
  "ethers",
  "eyre",
+ "http",
  "metrics",
  "opentelemetry",
  "opentelemetry-datadog",
+ "opentelemetry-http",
  "serde",
  "tokio",
  "tracing",
@@ -5163,12 +5165,15 @@ name = "tree_availability"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bytes",
  "common",
  "ethers",
  "eyre",
  "futures",
+ "futures-util",
  "hyper",
  "metrics",
+ "opentelemetry",
  "reqwest",
  "semaphore",
  "serde",

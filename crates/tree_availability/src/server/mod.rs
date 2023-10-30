@@ -1,6 +1,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+pub mod middleware;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;

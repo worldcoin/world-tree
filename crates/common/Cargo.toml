@@ -20,3 +20,5 @@ tracing = "0.1.40"
 tracing-opentelemetry = "0.21.0"
 tracing-subscriber = {version = "0.3.17", features = ["env-filter"]}
 tokio = "1.33.0"
+http = "0.2.9"
+opentelemetry-http = "0.9.0"
