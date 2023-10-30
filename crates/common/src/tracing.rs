@@ -1,10 +1,4 @@
-use opentelemetry::global;
-use opentelemetry::sdk::propagation::TraceContextPropagator;
-use opentelemetry::sdk::trace::{BatchSpanProcessor, Sampler, Tracer};
-use opentelemetry::trace::TracerProvider;
-use opentelemetry_datadog::DatadogExporter;
-use tracing::{Level, Subscriber};
-use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing::Level;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -20,36 +14,20 @@ pub fn init_subscriber(level: Level) {
         .with(fmt_layer)
         .init();
 }
-
 pub fn init_datadog_subscriber(service_name: &str, level: Level) {
-    //     let exporter = DatadogExporter::builder()
-    //         .with_service_name(service_name)
-    //         .init()
-    //         .expect("Error initializing Datadog exporter");
+    let tracer = opentelemetry_datadog::new_pipeline()
+        .with_service_name(service_name)
+        .with_api_version(opentelemetry_datadog::ApiVersion::Version05)
+        .install_simple()
+        .expect("Could not initialize tracer");
 
-    //     let batch = BatchSpanProcessor::builder(
-    //         exporter,
-    //         tokio::runtime::Handle::current(),
-    //     )
-    //     .build();
+    let otel_layer = tracing_opentelemetry::OpenTelemetryLayer::new(tracer);
 
-    //     let provider = opentelemetry::sdk::trace::TracerProvider::builder()
-    //         .with_simple_exporter(batch)
-    //         .with_config(opentelemetry::sdk::trace::Config {
-    //             sampler: Box::new(Sampler::AlwaysOn),
-    //             ..Default::default()
-    //         })
-    //         .build();
+    let filter = tracing_subscriber::filter::EnvFilter::from_default_env()
+        .add_directive(level.into());
 
-    //     let tracer = provider.tracer("my_tracer");
-    //     let otel_layer = OpenTelemetryLayer::new(tracer);
-
-    //     let filter = EnvFilter::from_default_env().add_directive(level.into());
-
-    //     global::set_text_map_propagator(TraceContextPropagator::new());
-
-    //     tracing_subscriber::registry()
-    //         .with(filter)
-    //         .with(otel_layer)
-    //         .init();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(otel_layer)
+        .init();
 }
