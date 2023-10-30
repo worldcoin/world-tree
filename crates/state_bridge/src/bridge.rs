@@ -38,7 +38,7 @@ pub struct StateBridge<M: Middleware + 'static> {
     pub bridged_world_id: IBridgedWorldID<M>,
     /// Time in between `propagateRoot()` calls
     pub relaying_period: Duration,
-    /// The number of blocks before a `propagateRoot()` call is considered finalized
+    /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub block_confirmations: usize,
 }
 
