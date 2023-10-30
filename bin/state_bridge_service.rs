@@ -1,3 +1,38 @@
+//! # State Bridge Service
+//!
+//! ### Description
+//!
+//! The state bridge service for the World ID protocol takes care of periodically relaying the latest roots from the World ID Identity Manager onto L2 networks or sidechains that implement native bridge on Ethereum or have an integration with third party messaging protocol. The state bridge service requires a deployment of the [`world-id-state-bridge`](github.com/worldcoin/world-id-state-bridge/) contracts which in turn also have to be connected to a valid [`world-id-contracts`](https://github.com/worldcoin/world-id-contracts/) deployment.
+//!
+//! ### Usage
+//!
+//! #### CLI
+//!
+//! Create a state_bridge_service.toml file which will hold the configuration parameters for the state bridge
+//! service. You can use the example in the test as a template:
+//!
+//! ```toml
+//! rpc_url = "127.0.0.1:8545"
+//! private_key = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
+//! world_id_address = "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
+//! bridge_configs = [
+//!     [
+//!         "Optimism",
+//!         # StateBridge Address
+//!         "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
+//!         # BridgedWorldID Address
+//!         "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
+//!         "127.0.0.1:8545",
+//!     ]
+//! ]
+//! relaying_period_seconds = 5
+//! ```
+//!
+//! ```bash
+//! cargo build --bin state-bridge-service --release
+//! ./target/release/state-bridge-service --config <CONFIG>
+//! ```
+
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,10 +51,8 @@ use state_bridge::root::IWorldIDIdentityManager;
 use state_bridge::StateBridgeService;
 use tracing::info;
 
-/// The state bridge service propagates roots according to the specified relaying_period by
-/// calling the propagateRoot() method on each specified World ID StateBridge. The state bridge
-/// service will also make sure that it doesn't propagate roots that have already been propagated
-/// and have finalized on the BridgedWorldID side.
+/// The state bridge service propagates roots from the world tree. Frequency of root propagation is specified
+/// by the relaying_period. This service will not propagate roots that have already been propagated before.
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",

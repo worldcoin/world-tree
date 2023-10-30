@@ -78,7 +78,7 @@ impl<M: Middleware> StateBridge<M> {
     ///
     /// `relaying_period`: Time in between `propagateRoot()` calls
     ///
-    /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized
+    ///  `block_confirmations: The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub fn new_from_parts(
         bridge_address: H160,
         canonical_middleware: Arc<M>,

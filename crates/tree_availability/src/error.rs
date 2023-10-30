@@ -4,7 +4,6 @@ use ethers::types::Log;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-/// Wraps dependency errors and converts them to `TreeAvailabilityError`s
 #[derive(Error, Debug)]
 pub enum TreeAvailabilityError<M>
 where
