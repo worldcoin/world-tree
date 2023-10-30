@@ -36,7 +36,7 @@ pub struct StateBridge<M: Middleware + 'static> {
     pub state_bridge: IStateBridge<M>,
     /// Interface for the `BridgedWorldID` contract
     pub bridged_world_id: IBridgedWorldID<M>,
-    /// Time in between `propagateRoot()` calls
+    /// Time delay between `propagateRoot()` transactions
     pub relaying_period: Duration,
     /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub block_confirmations: usize,
