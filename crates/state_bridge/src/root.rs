@@ -37,7 +37,7 @@ impl<M> WorldTreeRoot<M>
 where
     M: Middleware,
 {
-    /// `WorldTreeRoot` constructor
+    /// Initializes `WorldTreeRoot`
     ///
     /// `world_id_identity_manager`:`IWorldIDIdentityManager<M>` - `WorldIDIdentityManager` interface
     pub async fn new(
@@ -51,7 +51,7 @@ where
         })
     }
 
-    /// `WorldTreeRoot` constructor from address and middleware
+    /// Initializes `WorldTreeRoot` from address and middleware
     ///
     /// `world_id_identity_manager`:`IWorldIDIdentityManager<M>` - `WorldIDIdentityManager` interface
     ///

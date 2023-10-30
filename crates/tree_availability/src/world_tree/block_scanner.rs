@@ -19,7 +19,7 @@ impl<M> BlockScanner<M>
 where
     M: Middleware,
 {
-    /// Constructor
+    /// Initializes a BlockScanner
     pub const fn new(
         middleware: M,
         window_size: u64,

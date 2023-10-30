@@ -35,7 +35,7 @@ impl<M> StateBridgeService<M>
 where
     M: Middleware,
 {
-    /// ### Constructor for the `StateBridgeService`
+    /// Initializes the `StateBridgeService`
     ///
     /// `world_tree`:`IWorldID ` - interface to the `WorldIDIdentityManager`
     pub async fn new(
@@ -48,7 +48,7 @@ where
         })
     }
 
-    /// Constructor for the `StateBridgeService`
+    /// Initializes the `StateBridgeService`
     ///
     /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
     ///

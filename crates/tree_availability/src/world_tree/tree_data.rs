@@ -25,7 +25,7 @@ pub struct TreeUpdate {
 }
 
 impl TreeData {
-    /// Constructor
+    /// Initializes TreeData
     ///
     /// `tree`: Canonical in-memory tree
     ///

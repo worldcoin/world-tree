@@ -34,7 +34,7 @@ pub struct TreeUpdater<M: Middleware> {
 }
 
 impl<M: Middleware> TreeUpdater<M> {
-    /// Constructor
+    /// Initializes TreeUpdater
     ///
     /// `address`: `WorldIDIdentityManager` contract address
     ///

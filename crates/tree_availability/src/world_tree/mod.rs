@@ -33,7 +33,7 @@ pub struct WorldTree<M: Middleware> {
 }
 
 impl<M: Middleware> WorldTree<M> {
-    /// Constructor
+    /// Initializes WorldTree
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,

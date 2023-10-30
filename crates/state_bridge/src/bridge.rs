@@ -43,7 +43,7 @@ pub struct StateBridge<M: Middleware + 'static> {
 }
 
 impl<M: Middleware> StateBridge<M> {
-    /// Constructor
+    /// Initializes a StateBridge
     ///
     /// `state_bridge`: `StateBridge` contract interface
     ///
@@ -66,7 +66,7 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
-    /// Constructor with address and middleware
+    /// Initializes a StateBridge with address and middleware
     ///
     /// `bridge_address`: `StateBridge` contract address
     ///
