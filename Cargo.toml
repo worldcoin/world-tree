@@ -14,6 +14,7 @@ members = [
 
 [dependencies]
 clap = { version = "4.4.6", features = ["derive"] }
+common = { path = "./crates/common" }
 ethers = "2.0.10"
 eyre = "0.6.8"
 futures = "0.3.28"
@@ -24,7 +25,6 @@ tokio = { version = "1.33.0", features = ["full"] }
 toml = "0.8.4"
 tracing = "0.1.40"
 tree_availability = { path = "crates/tree_availability" }
-common = { path = "./crates/common" }
 
 [[bin]]
 name = "tree-availability-service"
