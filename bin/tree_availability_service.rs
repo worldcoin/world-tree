@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use tracing::Level;
 use tree_availability::TreeAvailabilityService;
 
 #[derive(Parser, Debug)]
@@ -36,11 +38,20 @@ struct Opts {
         default_value = "8080"
     )]
     port: u16,
+
+    #[clap(long, help = "Enable datadog backend for instrumentation")]
+    datadog: bool,
 }
 
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
+
+    if opts.datadog {
+        init_datadog_subscriber("tree_availability_service", Level::INFO);
+    } else {
+        init_subscriber(Level::INFO);
+    }
 
     let middleware = Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?);
     let handles = TreeAvailabilityService::new(

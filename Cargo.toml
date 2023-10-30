@@ -24,6 +24,7 @@ tokio = { version = "1.33.0", features = ["full"] }
 toml = "0.8.4"
 tracing = "0.1.40"
 tree_availability = { path = "crates/tree_availability" }
+common = { path = "./crates/common" }
 
 [[bin]]
 name = "tree-availability-service"
