@@ -11,6 +11,7 @@ use semaphore::Field;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use tokio::time::Instant;
 
 use crate::error::TreeError;
 use crate::world_tree::{Hash, WorldTree};
@@ -81,11 +82,20 @@ pub async fn inclusion_proof<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
+    metrics::increment_counter!("tree_availability.server.inclusion_proof");
+
     if world_tree.tree_updater.synced.load(Ordering::Relaxed) {
+        let inclusion_proof_start_time = Instant::now();
+
         let inclusion_proof = world_tree
             .tree_data
             .get_inclusion_proof(req.identity_commitment, req.root)
             .await;
+
+        metrics::histogram!(
+            "tree_availability.server.inclusion_proof_duration_ms",
+            inclusion_proof_start_time.elapsed().as_millis() as f64
+        );
 
         Ok((StatusCode::OK, inclusion_proof.into()))
     } else {

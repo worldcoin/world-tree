@@ -113,6 +113,10 @@ impl<M: Middleware> TreeUpdater<M> {
                 .map(|u256: U256| Hash::from_limbs(u256.0))
                 .collect();
 
+            metrics::increment_counter!(
+                "tree_availability.tree_updater.insertion"
+            );
+
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;
@@ -125,6 +129,10 @@ impl<M: Middleware> TreeUpdater<M> {
             );
             let indices: Vec<_> =
                 indices.into_iter().map(|x| x as usize).collect();
+
+            metrics::increment_counter!(
+                "tree_availability.tree_updater.deletion"
+            );
 
             tree_data.delete_many(&indices).await;
         } else {

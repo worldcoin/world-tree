@@ -34,6 +34,11 @@ where
     ) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
 
+        metrics::gauge!(
+            "tree_availability.block_scanner.latest_block",
+            latest_block as f64
+        );
+
         let current_block = self.current_block.load(Ordering::SeqCst);
 
         if current_block >= latest_block {
