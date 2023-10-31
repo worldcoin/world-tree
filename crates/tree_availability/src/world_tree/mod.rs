@@ -33,7 +33,19 @@ pub struct WorldTree<M: Middleware> {
 }
 
 impl<M: Middleware> WorldTree<M> {
-    /// Initializes WorldTree
+    /// Initializes a new instance of `WorldTree`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The PoseidonTree used for the merkle tree representation.
+    /// * `tree_history_size` - The number of historical tree roots to keep in memory.
+    /// * `address` - The smart contract address of the `WorldIDIdentityManager`.
+    /// * `creation_block` - The block number at which the contract was deployed.
+    /// * `middleware` - Provider to interact with Ethereum.
+    ///
+    /// # Returns
+    ///
+    /// New instance of `WorldTree`.
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,
@@ -51,6 +63,11 @@ impl<M: Middleware> WorldTree<M> {
         }
     }
 
+    /// Spawns a task that continually syncs the `TreeData` to the state at the chain head.
+    ///
+    /// # Returns
+    ///
+    /// A `JoinHandle` that resolves to a `Result<(), TreeAvailabilityError<M>>` when the spawned task completes.
     pub async fn spawn(
         &self,
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {

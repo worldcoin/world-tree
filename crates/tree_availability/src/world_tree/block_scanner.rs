@@ -11,7 +11,7 @@ pub struct BlockScanner<M> {
     middleware: M,
     /// The block from which to start parsing a given event
     current_block: AtomicU64,
-    /// Event window
+    /// The maximum block range to parse
     window_size: u64,
 }
 
@@ -19,7 +19,7 @@ impl<M> BlockScanner<M>
 where
     M: Middleware,
 {
-    /// Initializes a BlockScanner
+    /// Initializes a new `BlockScanner`
     pub const fn new(
         middleware: M,
         window_size: u64,
@@ -32,11 +32,12 @@ where
         }
     }
 
-    /// Returns a list of specified events that were emitted by a given smart contract address
+    /// Retrieves events matching the specified address and topics from the last synced block to the latest block.
     ///
-    /// `address`: Address of the contract that we want to listen to events in
+    /// # Arguments
     ///
-    /// `topics`: The topics of the events the `BlockScanner` will listen to and parse
+    /// * `address` - Optional address to target when fetching logs.
+    /// * `topics` - Optional topics to target when fetching logs, enabling granular filtering when looking for specific event signatures or topic values.
     pub async fn next(
         &self,
         address: Option<ValueOrArray<Address>>,

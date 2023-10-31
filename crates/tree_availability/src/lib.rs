@@ -23,20 +23,27 @@ use world_tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::server::{inclusion_proof, synced};
 
-/// The tree availability service data structure
+/// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
-    /// The World ID merkle tree synced from the `WorldIDIdentityManager` contract
+    /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree<M>>,
 }
 
 impl<M: Middleware> TreeAvailabilityService<M> {
-    /// Initializes new instance of TreeAvailabilityService
-    /// `tree_depth`: the depth of the World ID contract (currently 30 in production - Nov 2023)
-    /// `dense_prefix_depth`: what is the depth of the tree that is densely populated (currently depth 10)
-    /// `tree_history_size`: how many historical roots and derived trees to hold in memory to serve proofs for
-    /// `world_tree_address`: `WorldIDIdentityManager` contract address
-    /// `world_tree_creation_block`: block at which `WorldIDIdentityManager` contract was deployed
-    /// `middleware`: Ethereum provider
+    /// Initializes new instance of `TreeAvailabilityService`,
+    ///
+    /// # Arguments
+    ///
+    /// * `tree_depth` - Depth of the merkle tree
+    /// * `dense_prefix_depth`: Depth of the tree that is densely populated. Nodes beyond the `dense_prefix_depth` will be stored through pointer based structures.
+    /// * `tree_history_size`: Number of historical roots to store in memory. This is used to serve proofs against historical roots.
+    /// * `world_tree_address`: Address of the `WorldIDIdentityManager` contract onchain
+    /// * `world_tree_creation_block`: Block number where `WorldIDIdentityManager` was deployed
+    /// * `middleware`: Provider to interact with Ethereum
+    ///
+    /// # Returns
+    ///
+    /// New instance of `TreeAvailabilityService`.
     pub fn new(
         tree_depth: usize,
         dense_prefix_depth: usize,
@@ -62,8 +69,15 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         Self { world_tree }
     }
 
-    /// Spins up the /inclusionProof endpoint to serve proofs of inclusion for the World ID tree
-    /// `port`: which port on the machine will serve HTTP requests
+    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for a given World ID. This function also spawns a new task to keep the world tree synced to the chain head.
+    ///
+    /// # Arguments
+    ///
+    /// * `port` - Port to bind the server to.
+    ///
+    /// # Returns
+    ///
+    /// Vector of `JoinHandle`s for the spawned tasks.
     pub async fn serve(
         self,
         port: u16,

@@ -130,10 +130,12 @@ pub async fn synced<M: Middleware>(
 
 impl TreeError {
     fn to_status_code(&self) -> StatusCode {
-        //TODO: update this
-        StatusCode::BAD_REQUEST
+        match self {
+            TreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
+        }
     }
 }
+
 impl IntoResponse for TreeError {
     fn into_response(self) -> axum::response::Response {
         let status_code = self.to_status_code();
