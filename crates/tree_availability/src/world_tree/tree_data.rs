@@ -9,6 +9,7 @@ use crate::server::InclusionProof;
 
 pub struct TreeData {
     pub tree: RwLock<PoseidonTree<Derived>>,
+    pub depth: usize,
     pub tree_history_size: usize,
     pub tree_history: RwLock<VecDeque<PoseidonTree<Derived>>>, //TODO: make a note that the latest is at the front
 }
@@ -24,6 +25,7 @@ impl TreeData {
     ) -> Self {
         Self {
             tree_history_size,
+            depth: tree.depth(),
             tree: RwLock::new(tree.derived()),
             tree_history: RwLock::new(VecDeque::new()),
         }

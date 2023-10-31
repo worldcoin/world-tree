@@ -63,7 +63,7 @@ impl<M: Middleware> WorldTree<M> {
                 tree_updater.sync_to_head(&tree_data).await?;
 
                 // Sleep a little to unblock the executor
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                // tokio::time::sleep(Duration::from_secs(5)).await;
             }
         })
     }

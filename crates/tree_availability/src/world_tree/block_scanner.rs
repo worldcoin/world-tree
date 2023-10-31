@@ -40,6 +40,9 @@ where
             return Ok(Vec::new());
         }
 
+        //TODO: next should maybe sync to chain head or maybe this logic can be outside of the block scanner
+        //TODO: but we need some way to create futures ordered until we get the chain head?
+
         let from_block = current_block;
         let to_block = latest_block.min(from_block + self.window_size);
 
