@@ -81,7 +81,7 @@ pub async fn inclusion_proof<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    if world_tree.tree_updater.synced.load(Ordering::Relaxed) {
+    if world_tree.synced.load(Ordering::Relaxed) {
         let inclusion_proof = world_tree
             .tree_data
             .get_inclusion_proof(req.identity_commitment, req.root)
@@ -112,7 +112,7 @@ impl SyncResponse {
 pub async fn synced<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
 ) -> (StatusCode, Json<SyncResponse>) {
-    if world_tree.tree_updater.synced.load(Ordering::Relaxed) {
+    if world_tree.synced.load(Ordering::Relaxed) {
         (StatusCode::OK, SyncResponse::new(true, None).into())
     } else {
         let latest_synced_block = Some(

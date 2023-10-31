@@ -7,7 +7,6 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tree_availability::TreeAvailabilityService;
 
-// CLI interface for the Tree Availability Service
 #[derive(Parser, Debug)]
 #[clap(
     name = "Tree Availability Service",

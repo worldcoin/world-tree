@@ -3,7 +3,7 @@ pub mod block_scanner;
 pub mod tree_data;
 pub mod tree_updater;
 
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,6 +30,8 @@ pub struct WorldTree<M: Middleware> {
     pub tree_data: Arc<TreeData>,
     /// The object in charge of syncing the tree from calldata
     pub tree_updater: Arc<TreeUpdater<M>>,
+    /// Boolean to indicate when the tree state is synced wth the chain head upon spawning the `WorldTree`.
+    pub synced: Arc<AtomicBool>,
 }
 
 impl<M: Middleware> WorldTree<M> {
@@ -60,6 +62,7 @@ impl<M: Middleware> WorldTree<M> {
                 creation_block,
                 middleware,
             )),
+            synced: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -73,9 +76,11 @@ impl<M: Middleware> WorldTree<M> {
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let tree_data = self.tree_data.clone();
         let tree_updater = self.tree_updater.clone();
+        let synced = self.synced.clone();
+
         tokio::spawn(async move {
             tree_updater.sync_to_head(&tree_data).await?;
-            tree_updater.synced.store(true, Ordering::Relaxed);
+            synced.store(true, Ordering::Relaxed);
 
             loop {
                 tree_updater.sync_to_head(&tree_data).await?;

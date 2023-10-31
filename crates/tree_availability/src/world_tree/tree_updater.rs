@@ -19,17 +19,15 @@ use crate::world_tree::Hash;
 // TODO: Change to a configurable parameter
 const SCANNING_WINDOW_SIZE: u64 = 100;
 
-/// The `TreeUpdater` holds the necessary data to be able to sync the World ID tree
-/// from Ethereum calldata and events emitted by the `WorldIDIdentityManager` contracts
+/// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {
-    /// `address`: `WorldIDIdentityManager` contract address
+    /// Contract address of the `WorldIDIdentityManager`.
     pub address: H160,
+    /// Latest block that has been synced.
     pub latest_synced_block: AtomicU64,
-    /// `synced`: has the updater finished syncing up to the latest canonical onchain tree
-    pub synced: AtomicBool,
-    /// `block_scanner`: utility tool to parse calldata and events
+    /// Scanner responsible for fetching logs and parsing calldata to decode tree updates.
     block_scanner: BlockScanner<Arc<M>>,
-    /// `middleware`: provider
+    /// Provider to interact with Ethereum.
     pub middleware: Arc<M>,
 }
 
@@ -45,7 +43,6 @@ impl<M: Middleware> TreeUpdater<M> {
         Self {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
-            synced: AtomicBool::new(false),
             block_scanner: BlockScanner::new(
                 middleware.clone(),
                 SCANNING_WINDOW_SIZE,
@@ -55,9 +52,11 @@ impl<M: Middleware> TreeUpdater<M> {
         }
     }
 
-    /// Sync the state of the tree to to the chain head
+    /// Updates the in-memory tree to reflect the latest state of the onchain tree.
     ///
-    /// `tree_data`: Data structure holding the tree's currently synced state
+    /// # Arguments
+    ///
+    /// * `tree_data` - Instance of `TreeData` maintaining the current state of the tree and tree history.
     pub async fn sync_to_head(
         &self,
         tree_data: &TreeData,
@@ -107,11 +106,12 @@ impl<M: Middleware> TreeUpdater<M> {
         Ok(())
     }
 
-    /// Syncs the tree data from a provided onchain transaction
+    /// Updates the in-memory tree based transaction calldata.
     ///
-    /// `tree_data`: Data structure holding the tree's currently synced state
+    /// # Arguments
     ///
-    /// `transaction`: onchain transaction object
+    /// * `tree_data` - Instance of `TreeData` maintaining the current state of the tree and tree history.
+    /// * `transaction` - Transaction containing the calldata necessary to update the local tree.
     pub async fn sync_from_transaction(
         &self,
         tree_data: &TreeData,
@@ -155,8 +155,11 @@ impl<M: Middleware> TreeUpdater<M> {
     }
 }
 
-/// Converts an array of indices into a tightly packed vector of bytes
-/// `indices`: array of 32 bit integers that represent the position of identity commitments in the `WorldTree`
+/// Packs an array of 32-bit indices into a contiguous byte vector.
+///
+/// # Arguments
+///
+/// * `indices` - The array of indices representing positions of identity commitments in the `WorldTree`.
 pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     let mut packed = Vec::with_capacity(indices.len() * 4);
 
@@ -167,8 +170,11 @@ pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     packed
 }
 
-/// Converts a packed array of bytes into a vector of 32 bit integers
-/// `packed`: packed indices holding the positions of identity commitments in the `WorldTree`
+/// Unpacks a contiguous byte array into a vector of 32-bit indices.
+///
+/// # Arguments
+///
+/// * `packed` - The packed byte array containing positions of identity commitments in the `WorldTree`.
 pub fn unpack_indices(packed: &[u8]) -> Vec<u32> {
     let mut indices = Vec::with_capacity(packed.len() / 4);
 
