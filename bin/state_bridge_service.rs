@@ -10,6 +10,8 @@ use ethers::prelude::{
     SignerMiddleware, H160,
 };
 use ethers::providers::Middleware;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use state_bridge::abi::{
     IBridgedWorldID, IStateBridge, IWorldIDIdentityManager,
@@ -189,7 +191,11 @@ async fn spawn_state_bridge_service(
         info!("Added a bridge to {} to the state-bridge-service", name);
     }
 
-    state_bridge_service.spawn().await?;
+    let handles = state_bridge_service.spawn().await?;
+    let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
+    while let Some(result) = handles.next().await {
+        result??;
+    }
 
     Ok(())
 }
