@@ -11,8 +11,10 @@ use ethers::prelude::{
 };
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
-use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
-use state_bridge::root::IWorldIDIdentityManager;
+use state_bridge::abi::{
+    IBridgedWorldID, IStateBridge, IWorldIDIdentityManager,
+};
+use state_bridge::bridge::StateBridge;
 use state_bridge::StateBridgeService;
 use tracing::info;
 

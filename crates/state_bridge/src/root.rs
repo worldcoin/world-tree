@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use common::test_utilities::abi::TreeChangedFilter;
 use ethers::middleware::Middleware;
 use ethers::providers::StreamExt;
 use ethers::types::H160;
@@ -12,7 +11,7 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 use ethers::prelude::abigen;
 use tokio::task::JoinHandle;
 
-use crate::abi::IWorldIDIdentityManager;
+use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};
 use crate::error::StateBridgeError;
 
 /// `WorldTreeRoot` is the struct that has a `WorldIDIdentityManager` interface
