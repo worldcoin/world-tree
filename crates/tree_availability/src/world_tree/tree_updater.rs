@@ -34,11 +34,9 @@ pub struct TreeUpdater<M: Middleware> {
 impl<M: Middleware> TreeUpdater<M> {
     /// Initializes TreeUpdater
     ///
-    /// `address`: `WorldIDIdentityManager` contract address
-    ///
-    /// `creation_block`: The block height of the `WorldIDIdentityManager` contract deployment
-    ///
-    /// `middleware`: provider
+    /// * `address` - `WorldIDIdentityManager` contract address
+    /// * `creation_block` The block height of the `WorldIDIdentityManager` contract deployment
+    /// * `middleware` - Provider to interact with Ethereum.
     pub fn new(address: H160, creation_block: u64, middleware: Arc<M>) -> Self {
         Self {
             address,

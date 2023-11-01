@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use common::test_utilities::abi::TreeChangedFilter;
 use ethers::middleware::Middleware;
 use ethers::providers::StreamExt;
 use ethers::types::H160;
@@ -11,16 +12,8 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 use ethers::prelude::abigen;
 use tokio::task::JoinHandle;
 
+use crate::abi::IWorldIDIdentityManager;
 use crate::error::StateBridgeError;
-
-// Creates the ABI for the WorldIDIdentityManager interface
-abigen!(
-    IWorldIDIdentityManager,
-    r#"[
-        function latestRoot() external returns (uint256)
-        event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
-    ]"#;
-);
 
 /// `WorldTreeRoot` is the struct that has a `WorldIDIdentityManager` interface
 /// and sends the latest roots to a channel so that the `StateBridgeService` can

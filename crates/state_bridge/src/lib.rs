@@ -4,17 +4,19 @@
 //!
 //! The state bridge service for the World ID protocol takes care of periodically relaying the latest roots from the World ID Identity Manager onto L2 networks or sidechains that implement native bridge on Ethereum or have an integration with third party messaging protocol. The state bridge service requires a deployment of the [`world-id-state-bridge`](github.com/worldcoin/world-id-state-bridge/) contracts which in turn also have to be connected to a valid [`world-id-contracts`](https://github.com/worldcoin/world-id-contracts/) deployment.
 
+pub mod abi;
 pub mod bridge;
 pub mod error;
 pub mod root;
 
 use std::sync::Arc;
 
+use abi::IWorldIDIdentityManager;
 use bridge::StateBridge;
 use error::StateBridgeError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
-use root::{IWorldIDIdentityManager, WorldTreeRoot};
+use root::WorldTreeRoot;
 use tokio::task::JoinHandle;
 
 /// `StateBridgeService` has handles to `StateBridge` contracts, periodically

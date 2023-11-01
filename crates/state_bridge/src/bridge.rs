@@ -8,26 +8,9 @@ use tokio::select;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
+use crate::abi::{IBridgedWorldID, IStateBridge};
 use crate::error::StateBridgeError;
 use crate::root::Hash;
-
-abigen!(
-    IStateBridge,
-    r#"[
-        function propagateRoot() external
-    ]"#;
-);
-
-abigen!(
-    IBridgedWorldID,
-    r#"[
-        event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
-        event RootAdded(uint256 root, uint128 timestamp)
-        function latestRoot() public view virtual returns (uint256)
-        function receiveRoot(uint256 newRoot) external
-    ]"#,
-    event_derives(serde::Deserialize, serde::Serialize)
-);
 
 /// The `StateBridge` takes care of listening to roots propagated from the `WorldRoot` and
 /// propagates them periodically every time `relaying_period` elapses and the root was updated.

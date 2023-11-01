@@ -16,7 +16,7 @@ pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
-use state_bridge::bridge::{IBridgedWorldID, IStateBridge, StateBridge};
+use state_bridge::abi::{IBridgedWorldID, IStateBridge, StateBridge};
 use state_bridge::error::StateBridgeError;
 use state_bridge::root::IWorldIDIdentityManager;
 use state_bridge::StateBridgeService;
