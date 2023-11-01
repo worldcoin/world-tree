@@ -29,6 +29,12 @@ struct Opts {
     address: H160,
     #[clap(short, long, help = "Creation block of the World Tree")]
     creation_block: u64,
+    #[clap(
+        short,
+        long,
+        help = "Maximum window size when scanning blocks for TreeChanged events"
+    )]
+    window_size: Option<u64>,
     #[clap(short, long, help = "Ethereum RPC endpoint")]
     rpc_endpoint: String,
     #[clap(
@@ -38,7 +44,6 @@ struct Opts {
         default_value = "8080"
     )]
     port: u16,
-
     #[clap(long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
 }
@@ -60,6 +65,7 @@ pub async fn main() -> eyre::Result<()> {
         opts.tree_history_size,
         opts.address,
         opts.creation_block,
+        opts.window_size,
         middleware,
     )
     .serve(opts.port)

@@ -17,9 +17,6 @@ use crate::error::TreeAvailabilityError;
 use crate::world_tree::abi::DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall;
 use crate::world_tree::{abi, Hash};
 
-// TODO: Change to a configurable parameter
-const SCANNING_WINDOW_SIZE: u64 = 100000;
-
 pub struct TreeUpdater<M: Middleware> {
     pub address: H160,
     pub latest_synced_block: AtomicU64,
@@ -29,14 +26,14 @@ pub struct TreeUpdater<M: Middleware> {
 }
 
 impl<M: Middleware> TreeUpdater<M> {
-    pub fn new(address: H160, creation_block: u64, middleware: Arc<M>) -> Self {
+    pub fn new(address: H160, creation_block: u64, window_size: u64, middleware: Arc<M>) -> Self {
         Self {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
             synced: AtomicBool::new(false),
             block_scanner: BlockScanner::new(
                 middleware.clone(),
-                SCANNING_WINDOW_SIZE,
+                window_size,
                 creation_block,
             ),
             middleware,
@@ -49,6 +46,8 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
         tracing::info!("Syncing tree to chain head");
+
+        
 
         let logs = self
             .block_scanner

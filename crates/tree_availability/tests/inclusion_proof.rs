@@ -60,6 +60,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         5,
         world_tree_address,
         world_tree_creation_block,
+        Some(10000),
         middleware,
     );
 
