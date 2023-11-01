@@ -18,7 +18,7 @@ use self::tree_data::TreeData;
 use self::tree_updater::TreeUpdater;
 use crate::error::TreeAvailabilityError;
 
-pub const DEFAULT_WINDOW_SIZE: u64 = 1000000000;
+pub const DEFAULT_WINDOW_SIZE: u64 = 100_000_000;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
@@ -66,8 +66,7 @@ impl<M: Middleware> WorldTree<M> {
             loop {
                 tree_updater.sync_to_head(&tree_data).await?;
 
-                // Sleep a little to unblock the executor
-                // tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         })
     }

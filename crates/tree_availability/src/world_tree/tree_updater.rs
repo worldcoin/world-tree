@@ -77,7 +77,7 @@ impl<M: Middleware> TreeUpdater<M> {
                     .transaction_hash
                     .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
 
-                tracing::info!("Getting transaction for {tx_hash}");
+                tracing::info!("Getting transaction {tx_hash:?}");
 
                 futures.push_back(self.middleware.get_transaction(tx_hash));
             }
@@ -91,7 +91,7 @@ impl<M: Middleware> TreeUpdater<M> {
             }
 
             //TODO: use a better throttle
-            // tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
         Ok(())

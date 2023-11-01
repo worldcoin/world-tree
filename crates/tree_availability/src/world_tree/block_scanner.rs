@@ -7,7 +7,7 @@ use ethers::types::{
 
 pub struct BlockScanner<M> {
     middleware: M,
-    pub current_block: AtomicU64,
+    pub last_synced_block: AtomicU64,
     window_size: u64,
 }
 
@@ -22,7 +22,7 @@ where
     ) -> Self {
         Self {
             middleware,
-            current_block: AtomicU64::new(current_block),
+            last_synced_block: AtomicU64::new(current_block),
             window_size,
         }
     }
@@ -34,18 +34,18 @@ where
     ) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
 
-        let current_block = self.current_block.load(Ordering::SeqCst);
+        let last_synced_block = self.last_synced_block.load(Ordering::SeqCst);
 
-        if current_block >= latest_block {
+        if last_synced_block >= latest_block {
             return Ok(Vec::new());
         }
 
-        let from_block = current_block;
+        let from_block = last_synced_block + 1;
         let to_block = latest_block.min(from_block + self.window_size);
 
-        tracing::info!("Scanning from {} to {}", current_block, latest_block);
+        tracing::info!("Scanning from {} to {}", from_block, to_block);
 
-        let next_current_block = to_block + 1;
+        let new_synced_block = to_block;
 
         let from_block = Some(BlockNumber::Number(from_block.into()));
         let to_block = Some(BlockNumber::Number(to_block.into()));
@@ -62,10 +62,10 @@ where
             })
             .await?;
 
-        self.current_block
-            .store(next_current_block, Ordering::SeqCst);
+        self.last_synced_block
+            .store(new_synced_block, Ordering::SeqCst);
 
-        tracing::info!("Current block updated to {next_current_block}");
+        tracing::info!("Last synced block updated to {new_synced_block}");
 
         Ok(logs)
     }
