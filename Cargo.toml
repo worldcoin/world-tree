@@ -6,8 +6,7 @@ edition = "2021"
 
 [workspace]
 members = [
-  "crates/common"
-,
+  "crates/common",
   "crates/sequencer",
   "crates/state_bridge",
   "crates/tree_availability"]

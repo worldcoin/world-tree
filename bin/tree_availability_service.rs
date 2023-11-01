@@ -53,7 +53,7 @@ pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
 
     if opts.datadog {
-        init_datadog_subscriber("tree_availability_service", Level::INFO);
+        init_datadog_subscriber("tree-availability-service", Level::INFO);
     } else {
         init_subscriber(Level::INFO);
     }
