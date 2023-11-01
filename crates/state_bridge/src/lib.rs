@@ -19,42 +19,27 @@ use ethers::types::H160;
 use root::WorldTreeRoot;
 use tokio::task::JoinHandle;
 
-/// `StateBridgeService` has handles to `StateBridge` contracts, periodically
-/// calls the `propagateRoot` method on them and ensures that the transaction
-/// finalizes on Ethereum mainnet. It also monitors `_latestRoot` changes
-/// on the `WorldIDIdentityManager` contract and calls `propagateRoot` only if
-/// the root has changed and a specific relay period amount of time has elapsed.
+/// Monitors the world tree root for changes and propagates new roots to target Layer 2s
 pub struct StateBridgeService<M: Middleware + 'static> {
-    /// `WorldIDIdentityManager` contract interface
+    /// Local state of the world tree root, responsible for listening to TreeChanged events from the`WorldIDIdentityManager`.
     pub canonical_root: WorldTreeRoot<M>,
-    /// List of `StateBridge` contract interfaces
+    /// Vec of `StateBridge`, responsible for root propagation to target Layer 2s.
     pub state_bridges: Vec<StateBridge<M>>,
-    /// `StateBridge` Tokio task handles
-    pub handles: Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
 }
 
 impl<M> StateBridgeService<M>
 where
     M: Middleware,
 {
-    /// Initializes the `StateBridgeService`
-    ///
-    /// `world_tree`:`IWorldID ` - interface to the `WorldIDIdentityManager`
     pub async fn new(
         world_tree: IWorldIDIdentityManager<M>,
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
             canonical_root: WorldTreeRoot::new(world_tree).await?,
             state_bridges: vec![],
-            handles: vec![],
         })
     }
 
-    /// Initializes the `StateBridgeService`
-    ///
-    /// `world_tree_address`:`H160` - interface to the `WorldIDIdentityManager`
-    ///
-    /// `middleware`:`Arc<M>` - Middleware provider
     pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
@@ -65,44 +50,36 @@ where
         Ok(Self {
             canonical_root: WorldTreeRoot::new(world_tree).await?,
             state_bridges: vec![],
-            handles: vec![],
         })
     }
 
-    /// Adds a state bridge to the list of state bridges the service will use
-    /// to propagate roots on chain to their destination chains.
-    ///
-    /// `state_bridge`: `StateBridge<M>` - state bridge contract interface with provider
-    ///
-    /// ### Notes
-    ///
-    /// Needs to be called before the spawn function so that the `StateBridgeService`
-    /// knows where to propagate roots to.
+    /// Adds a `StateBridge` to orchestrate root propagation to a target Layer 2.
     pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {
         self.state_bridges.push(state_bridge);
     }
 
     /// Spawns the `StateBridgeService`.
-    pub async fn spawn(&mut self) -> Result<(), StateBridgeError<M>> {
-        // if no state bridge initialized then there is no point in spawning
-        // the state bridge service as there'd be no receivers for new roots.
+    pub async fn spawn(
+        &mut self,
+    ) -> Result<
+        Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
+        StateBridgeError<M>,
+    > {
         if self.state_bridges.is_empty() {
             return Err(StateBridgeError::BridgesNotInitialized);
         }
 
-        // We first instantiate the receivers on the state bridges
-        // so that the root sender doesn't yield an error when pushing roots
-        // through the channel.
+        let mut handles = vec![];
+
+        // Bridges are spawned before the root so that the broadcast channel has active subscribers before the sender is spawned to avoid a SendError
         for bridge in self.state_bridges.iter() {
-            self.handles.push(
+            handles.push(
                 bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
             );
         }
 
-        // creates a sender to the channel which will fetch new roots
-        // and pass it to the `StateBridge` through the channel
-        self.handles.push(self.canonical_root.spawn().await);
+        handles.push(self.canonical_root.spawn().await);
 
-        Ok(())
+        Ok(handles)
     }
 }

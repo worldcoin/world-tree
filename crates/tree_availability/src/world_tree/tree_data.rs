@@ -18,8 +18,6 @@ pub struct TreeData {
 }
 
 impl TreeData {
-    /// Initializes a new instance of `TreeData`.
-    ///
     /// * `tree` - PoseidonTree representing the World Tree onchain, which will be used to generate inclusion proofs.
     /// * `tree_history_size` - Number of previous tree states to retain for serving proofs with historical roots.
     pub fn new(
