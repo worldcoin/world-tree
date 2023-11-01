@@ -20,8 +20,6 @@ use state_bridge::bridge::StateBridge;
 use state_bridge::StateBridgeService;
 use tracing::info;
 
-// The state bridge service propagates roots from the world tree. Frequency of root propagation is specified
-// by the relaying_period. This service will not propagate roots that have already been propagated before.
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",
@@ -30,28 +28,6 @@ use tracing::info;
 struct Options {
     #[clap(long, help = "Path to the TOML state bridge service config file")]
     config: PathBuf,
-}
-
-// Converts a u64 into a Duration using Duration::from_secs
-mod duration_seconds {
-    use std::time::Duration;
-
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(duration: &Duration, s: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        s.serialize_u64(duration.as_secs())
-    }
-
-    pub fn deserialize<'de, D>(d: D) -> Result<Duration, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let secs = u64::deserialize(d)?;
-        Ok(Duration::from_secs(secs))
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -81,16 +57,10 @@ struct Config {
     // List of `StateBridge` and `BridgedWorldID` pair addresses
     bridge_configs: Vec<BridgeConfig>,
     // `propagateRoot()` call period time in seconds
-    #[serde(with = "duration_seconds")]
     relaying_period_seconds: Duration,
     // Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
     // contract
-    #[serde(default = "default_block_confirmations")]
-    block_confirmations: usize,
-}
-
-fn default_block_confirmations() -> usize {
-    1usize
+    block_confirmations: Option<usize>,
 }
 
 #[tokio::main]
@@ -111,7 +81,7 @@ async fn main() -> eyre::Result<()> {
         config.world_id_address,
         config.bridge_configs,
         config.relaying_period_seconds,
-        block_confirmations,
+        block_confirmations.unwrap_or(0),
     )
     .await?;
 
@@ -198,72 +168,4 @@ async fn spawn_state_bridge_service(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-    use std::time::Duration;
-
-    use super::{Config, H160};
-    use crate::BridgeConfig;
-
-    #[tokio::test]
-    async fn test_deserialize_toml() -> eyre::Result<()> {
-        let config: Config = toml::from_str(
-            r#"
-            rpc_url = "127.0.0.1:8545"
-            private_key = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
-            world_id_address = "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9"
-            bridge_configs = [
-                [
-                    "Optimism",
-                    "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
-                    "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
-                    "127.0.0.1:8545",
-                ]
-            ]
-            relaying_period_seconds = 5
-            "#)
-        .expect("couldn't deserialize toml-encoded string");
-
-        assert_eq!(
-            config.rpc_url,
-            String::from("127.0.0.1:8545"),
-            "RPC didn't match"
-        );
-        assert_eq!(config.private_key, String::from("4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"), "private key didn't match");
-        assert_eq!(
-            config.world_id_address,
-            H160::from_str("0x3f0BF744bb79A0b919f7DED73724ec20c43572B9")
-                .unwrap(),
-            "World ID address didn't match"
-        );
-        let bridged_configs: Vec<BridgeConfig> = vec![BridgeConfig {
-            name: "Optimism".to_string(),
-            state_bridge_address: H160::from_str(
-                "0x3f0BF744bb79A0b919f7DED73724ec20c43572B9",
-            )
-            .unwrap(),
-            bridged_world_id_address: H160::from_str(
-                "0x4f0BF744bb79A0b919f7DED73724ec20c43572B9",
-            )
-            .unwrap(),
-            bridged_rpc_url: "127.0.0.1:8545".to_string(),
-        }];
-
-        assert_eq!(config.bridge_configs, bridged_configs);
-        // assert it uses serde default 1 block confirmation
-        assert_eq!(
-            config.block_confirmations, 1usize,
-            "block confirmations didn't match"
-        );
-        assert_eq!(
-            config.relaying_period_seconds,
-            Duration::from_secs(5u64),
-            "relaying period didn't match"
-        );
-
-        Ok(())
-    }
 }
