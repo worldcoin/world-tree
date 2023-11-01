@@ -2403,7 +2403,6 @@ dependencies = [
  "ethers",
  "eyre",
  "futures",
- "reqwest",
  "serde",
  "state_bridge",
  "tokio",
@@ -3150,6 +3149,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry-semantic-conventions",
+ "reqwest",
  "rmp",
  "thiserror",
  "url",
@@ -3165,6 +3165,7 @@ dependencies = [
  "bytes",
  "http",
  "opentelemetry_api",
+ "reqwest",
 ]
 
 [[package]]

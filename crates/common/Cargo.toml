@@ -15,7 +15,7 @@ eyre = "0.6.8"
 serde = "1.0.189"
 metrics = "0.21.1"
 opentelemetry = "0.20.0"
-opentelemetry-datadog = "0.8.0"
+opentelemetry-datadog = {verison = "0.8.0", features = ["reqwest-client"]}
 tracing = "0.1.40"
 tracing-opentelemetry = "0.21.0"
 tracing-subscriber = {version = "0.3.17", features = ["env-filter"]}
