@@ -23,10 +23,14 @@ use tracing::info;
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",
-    about = "The state bridge service propagates roots according to the specified relaying_period by calling the propagateRoot() method on each specified World ID StateBridge. The state bridge service will also make sure that it doesn't propagate roots that have already been propagated and have finalized on the BridgedWorldID side."
+    about = "The state bridge service listens to root changes from the WorldIdIdentityManager and propagates them to each of the corresponding Layer 2s specified in the configuration file."
 )]
-struct Options {
-    #[clap(long, help = "Path to the TOML state bridge service config file")]
+struct Opts {
+    #[clap(
+        short,
+        long,
+        help = "Path to the TOML state bridge service config file"
+    )]
     config: PathBuf,
 }
 
@@ -38,14 +42,24 @@ struct BridgeConfig {
     bridged_rpc_url: String,
 }
 
-// The config TOML file defines all the necessary parameters to spawn a state bridge service.
-// rpc_url - HTTP rpc url for an Ethereum node (string)
-// private_key - pk to an address that will call the propagateRoot() method on the StateBridge contract (string)
-// world_id_address - WorldIDIdentityManager contract address (string)
-// bridge_pair_addresses - List of StateBridge and BridgedWorldID contract address pairs (strings)
-// bridged_world_id_addresses - List of BridgedWorldID contract addresses (strings)
-// relaying_period:  propagateRoot() call period time in seconds (u64)
-// block_confirmations - Number of block confirmations required for the propagateRoot call on the StateBridge contract (optional number)
+//TODO: lets update this to be a yaml file and then we can do something like the following:
+// rpc_url: ""
+// private_key: ""
+// world_id_address: ""
+// block_confirmations: ""
+// state_bridges:
+//   optimism:
+//      state_bridge_address: ""
+//      bridged_world_id_address: ""
+//      bridged_rpc_url: ""
+//      relaying_period_seconds: 5
+//
+//   arbitrum:
+//      state_bridge_address: ""
+//      bridged_world_id_address: ""
+//      bridged_rpc_url: ""
+//      relaying_period_seconds: 5
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct Config {
     // RPC URL for the HTTP provider (World ID IdentityManager)
@@ -65,23 +79,17 @@ struct Config {
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    let options = Options::parse();
-
-    let contents = fs::read_to_string(&options.config)?;
-
+    let opts = Opts::parse();
+    let contents = fs::read_to_string(&opts.config)?;
     let config: Config = toml::from_str(&contents)?;
 
-    let rpc_url = config.rpc_url;
-
-    let block_confirmations = config.block_confirmations;
-
     spawn_state_bridge_service(
-        rpc_url,
+        config.rpc_url,
         config.private_key,
         config.world_id_address,
         config.bridge_configs,
         config.relaying_period_seconds,
-        block_confirmations.unwrap_or(0),
+        config.block_confirmations.unwrap_or(0),
     )
     .await?;
 
@@ -101,15 +109,13 @@ async fn spawn_state_bridge_service(
 
     let chain_id = provider.get_chainid().await?.as_u64();
 
-    let wallet = private_key
-        .parse::<LocalWallet>()
-        .expect("couldn't instantiate wallet from private key")
-        .with_chain_id(chain_id);
+    let wallet = private_key.parse::<LocalWallet>()?.with_chain_id(chain_id);
     let wallet_address = wallet.address();
 
-    let middleware = SignerMiddleware::new(provider, wallet);
-    let middleware = NonceManagerMiddleware::new(middleware, wallet_address);
-    let middleware = Arc::new(middleware);
+    let signer_middleware = SignerMiddleware::new(provider, wallet);
+    let nonce_manager_middleware =
+        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+    let middleware = Arc::new(nonce_manager_middleware);
 
     let world_id_interface =
         IWorldIDIdentityManager::new(world_id_address, middleware.clone());
@@ -162,6 +168,7 @@ async fn spawn_state_bridge_service(
     }
 
     let handles = state_bridge_service.spawn().await?;
+
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
         result??;
