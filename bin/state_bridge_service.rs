@@ -16,10 +16,8 @@ use state_bridge::root::IWorldIDIdentityManager;
 use state_bridge::StateBridgeService;
 use tracing::info;
 
-/// The state bridge service propagates roots according to the specified relaying_period by
-/// calling the propagateRoot() method on each specified World ID StateBridge. The state bridge
-/// service will also make sure that it doesn't propagate roots that have already been propagated
-/// and have finalized on the BridgedWorldID side
+// The state bridge service propagates roots from the world tree. Frequency of root propagation is specified
+// by the relaying_period. This service will not propagate roots that have already been propagated before.
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",
@@ -30,7 +28,7 @@ struct Options {
     config: PathBuf,
 }
 
-/// Converts a u64 into a Duration using Duration::from_secs
+// Converts a u64 into a Duration using Duration::from_secs
 mod duration_seconds {
     use std::time::Duration;
 
@@ -60,29 +58,29 @@ struct BridgeConfig {
     bridged_rpc_url: String,
 }
 
-/// The config TOML file defines all the necessary parameters to spawn a state bridge service.
-/// rpc_url - HTTP rpc url for an Ethereum node (string)
-/// private_key - pk to an address that will call the propagateRoot() method on the StateBridge contract (string)
-/// world_id_address - WorldIDIdentityManager contract address (string)
-/// bridge_pair_addresses - List of StateBridge and BridgedWorldID contract address pairs (strings)
-/// bridged_world_id_addresses - List of BridgedWorldID contract addresses (strings)
-/// relaying_period:  propagateRoot() call period time in seconds (u64)
-/// block_confirmations - Number of block confirmations required for the propagateRoot call on the StateBridge contract (optional number)
+// The config TOML file defines all the necessary parameters to spawn a state bridge service.
+// rpc_url - HTTP rpc url for an Ethereum node (string)
+// private_key - pk to an address that will call the propagateRoot() method on the StateBridge contract (string)
+// world_id_address - WorldIDIdentityManager contract address (string)
+// bridge_pair_addresses - List of StateBridge and BridgedWorldID contract address pairs (strings)
+// bridged_world_id_addresses - List of BridgedWorldID contract addresses (strings)
+// relaying_period:  propagateRoot() call period time in seconds (u64)
+// block_confirmations - Number of block confirmations required for the propagateRoot call on the StateBridge contract (optional number)
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct Config {
-    /// RPC URL for the HTTP provider (World ID IdentityManager)
+    // RPC URL for the HTTP provider (World ID IdentityManager)
     rpc_url: String,
-    /// Private key to use for the middleware signer
+    // Private key to use for the middleware signer
     private_key: String,
-    /// `WorldIDIdentityManager` contract address
+    // `WorldIDIdentityManager` contract address
     world_id_address: H160,
-    /// List of `StateBridge` and `BridgedWorldID` pair addresses
+    // List of `StateBridge` and `BridgedWorldID` pair addresses
     bridge_configs: Vec<BridgeConfig>,
-    /// `propagateRoot()` call period time in seconds
+    // `propagateRoot()` call period time in seconds
     #[serde(with = "duration_seconds")]
     relaying_period_seconds: Duration,
-    /// Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
-    /// contract
+    // Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
+    // contract
     #[serde(default = "default_block_confirmations")]
     block_confirmations: usize,
 }

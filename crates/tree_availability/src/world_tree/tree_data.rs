@@ -7,17 +7,25 @@ use tokio::sync::RwLock;
 use super::{Hash, PoseidonTree};
 use crate::server::InclusionProof;
 
+/// Represents the in-memory state of the World Tree, caching historical roots up to `tree_history_size`.
 pub struct TreeData {
+    /// A canonical in-memory representation of the World Tree.
     pub tree: RwLock<PoseidonTree<Derived>>,
+    /// The number of historical tree roots to cache for serving older proofs.
     pub tree_history_size: usize,
-    pub tree_history: RwLock<VecDeque<PoseidonTree<Derived>>>, //TODO: make a note that the latest is at the front
-}
-pub struct TreeUpdate {
-    pub index: usize,
-    pub value: Hash,
+    /// Cache of historical tree state, used to serve proofs against older roots. If the cache becomes larger than `tree_history_size`, the oldest roots are removed on a FIFO basis.
+    pub tree_history: RwLock<VecDeque<PoseidonTree<Derived>>>,
 }
 
 impl TreeData {
+    /// Initializes a new instance of `TreeData`.
+    ///
+    /// * `tree` - PoseidonTree representing the World Tree onchain, which will be used to generate inclusion proofs.
+    /// * `tree_history_size` - Number of previous tree states to retain for serving proofs with historical roots.
+    ///
+    /// # Returns
+    ///
+    /// A new `TreeData` instance.
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,
@@ -29,6 +37,12 @@ impl TreeData {
         }
     }
 
+    /// Inserts multiple identity commitments starting from a specified index. The tree state before the insert operation is cached to tree history.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_index` - The leaf index in the tree to begin inserting identity commitments.
+    /// * `identities` - The array of identity commitments to insert.
     pub async fn insert_many_at(
         &self,
         start_index: usize,
@@ -42,6 +56,11 @@ impl TreeData {
         }
     }
 
+    /// Deletes multiple identity commitments at specified indices. The tree state before the delete operation is cached to tree history.
+    ///
+    /// # Arguments
+    ///
+    /// * `delete_indices` - The indices of the leaves in the tree to delete.
     pub async fn delete_many(&self, delete_indices: &[usize]) {
         self.cache_tree_history().await;
 
@@ -52,6 +71,7 @@ impl TreeData {
         }
     }
 
+    /// Caches the current tree state to `tree_history` if `tree_history_size` is greater than 0.
     pub async fn cache_tree_history(&self) {
         if self.tree_history_size != 0 {
             let mut tree_history = self.tree_history.write().await;
@@ -64,10 +84,12 @@ impl TreeData {
         }
     }
 
-    /// Fetches the inclusion proof of the provided identity at the given root hash
+    /// Fetches the inclusion proof for a given identity against a specified root. If no root is specified, the latest root is used. Returns `None` if root or identity is not found.
     ///
-    /// Returns None if the provided root hash is not in the latest one or is not present in tree history
-    /// or if the identity is not present in the tree
+    /// # Arguments
+    ///
+    /// * `identity` - The identity commitment for which to fetch the inclusion proof.
+    /// * `root` - Optional root hash to serve the inclusion proof against. If `None`, uses the latest root.
     pub async fn get_inclusion_proof(
         &self,
         identity: Hash,
@@ -110,6 +132,12 @@ impl TreeData {
         }
     }
 
+    /// Generates an inclusion proof for a specific identity commitment from a given `PoseidonTree`.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The Poseidon tree to fetch the inclusion proof against.
+    /// * `identity` - The identity commitment to generate the inclusion proof for.
     fn proof<V: VersionMarker>(
         tree: &PoseidonTree<V>,
         identity: Hash,
