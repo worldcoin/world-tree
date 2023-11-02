@@ -14,6 +14,7 @@ pub mod world_tree;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
+use axum::middleware;
 use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
@@ -87,11 +88,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
-        tracing::info!("Initializing axum server on port {port}");
+        tracing::info!(?port, "Initializing axum server");
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
+            .layer(middleware::from_fn(server::middleware::logging::middleware))
             .with_state(self.world_tree.clone());
 
         let address =
