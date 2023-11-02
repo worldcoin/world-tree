@@ -33,8 +33,6 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
         .init();
 }
 
-/// Extract the W3C Trace Context from the headers of a request and add them
-/// to the current span.
 pub fn trace_from_headers(headers: &http::HeaderMap) {
     tracing::Span::current().set_parent(
         opentelemetry::global::get_text_map_propagator(|propagator| {
