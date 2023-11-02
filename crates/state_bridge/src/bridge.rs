@@ -29,14 +29,29 @@ abigen!(
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
+/// The `StateBridge` takes care of listening to roots propagated from the `WorldRoot` and
+/// propagates them periodically every time `relaying_period` elapses and the root was updated.
 pub struct StateBridge<M: Middleware + 'static> {
+    /// Interface for the `StateBridge` contract
     pub state_bridge: IStateBridge<M>,
+    /// Interface for the `BridgedWorldID` contract
     pub bridged_world_id: IBridgedWorldID<M>,
+    /// Time delay between `propagateRoot()` transactions
     pub relaying_period: Duration,
+    /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub block_confirmations: usize,
 }
 
 impl<M: Middleware> StateBridge<M> {
+    /// Initializes a StateBridge
+    ///
+    /// `state_bridge`: `StateBridge` contract interface
+    ///
+    /// `bridged_world_id`: `BridgedWorldID` contract interface
+    ///
+    /// `relaying_period`: Time in between `propagateRoot()` calls
+    ///
+    /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized
     pub fn new(
         state_bridge: IStateBridge<M>,
         bridged_world_id: IBridgedWorldID<M>,
@@ -51,6 +66,19 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
+    /// Initializes a StateBridge with address and middleware
+    ///
+    /// `bridge_address`: `StateBridge` contract address
+    ///
+    /// `canonical_middleware`: middleware for the chain where the `StateBridge` is deployed
+    ///
+    /// `bridged_world_id_address`: `BridgedWorldID` contract address
+    ///
+    /// `derived_middleware`: middleware for the chain where the `BridgedWorldID` is deployed
+    ///
+    /// `relaying_period`: Time in between `propagateRoot()` calls
+    ///
+    ///  `block_confirmations: The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub fn new_from_parts(
         bridge_address: H160,
         canonical_middleware: Arc<M>,
@@ -75,6 +103,9 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
+    /// Spawns the `StateBridge` which listens to the `WorldRoot` `TreeChanged` events for new roots to propagate.
+    ///
+    /// `root_rx`: The root receiver that listens to the `WorldRoot` root sender
     pub async fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,

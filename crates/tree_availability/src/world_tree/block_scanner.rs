@@ -5,9 +5,13 @@ use ethers::types::{
     Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray,
 };
 
+/// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 pub struct BlockScanner<M> {
+    /// The onchain data provider
     middleware: M,
+    /// The block from which to start parsing a given event
     pub last_synced_block: AtomicU64,
+    /// The maximum block range to parse
     window_size: u64,
 }
 
@@ -15,6 +19,7 @@ impl<M> BlockScanner<M>
 where
     M: Middleware,
 {
+    /// Initializes a new `BlockScanner`
     pub const fn new(
         middleware: M,
         window_size: u64,
@@ -27,6 +32,12 @@ where
         }
     }
 
+    /// Retrieves events matching the specified address and topics from the last synced block to the latest block.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - Optional address to target when fetching logs.
+    /// * `topics` - Optional topics to target when fetching logs, enabling granular filtering when looking for specific event signatures or topic values.
     pub async fn next(
         &self,
         address: Option<ValueOrArray<Address>>,

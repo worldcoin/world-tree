@@ -10,7 +10,10 @@ use tracing::Level;
 use tree_availability::TreeAvailabilityService;
 
 #[derive(Parser, Debug)]
-#[clap(name = "Tree Availability Service", about = "")]
+#[clap(
+    name = "Tree Availability Service",
+    about = "The tree availability service periodically calls propagateRoot() on a World ID StateBridge contract."
+)]
 struct Opts {
     #[clap(long, help = "Depth of the World Tree")]
     tree_depth: usize,

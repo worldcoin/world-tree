@@ -80,11 +80,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Wait for the tree to be synced
     loop {
-        if world_tree
-            .tree_updater
-            .synced
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if world_tree.synced.load(std::sync::atomic::Ordering::Relaxed) {
             break;
         }
 
