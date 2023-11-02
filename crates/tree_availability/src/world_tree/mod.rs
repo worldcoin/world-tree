@@ -18,8 +18,6 @@ use self::tree_data::TreeData;
 use self::tree_updater::TreeUpdater;
 use crate::error::TreeAvailabilityError;
 
-pub const DEFAULT_WINDOW_SIZE: u64 = 100_000_000;
-
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
@@ -38,7 +36,7 @@ impl<M: Middleware> WorldTree<M> {
         tree_history_size: usize,
         address: H160,
         creation_block: u64,
-        window_size: Option<u64>,
+        window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
         Self {
@@ -46,7 +44,7 @@ impl<M: Middleware> WorldTree<M> {
             tree_updater: Arc::new(TreeUpdater::new(
                 address,
                 creation_block,
-                window_size.unwrap_or(DEFAULT_WINDOW_SIZE),
+                window_size,
                 middleware,
             )),
         }

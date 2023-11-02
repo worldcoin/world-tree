@@ -32,9 +32,10 @@ struct Opts {
     #[clap(
         short,
         long,
-        help = "Maximum window size when scanning blocks for TreeChanged events"
+        help = "Maximum window size when scanning blocks for TreeChanged events",
+        default_value = "1000"
     )]
-    window_size: Option<u64>,
+    window_size: u64,
     #[clap(short, long, help = "Ethereum RPC endpoint")]
     rpc_endpoint: String,
     #[clap(

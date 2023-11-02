@@ -25,7 +25,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         tree_history_size: usize,
         world_tree_address: H160,
         world_tree_creation_block: u64,
-        window_size: Option<u64>,
+        window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
         let tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
