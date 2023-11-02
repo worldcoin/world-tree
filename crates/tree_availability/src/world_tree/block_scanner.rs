@@ -54,29 +54,23 @@ where
         let from_block = current_block;
         let to_block = latest_block.min(from_block + self.window_size);
 
-        tracing::info!("Scanning from {} to {}", current_block, latest_block);
-
-        let next_current_block = to_block + 1;
-
-        let from_block = Some(BlockNumber::Number(from_block.into()));
-        let to_block = Some(BlockNumber::Number(to_block.into()));
+        tracing::info!(?current_block, ?latest_block, "Scanning blocks");
 
         let logs = self
             .middleware
             .get_logs(&Filter {
                 block_option: FilterBlockOption::Range {
-                    from_block,
-                    to_block,
+                    from_block: Some(BlockNumber::Number(from_block.into())),
+                    to_block: Some(BlockNumber::Number(to_block.into())),
                 },
                 address,
                 topics,
             })
             .await?;
 
-        self.current_block
-            .store(next_current_block, Ordering::SeqCst);
+        self.current_block.store(to_block, Ordering::SeqCst);
 
-        tracing::info!("Current block updated to {next_current_block}");
+        tracing::info!(?to_block, "Current block updated");
 
         Ok(logs)
     }

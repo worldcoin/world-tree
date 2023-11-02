@@ -85,7 +85,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
-        tracing::info!("Initializing axum server on port {port}");
+        tracing::info!(?port, "Initializing axum server");
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
