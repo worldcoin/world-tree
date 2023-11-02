@@ -8,7 +8,6 @@ use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 
 pub type Hash = <PoseidonHash as Hasher>::Hash;
-use ethers::prelude::abigen;
 use tokio::task::JoinHandle;
 
 use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};

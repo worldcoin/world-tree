@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use ethers::middleware::contract::abigen;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use ruint::Uint;
