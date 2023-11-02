@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicU64};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
 use crate::error::TreeAvailabilityError;
 use crate::world_tree::abi::DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall;
-use crate::world_tree::{abi, Hash};
+use crate::world_tree::{Hash};
 
 /// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {
