@@ -11,7 +11,6 @@ use semaphore::Field;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use tokio::time::Instant;
 
 use crate::error::TreeError;
 use crate::world_tree::{Hash, WorldTree};
