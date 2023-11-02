@@ -22,7 +22,7 @@ use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
-use crate::server::{inclusion_proof, middleware, synced};
+use crate::server::{inclusion_proof, synced};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
