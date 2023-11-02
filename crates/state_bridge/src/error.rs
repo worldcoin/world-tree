@@ -4,7 +4,6 @@ use thiserror::Error;
 
 use crate::root::Hash;
 
-/// Wraps dependency errors and converts them to `StateBridgeError` using `thiserror`
 #[derive(Error, Debug)]
 pub enum StateBridgeError<M>
 where

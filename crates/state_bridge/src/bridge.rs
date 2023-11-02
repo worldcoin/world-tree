@@ -8,35 +8,29 @@ use tokio::select;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
+use crate::abi::{IBridgedWorldID, IStateBridge};
 use crate::error::StateBridgeError;
 use crate::root::Hash;
 
-abigen!(
-    IStateBridge,
-    r#"[
-        function propagateRoot() external
-    ]"#;
-);
-
-abigen!(
-    IBridgedWorldID,
-    r#"[
-        event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
-        event RootAdded(uint256 root, uint128 timestamp)
-        function latestRoot() public view virtual returns (uint256)
-        function receiveRoot(uint256 newRoot) external
-    ]"#,
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
+/// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
 pub struct StateBridge<M: Middleware + 'static> {
+    /// Interface for the `StateBridge` contract
     pub state_bridge: IStateBridge<M>,
+    /// Interface for the `BridgedWorldID` contract
     pub bridged_world_id: IBridgedWorldID<M>,
+    /// Time delay between `propagateRoot()` transactions
     pub relaying_period: Duration,
+    /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub block_confirmations: usize,
 }
 
 impl<M: Middleware> StateBridge<M> {
+    /// # Arguments
+    ///
+    /// * state_bridge - Interface to the StateBridge smart contract.
+    /// * bridged_world_id - Interface to the BridgedWorldID smart contract.
+    /// * relaying_period - Duration between successive propagateRoot() invocations.
+    /// * block_confirmations - Number of block confirmations required to consider a propagateRoot() transaction as finalized.
     pub fn new(
         state_bridge: IStateBridge<M>,
         bridged_world_id: IBridgedWorldID<M>,
@@ -51,6 +45,14 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
+    /// # Arguments
+    ///
+    /// * `bridge_address` - Address of the StateBridge contract.
+    /// * `canonical_middleware` - Middleware for interacting with the chain where StateBridge is deployed.
+    /// * `bridged_world_id_address` - Address of the BridgedWorldID contract.
+    /// * `derived_middleware` - Middleware for interacting with the chain where BridgedWorldID is deployed.
+    /// * `relaying_period` - Duration between `propagateRoot()` transactions.
+    /// * `block_confirmations` - Number of block confirmations before a`propagateRoot()` transaction is considered finalized.
     pub fn new_from_parts(
         bridge_address: H160,
         canonical_middleware: Arc<M>,
@@ -75,6 +77,11 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
+    /// Spawns a `StateBridge` task to listen for `TreeChanged` events from `WorldRoot` and propagate new roots.
+    ///
+    /// # Arguments
+    ///
+    /// * `root_rx` - Receiver channel for roots from `WorldRoot`.
     pub async fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
