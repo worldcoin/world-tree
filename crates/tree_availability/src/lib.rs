@@ -14,6 +14,7 @@ pub mod world_tree;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
+use axum::middleware;
 use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
@@ -21,7 +22,7 @@ use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
-use crate::server::{inclusion_proof, synced};
+use crate::server::{inclusion_proof, middleware, synced};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
@@ -90,6 +91,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
+            .layer(middleware::from_fn(server::middleware::logging::middleware))
             .with_state(self.world_tree.clone());
 
         let address =
