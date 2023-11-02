@@ -1,5 +1,6 @@
 use ethers::middleware::contract::abigen;
 
+//TODO: Update staging deployment and remove `deleteIdentities` containing a batch size from the abi below
 abigen!(
     IWorldIDIdentityManager,
     r#"[
