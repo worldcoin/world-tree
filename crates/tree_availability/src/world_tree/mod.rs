@@ -66,6 +66,7 @@ impl<M: Middleware> WorldTree<M> {
     }
 
     /// Spawns a task that continually syncs the `TreeData` to the state at the chain head.
+    #[allow(clippy::async_yields_async)]
     #[instrument(skip(self))]
     pub async fn spawn(
         &self,
