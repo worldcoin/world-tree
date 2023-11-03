@@ -7,6 +7,7 @@ use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
+use tracing::instrument;
 
 use super::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
@@ -53,6 +54,7 @@ impl<M: Middleware> TreeUpdater<M> {
     /// # Arguments
     ///
     /// * `tree_data` - Instance of `TreeData` maintaining the current state of the tree and tree history.
+    #[instrument(skip(self, tree_data))]
     pub async fn sync_to_head(
         &self,
         tree_data: &TreeData,
@@ -113,6 +115,7 @@ impl<M: Middleware> TreeUpdater<M> {
     ///
     /// * `tree_data` - Instance of `TreeData` maintaining the current state of the tree and tree history.
     /// * `transaction` - Transaction containing the calldata necessary to update the local tree.
+    #[instrument(skip(self, tree_data))]
     pub async fn sync_from_transaction(
         &self,
         tree_data: &TreeData,
