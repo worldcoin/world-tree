@@ -6,12 +6,13 @@ use ethers::types::H160;
 use ruint::Uint;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-
-pub type Hash = <PoseidonHash as Hasher>::Hash;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};
 use crate::error::StateBridgeError;
+
+pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// Monitors `TreeChanged` events from `WorldIDIdentityManager` and broadcasts new roots to through the `root_tx`.
 pub struct WorldTreeRoot<M: Middleware + 'static> {
@@ -53,9 +54,15 @@ where
 
     /// Spawns the `WorldTreeRoot` task which will listen to changes to the `WorldIDIdentityManager`
     /// [merkle tree root](https://github.com/worldcoin/world-id-contracts/blob/852790da8f348d6a2dbb58d1e29123a644f4aece/src/WorldIDIdentityManagerImplV1.sol#L63).
+    #[allow(clippy::async_yields_async)]
+    #[instrument(skip(self))]
     pub async fn spawn(&self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
         let root_tx = self.root_tx.clone();
         let world_id_identity_manager = self.world_id_identity_manager.clone();
+
+        let world_id_identity_manager_address =
+            world_id_identity_manager.address();
+        tracing::info!(?world_id_identity_manager_address, "Spawning root");
 
         tokio::spawn(async move {
             // Event emitted when insertions or deletions are made to the tree
@@ -65,6 +72,8 @@ where
 
             // Listen to a stream of events, when a new event is received, update the root and block number
             while let Some(Ok((event, _))) = event_stream.next().await {
+                let new_root = event.post_root.0;
+                tracing::info!(?new_root, "New root from chain");
                 root_tx.send(Uint::from_limbs(event.post_root.0))?;
             }
 

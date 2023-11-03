@@ -18,7 +18,6 @@ use state_bridge::abi::{
 };
 use state_bridge::bridge::StateBridge;
 use state_bridge::StateBridgeService;
-use tracing::info;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -36,7 +35,7 @@ struct Opts {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 struct BridgeConfig {
-    name: String,
+    name: String, //TODO: do we need this where do we use it?
     state_bridge_address: Address,
     bridged_world_id_address: Address,
     bridged_rpc_url: String,
@@ -125,10 +124,10 @@ async fn spawn_state_bridge_service(
 
     for bridge_config in bridge_configs {
         let BridgeConfig {
-            name,
             state_bridge_address,
             bridged_world_id_address,
             bridged_rpc_url,
+            ..
         } = bridge_config;
 
         let bridged_provider = Provider::<Http>::try_from(bridged_rpc_url)
@@ -164,9 +163,9 @@ async fn spawn_state_bridge_service(
         )?;
 
         state_bridge_service.add_state_bridge(state_bridge);
-        info!("Added a bridge to {} to the state-bridge-service", name);
     }
 
+    tracing::info!("Spawning state bridge service");
     let handles = state_bridge_service.spawn().await?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
