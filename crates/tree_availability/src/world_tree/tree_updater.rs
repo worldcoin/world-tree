@@ -15,7 +15,7 @@ use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
 use crate::error::TreeAvailabilityError;
 use crate::world_tree::abi::DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall;
-use crate::world_tree::{Hash};
+use crate::world_tree::Hash;
 
 /// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {
@@ -30,7 +30,12 @@ pub struct TreeUpdater<M: Middleware> {
 }
 
 impl<M: Middleware> TreeUpdater<M> {
-    pub fn new(address: H160, creation_block: u64, window_size: u64, middleware: Arc<M>) -> Self {
+    pub fn new(
+        address: H160,
+        creation_block: u64,
+        window_size: u64,
+        middleware: Arc<M>,
+    ) -> Self {
         Self {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
@@ -53,8 +58,6 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
         tracing::info!("Syncing tree to chain head");
-
-        
 
         let logs = self
             .block_scanner
@@ -154,7 +157,6 @@ impl<M: Middleware> TreeUpdater<M> {
                 .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
                 .map(|x| x as usize)
                 .collect();
-            
             tree_data.delete_many(&indices).await;
 
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
@@ -173,7 +175,6 @@ impl<M: Middleware> TreeUpdater<M> {
                 .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
                 .map(|x| x as usize)
                 .collect();
-        
             tree_data.delete_many(&indices).await;
 
 
