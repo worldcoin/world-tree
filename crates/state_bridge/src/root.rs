@@ -6,12 +6,13 @@ use ethers::types::H160;
 use ruint::Uint;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-
-pub type Hash = <PoseidonHash as Hasher>::Hash;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};
 use crate::error::StateBridgeError;
+
+pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// Monitors `TreeChanged` events from `WorldIDIdentityManager` and broadcasts new roots to through the `root_tx`.
 pub struct WorldTreeRoot<M: Middleware + 'static> {

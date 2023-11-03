@@ -6,6 +6,7 @@ use ruint::Uint;
 use tokio::select;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
+use tracing::instrument;
 
 use crate::abi::{IBridgedWorldID, IStateBridge};
 use crate::error::StateBridgeError;
