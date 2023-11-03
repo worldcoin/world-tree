@@ -10,7 +10,7 @@ pub struct BlockScanner<M> {
     /// The onchain data provider
     middleware: M,
     /// The block from which to start parsing a given event
-    current_block: AtomicU64,
+    pub last_synced_block: AtomicU64,
     /// The maximum block range to parse
     window_size: u64,
 }
@@ -27,7 +27,7 @@ where
     ) -> Self {
         Self {
             middleware,
-            current_block: AtomicU64::new(current_block),
+            last_synced_block: AtomicU64::new(current_block),
             window_size,
         }
     }
@@ -45,16 +45,16 @@ where
     ) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
 
-        let current_block = self.current_block.load(Ordering::SeqCst);
+        let last_synced_block = self.last_synced_block.load(Ordering::SeqCst);
 
-        if current_block >= latest_block {
+        if last_synced_block >= latest_block {
             return Ok(Vec::new());
         }
 
-        let from_block = current_block;
+        let from_block = last_synced_block + 1;
         let to_block = latest_block.min(from_block + self.window_size);
 
-        tracing::info!(?current_block, ?latest_block, "Scanning blocks");
+        tracing::info!(?from_block, ?to_block, "Scanning blocks");
 
         let logs = self
             .middleware
@@ -68,7 +68,7 @@ where
             })
             .await?;
 
-        self.current_block.store(to_block, Ordering::SeqCst);
+        self.last_synced_block.store(to_block, Ordering::SeqCst);
 
         tracing::info!(?to_block, "Current block updated");
 

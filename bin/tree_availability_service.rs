@@ -32,6 +32,13 @@ struct Opts {
     address: H160,
     #[clap(short, long, help = "Creation block of the World Tree")]
     creation_block: u64,
+    #[clap(
+        short,
+        long,
+        help = "Maximum window size when scanning blocks for TreeChanged events",
+        default_value = "1000"
+    )]
+    window_size: u64,
     #[clap(short, long, help = "Ethereum RPC endpoint")]
     rpc_endpoint: String,
     #[clap(
@@ -41,7 +48,6 @@ struct Opts {
         default_value = "8080"
     )]
     port: u16,
-
     #[clap(long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
 }
@@ -51,7 +57,7 @@ pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
 
     if opts.datadog {
-        init_datadog_subscriber("tree_availability_service", Level::INFO);
+        init_datadog_subscriber("tree-availability-service", Level::INFO);
     } else {
         init_subscriber(Level::INFO);
     }
@@ -63,6 +69,7 @@ pub async fn main() -> eyre::Result<()> {
         opts.tree_history_size,
         opts.address,
         opts.creation_block,
+        opts.window_size,
         middleware,
     )
     .serve(opts.port)
@@ -70,6 +77,7 @@ pub async fn main() -> eyre::Result<()> {
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
+        tracing::error!("TreeAvailabilityError: {:?}", result);
         result??;
     }
 

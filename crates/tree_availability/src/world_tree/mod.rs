@@ -49,6 +49,7 @@ impl<M: Middleware> WorldTree<M> {
         tree_history_size: usize,
         address: H160,
         creation_block: u64,
+        window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
         Self {
@@ -56,6 +57,7 @@ impl<M: Middleware> WorldTree<M> {
             tree_updater: Arc::new(TreeUpdater::new(
                 address,
                 creation_block,
+                window_size,
                 middleware,
             )),
             synced: Arc::new(AtomicBool::new(false)),
@@ -79,7 +81,6 @@ impl<M: Middleware> WorldTree<M> {
             loop {
                 tree_updater.sync_to_head(&tree_data).await?;
 
-                // Sleep a little to unblock the executor
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         })

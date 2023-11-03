@@ -11,6 +11,8 @@ use crate::server::InclusionProof;
 pub struct TreeData {
     /// A canonical in-memory representation of the World Tree.
     pub tree: RwLock<PoseidonTree<Derived>>,
+    /// Depth of the merkle tree.
+    pub depth: usize,
     /// The number of historical tree roots to cache for serving older proofs.
     pub tree_history_size: usize,
     /// Cache of historical tree state, used to serve proofs against older roots. If the cache becomes larger than `tree_history_size`, the oldest roots are removed on a FIFO basis.
@@ -26,6 +28,7 @@ impl TreeData {
     ) -> Self {
         Self {
             tree_history_size,
+            depth: tree.depth(),
             tree: RwLock::new(tree.derived()),
             tree_history: RwLock::new(VecDeque::new()),
         }
