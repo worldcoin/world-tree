@@ -54,6 +54,7 @@ where
 
     /// Spawns the `WorldTreeRoot` task which will listen to changes to the `WorldIDIdentityManager`
     /// [merkle tree root](https://github.com/worldcoin/world-id-contracts/blob/852790da8f348d6a2dbb58d1e29123a644f4aece/src/WorldIDIdentityManagerImplV1.sol#L63).
+    #[allow(clippy::async_yields_async)]
     #[instrument(skip(self))]
     pub async fn spawn(&self) -> JoinHandle<Result<(), StateBridgeError<M>>> {
         let root_tx = self.root_tx.clone();

@@ -82,6 +82,7 @@ impl<M: Middleware> StateBridge<M> {
     /// # Arguments
     ///
     /// * `root_rx` - Receiver channel for roots from `WorldRoot`.
+    #[allow(clippy::async_yields_async)]
     #[instrument(skip(self, root_rx))]
     pub async fn spawn(
         &self,
