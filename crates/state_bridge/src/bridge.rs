@@ -81,6 +81,7 @@ impl<M: Middleware> StateBridge<M> {
     /// # Arguments
     ///
     /// * `root_rx` - Receiver channel for roots from `WorldRoot`.
+    #[instrument(skip(self, root_rx))]
     pub async fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
