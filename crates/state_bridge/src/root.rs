@@ -57,6 +57,10 @@ where
         let root_tx = self.root_tx.clone();
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
+        let world_id_identity_manager_address =
+            world_id_identity_manager.address();
+        tracing::info!(?world_id_identity_manager_address, "Spawning root");
+
         tokio::spawn(async move {
             // Event emitted when insertions or deletions are made to the tree
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
@@ -65,6 +69,8 @@ where
 
             // Listen to a stream of events, when a new event is received, update the root and block number
             while let Some(Ok((event, _))) = event_stream.next().await {
+                let new_root = event.post_root.0;
+                tracing::info!(?new_root, "New root from chain");
                 root_tx.send(Uint::from_limbs(event.post_root.0))?;
             }
 

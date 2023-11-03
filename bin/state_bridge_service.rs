@@ -164,9 +164,9 @@ async fn spawn_state_bridge_service(
         )?;
 
         state_bridge_service.add_state_bridge(state_bridge);
-        info!("Added a bridge to {} to the state-bridge-service", name);
     }
 
+    tracing::info!("Spawning state bridge service");
     let handles = state_bridge_service.spawn().await?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
