@@ -1,6 +1,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+pub mod middleware;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -15,7 +17,7 @@ use serde_json::Value;
 use crate::error::TreeError;
 use crate::world_tree::{Hash, WorldTree};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InclusionProofRequest {
     pub identity_commitment: Hash,
@@ -38,7 +40,6 @@ impl InclusionProofRequest {
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
-    //TODO: Implement `Deserialize` for Proof within semaphore-rs instead of using `deserialize_with`
     #[serde(deserialize_with = "deserialize_proof")]
     pub proof: Proof,
     pub message: Option<String>,
@@ -77,6 +78,7 @@ where
     }
 }
 
+#[tracing::instrument(level = "debug", skip(world_tree))]
 pub async fn inclusion_proof<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
@@ -109,6 +111,7 @@ impl SyncResponse {
     }
 }
 
+#[tracing::instrument(level = "debug", skip(world_tree))]
 pub async fn synced<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
 ) -> (StatusCode, Json<SyncResponse>) {

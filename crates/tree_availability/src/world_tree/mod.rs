@@ -39,20 +39,17 @@ impl<M: Middleware> WorldTree<M> {
     ///
     /// # Arguments
     ///
-    /// * `tree` - The PoseidonTree used for the merkle tree representation.
+    /// * `tree` - The `PoseidonTree` used for the merkle tree representation.
     /// * `tree_history_size` - The number of historical tree roots to keep in memory.
     /// * `address` - The smart contract address of the `WorldIDIdentityManager`.
     /// * `creation_block` - The block number at which the contract was deployed.
     /// * `middleware` - Provider to interact with Ethereum.
-    ///
-    /// # Returns
-    ///
-    /// New instance of `WorldTree`.
     pub fn new(
         tree: PoseidonTree<Canonical>,
         tree_history_size: usize,
         address: H160,
         creation_block: u64,
+        window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
         Self {
@@ -60,6 +57,7 @@ impl<M: Middleware> WorldTree<M> {
             tree_updater: Arc::new(TreeUpdater::new(
                 address,
                 creation_block,
+                window_size,
                 middleware,
             )),
             synced: Arc::new(AtomicBool::new(false)),
@@ -67,15 +65,13 @@ impl<M: Middleware> WorldTree<M> {
     }
 
     /// Spawns a task that continually syncs the `TreeData` to the state at the chain head.
-    ///
-    /// # Returns
-    ///
-    /// A `JoinHandle` that resolves to a `Result<(), TreeAvailabilityError<M>>` when the spawned task completes.
     pub async fn spawn(
         &self,
     ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let tree_data = self.tree_data.clone();
         let tree_updater = self.tree_updater.clone();
+
+        tracing::info!("Spawning thread to sync tree");
         let synced = self.synced.clone();
 
         tokio::spawn(async move {
@@ -85,7 +81,6 @@ impl<M: Middleware> WorldTree<M> {
             loop {
                 tree_updater.sync_to_head(&tree_data).await?;
 
-                // Sleep a little to unblock the executor
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         })

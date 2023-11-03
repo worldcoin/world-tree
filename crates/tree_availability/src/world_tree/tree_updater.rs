@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,10 +14,8 @@ use super::abi::{
 use super::block_scanner::BlockScanner;
 use super::tree_data::TreeData;
 use crate::error::TreeAvailabilityError;
+use crate::world_tree::abi::DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall;
 use crate::world_tree::Hash;
-
-// TODO: Change to a configurable parameter
-const SCANNING_WINDOW_SIZE: u64 = 100;
 
 /// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {
@@ -32,20 +30,18 @@ pub struct TreeUpdater<M: Middleware> {
 }
 
 impl<M: Middleware> TreeUpdater<M> {
-    /// Initializes TreeUpdater
-    ///
-    /// `address`: `WorldIDIdentityManager` contract address
-    ///
-    /// `creation_block`: The block height of the `WorldIDIdentityManager` contract deployment
-    ///
-    /// `middleware`: provider
-    pub fn new(address: H160, creation_block: u64, middleware: Arc<M>) -> Self {
+    pub fn new(
+        address: H160,
+        creation_block: u64,
+        window_size: u64,
+        middleware: Arc<M>,
+    ) -> Self {
         Self {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
             block_scanner: BlockScanner::new(
                 middleware.clone(),
-                SCANNING_WINDOW_SIZE,
+                window_size,
                 creation_block,
             ),
             middleware,
@@ -61,6 +57,8 @@ impl<M: Middleware> TreeUpdater<M> {
         &self,
         tree_data: &TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
+        tracing::info!("Syncing tree to chain head");
+
         let logs = self
             .block_scanner
             .next(
@@ -76,19 +74,22 @@ impl<M: Middleware> TreeUpdater<M> {
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
         if logs.is_empty() {
+            tracing::info!("No `TreeChanged` events found within block range");
             return Ok(());
         }
 
         let mut futures = FuturesOrdered::new();
 
-        //TODO: update this to use a throttle that can be set by the user
+        //TODO: update this to use a throttle that can be set by the user, however this is likely only going to result in one log per query
         for logs in logs.chunks(20) {
             for log in logs {
-                futures.push_back(self.middleware.get_transaction(
-                    log.transaction_hash.ok_or(
-                        TreeAvailabilityError::TransactionHashNotFound,
-                    )?,
-                ));
+                let tx_hash = log
+                    .transaction_hash
+                    .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
+
+                tracing::info!(?tx_hash, "Getting transaction");
+
+                futures.push_back(self.middleware.get_transaction(tx_hash));
             }
 
             while let Some(transaction) = futures.next().await {
@@ -117,19 +118,25 @@ impl<M: Middleware> TreeUpdater<M> {
         tree_data: &TreeData,
         transaction: &Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
+        let tx_hash = transaction.hash;
+        tracing::info!(?tx_hash, "Syncing from transaction");
+
         let calldata = &transaction.input;
 
         let function_selector = Selector::try_from(&calldata[0..4])
             .expect("Transaction data does not contain a function selector");
 
         if function_selector == RegisterIdentitiesCall::selector() {
+            tracing::info!("Decoding registerIdentities calldata");
+
             let register_identities_call =
                 RegisterIdentitiesCall::decode(calldata.as_ref())?;
 
             let start_index = register_identities_call.start_index;
             let identities = register_identities_call.identity_commitments;
-            let identities: Vec<_> = identities
-                .into_iter()
+
+            let identities: Vec<Hash> = identities
+                .into_iter().take_while(|x| *x != U256::zero())
                 .map(|u256: U256| Hash::from_limbs(u256.0))
                 .collect();
 
@@ -137,16 +144,40 @@ impl<M: Middleware> TreeUpdater<M> {
                 .insert_many_at(start_index as usize, &identities)
                 .await;
         } else if function_selector == DeleteIdentitiesCall::selector() {
+            tracing::info!("Decoding deleteIdentities calldata");
+
             let delete_identities_call =
                 DeleteIdentitiesCall::decode(calldata.as_ref())?;
 
-            let indices = unpack_indices(
+            let indices= unpack_indices(
                 delete_identities_call.packed_deletion_indices.as_ref(),
             );
-            let indices: Vec<_> =
-                indices.into_iter().map(|x| x as usize).collect();
 
+            let indices: Vec<usize> = indices
+                .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
+                .map(|x| x as usize)
+                .collect();
             tree_data.delete_many(&indices).await;
+
+        } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
+
+            tracing::info!("Decoding deleteIdentities calldata");
+
+            // @dev This is a type that is generated by abigen!() since there is a function defined with a conflicting function name but different params
+            let delete_identities_call =
+            DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::decode(calldata.as_ref())?;
+
+            let indices= unpack_indices(
+                delete_identities_call.packed_deletion_indices.as_ref(),
+            );
+
+            let indices: Vec<usize> = indices
+                .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
+                .map(|x| x as usize)
+                .collect();
+            tree_data.delete_many(&indices).await;
+
+
         } else {
             return Err(TreeAvailabilityError::UnrecognizedFunctionSelector);
         }
