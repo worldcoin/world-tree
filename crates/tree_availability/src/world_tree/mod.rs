@@ -13,6 +13,7 @@ use semaphore::lazy_merkle_tree::{Canonical, LazyMerkleTree};
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 use self::tree_data::TreeData;
 use self::tree_updater::TreeUpdater;
@@ -65,9 +66,8 @@ impl<M: Middleware> WorldTree<M> {
     }
 
     /// Spawns a task that continually syncs the `TreeData` to the state at the chain head.
-    pub async fn spawn(
-        &self,
-    ) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
+    #[instrument(skip(self))]
+    pub fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
         let tree_data = self.tree_data.clone();
         let tree_updater = self.tree_updater.clone();
 
