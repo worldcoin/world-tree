@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use common::tracing::init_subscriber;
+use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
 use futures::stream::FuturesUnordered;
@@ -57,8 +57,8 @@ pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
 
     if opts.datadog {
-        todo!("Initialize datadog tracing backend");
-        // init_datadog_subscriber("tree-availability-service", Level::INFO);
+        // todo!("Initialize datadog tracing backend");
+        init_datadog_subscriber("tree-availability-service", Level::INFO);
     } else {
         init_subscriber(Level::INFO);
     }
