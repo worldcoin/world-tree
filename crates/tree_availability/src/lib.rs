@@ -113,7 +113,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles.push(server_handle);
 
         // Spawn a new task to keep the world tree synced to the chain head
-        handles.push(self.world_tree.spawn().await);
+        handles.push(self.world_tree.spawn());
 
         handles
     }
