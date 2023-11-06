@@ -1,4 +1,5 @@
 use chrono::Utc;
+use opentelemetry::global::shutdown_tracer_provider;
 use opentelemetry::sdk::trace;
 use opentelemetry::sdk::trace::Sampler;
 use opentelemetry::trace::TraceContextExt;
@@ -24,6 +25,10 @@ pub fn init_subscriber(level: Level) {
         .with(filter)
         .with(fmt_layer)
         .init();
+}
+
+pub fn shutdown_tracing_provider() {
+    opentelemetry::global::shutdown_tracer_provider();
 }
 
 pub fn init_datadog_subscriber(service_name: &str, level: Level) {

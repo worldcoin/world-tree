@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use common::tracing::{init_datadog_subscriber, init_subscriber};
+use common::tracing::{
+    init_datadog_subscriber, init_subscriber, shutdown_tracing_provider,
+};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
 use futures::stream::FuturesUnordered;
@@ -76,11 +78,13 @@ pub async fn main() -> eyre::Result<()> {
     .serve(opts.port)
     .await;
 
-    let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
-    while let Some(result) = handles.next().await {
-        tracing::error!("TreeAvailabilityError: {:?}", result);
-        result??;
-    }
+    shutdown_tracing_provider();
+
+    // let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
+    // while let Some(result) = handles.next().await {
+    //     tracing::error!("TreeAvailabilityError: {:?}", result);
+    //     result??;
+    // }
 
     Ok(())
 }

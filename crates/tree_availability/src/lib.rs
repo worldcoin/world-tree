@@ -20,6 +20,7 @@ use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::server::{inclusion_proof, synced};
@@ -81,6 +82,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     /// # Returns
     ///
     /// Vector of `JoinHandle`s for the spawned tasks.
+    #[instrument(skip(self))]
     pub async fn serve(
         self,
         port: u16,
