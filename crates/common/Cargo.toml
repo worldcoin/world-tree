@@ -13,4 +13,12 @@ ethers = { version = "2.0.10", features = [
 ] }
 eyre = "0.6.8"
 serde = "1.0.189"
-tracing = "0.1.39"
+metrics = "0.21.1"
+opentelemetry = { version = "0.20.0", features = ["rt-tokio"] }
+opentelemetry-datadog = {verison = "0.8.0", features = ["reqwest-client"]}
+tracing = "0.1.40"
+tracing-opentelemetry = "0.21.0"
+tracing-subscriber = {version = "0.3.17", features = ["env-filter"]}
+tokio = "1.33.0"
+http = "0.2.9"
+opentelemetry-http = "0.9.0"

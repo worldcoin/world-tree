@@ -10,7 +10,7 @@ pub struct BlockScanner<M> {
     /// The onchain data provider
     middleware: M,
     /// The block from which to start parsing a given event
-    current_block: AtomicU64,
+    pub last_synced_block: AtomicU64,
     /// The maximum block range to parse
     window_size: u64,
 }
@@ -27,7 +27,7 @@ where
     ) -> Self {
         Self {
             middleware,
-            current_block: AtomicU64::new(current_block),
+            last_synced_block: AtomicU64::new(current_block),
             window_size,
         }
     }
@@ -50,34 +50,32 @@ where
             latest_block as f64
         );
 
-        let current_block = self.current_block.load(Ordering::SeqCst);
+        let last_synced_block = self.last_synced_block.load(Ordering::SeqCst);
 
-        if current_block >= latest_block {
+        if last_synced_block >= latest_block {
             return Ok(Vec::new());
         }
 
-        let from_block = current_block;
+        let from_block = last_synced_block + 1;
         let to_block = latest_block.min(from_block + self.window_size);
 
-        let next_current_block = to_block + 1;
-
-        let from_block = Some(BlockNumber::Number(from_block.into()));
-        let to_block = Some(BlockNumber::Number(to_block.into()));
+        tracing::info!(?from_block, ?to_block, "Scanning blocks");
 
         let logs = self
             .middleware
             .get_logs(&Filter {
                 block_option: FilterBlockOption::Range {
-                    from_block,
-                    to_block,
+                    from_block: Some(BlockNumber::Number(from_block.into())),
+                    to_block: Some(BlockNumber::Number(to_block.into())),
                 },
                 address,
                 topics,
             })
             .await?;
 
-        self.current_block
-            .store(next_current_block, Ordering::SeqCst);
+        self.last_synced_block.store(to_block, Ordering::SeqCst);
+
+        tracing::info!(?to_block, "Current block updated");
 
         Ok(logs)
     }

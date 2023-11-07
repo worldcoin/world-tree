@@ -1,36 +1,18 @@
 use std::sync::Arc;
 
-use ethers::middleware::contract::abigen;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use ruint::Uint;
 use tokio::select;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
+use tracing::instrument;
 
+use crate::abi::{IBridgedWorldID, IStateBridge};
 use crate::error::StateBridgeError;
 use crate::root::Hash;
 
-abigen!(
-    IStateBridge,
-    r#"[
-        function propagateRoot() external
-    ]"#;
-);
-
-abigen!(
-    IBridgedWorldID,
-    r#"[
-        event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
-        event RootAdded(uint256 root, uint128 timestamp)
-        function latestRoot() public view virtual returns (uint256)
-        function receiveRoot(uint256 newRoot) external
-    ]"#,
-    event_derives(serde::Deserialize, serde::Serialize)
-);
-
-/// The `StateBridge` takes care of listening to roots propagated from the `WorldRoot` and
-/// propagates them periodically every time `relaying_period` elapses and the root was updated.
+/// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
 pub struct StateBridge<M: Middleware + 'static> {
     /// Interface for the `StateBridge` contract
     pub state_bridge: IStateBridge<M>,
@@ -43,15 +25,12 @@ pub struct StateBridge<M: Middleware + 'static> {
 }
 
 impl<M: Middleware> StateBridge<M> {
-    /// Initializes a StateBridge
+    /// # Arguments
     ///
-    /// `state_bridge`: `StateBridge` contract interface
-    ///
-    /// `bridged_world_id`: `BridgedWorldID` contract interface
-    ///
-    /// `relaying_period`: Time in between `propagateRoot()` calls
-    ///
-    /// `block_confirmations: The number of blocks before a `propagateRoot()` call is considered finalized
+    /// * state_bridge - Interface to the StateBridge smart contract.
+    /// * bridged_world_id - Interface to the BridgedWorldID smart contract.
+    /// * relaying_period - Duration between successive propagateRoot() invocations.
+    /// * block_confirmations - Number of block confirmations required to consider a propagateRoot() transaction as finalized.
     pub fn new(
         state_bridge: IStateBridge<M>,
         bridged_world_id: IBridgedWorldID<M>,
@@ -66,19 +45,14 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
-    /// Initializes a StateBridge with address and middleware
+    /// # Arguments
     ///
-    /// `bridge_address`: `StateBridge` contract address
-    ///
-    /// `canonical_middleware`: middleware for the chain where the `StateBridge` is deployed
-    ///
-    /// `bridged_world_id_address`: `BridgedWorldID` contract address
-    ///
-    /// `derived_middleware`: middleware for the chain where the `BridgedWorldID` is deployed
-    ///
-    /// `relaying_period`: Time in between `propagateRoot()` calls
-    ///
-    ///  `block_confirmations: The number of block confirmations before a `propagateRoot()` transaction is considered finalized
+    /// * `bridge_address` - Address of the StateBridge contract.
+    /// * `canonical_middleware` - Middleware for interacting with the chain where StateBridge is deployed.
+    /// * `bridged_world_id_address` - Address of the BridgedWorldID contract.
+    /// * `derived_middleware` - Middleware for interacting with the chain where BridgedWorldID is deployed.
+    /// * `relaying_period` - Duration between `propagateRoot()` transactions.
+    /// * `block_confirmations` - Number of block confirmations before a`propagateRoot()` transaction is considered finalized.
     pub fn new_from_parts(
         bridge_address: H160,
         canonical_middleware: Arc<M>,
@@ -103,9 +77,13 @@ impl<M: Middleware> StateBridge<M> {
         })
     }
 
-    /// Spawns the `StateBridge` which listens to the `WorldRoot` `TreeChanged` events for new roots to propagate.
+    /// Spawns a `StateBridge` task to listen for `TreeChanged` events from `WorldRoot` and propagate new roots.
     ///
-    /// `root_rx`: The root receiver that listens to the `WorldRoot` root sender
+    /// # Arguments
+    ///
+    /// * `root_rx` - Receiver channel for roots from `WorldRoot`.
+    #[allow(clippy::async_yields_async)]
+    #[instrument(skip(self, root_rx))]
     pub async fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
@@ -114,6 +92,16 @@ impl<M: Middleware> StateBridge<M> {
         let state_bridge = self.state_bridge.clone();
         let relaying_period = self.relaying_period;
         let block_confirmations = self.block_confirmations;
+
+        let bridged_world_id_address = bridged_world_id.address();
+        let state_bridge_address = state_bridge.address();
+        tracing::info!(
+            ?bridged_world_id_address,
+            ?state_bridge_address,
+            ?relaying_period,
+            ?block_confirmations,
+            "Spawning bridge"
+        );
 
         tokio::spawn(async move {
             let mut latest_root = Hash::ZERO;
@@ -126,22 +114,32 @@ impl<M: Middleware> StateBridge<M> {
 
                 select! {
                     root = root_rx.recv() => {
-
+                        tracing::info!(?root, "Root received from rx");
                         latest_root = root?;
                     }
 
-                    _ = tokio::time::sleep(sleep_time) => {}
+                    _ = tokio::time::sleep(sleep_time) => {
+                        tracing::info!("Sleep time elapsed");
+                    }
                 }
 
                 let time_since_last_propagation =
                     Instant::now() - last_propagation;
 
                 if time_since_last_propagation > relaying_period {
+                    tracing::info!("Relaying period elapsed");
+
                     let latest_bridged_root = Uint::from_limbs(
                         bridged_world_id.latest_root().call().await?.0,
                     );
 
                     if latest_root != latest_bridged_root {
+                        tracing::info!(
+                            ?latest_root,
+                            ?latest_bridged_root,
+                            "Propagating root"
+                        );
+
                         state_bridge
                             .propagate_root()
                             .send()
@@ -150,6 +148,8 @@ impl<M: Middleware> StateBridge<M> {
                             .await?;
 
                         last_propagation = Instant::now();
+                    } else {
+                        tracing::info!("Root already propagated");
                     }
                 }
             }

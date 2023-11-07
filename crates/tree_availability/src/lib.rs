@@ -14,6 +14,7 @@ pub mod world_tree;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
+use axum::middleware;
 use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
@@ -50,6 +51,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         tree_history_size: usize,
         world_tree_address: H160,
         world_tree_creation_block: u64,
+        window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
         let tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
@@ -63,6 +65,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             tree_history_size,
             world_tree_address,
             world_tree_creation_block,
+            window_size,
             middleware,
         ));
 
@@ -85,19 +88,24 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
+        tracing::info!(?port, "Initializing axum server");
+
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
+            .layer(middleware::from_fn(server::middleware::logging::middleware))
             .with_state(self.world_tree.clone());
 
         let address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
         let server_handle = tokio::spawn(async move {
+            tracing::info!("Spawning server");
             axum::Server::bind(&address)
                 .serve(router.into_make_service())
                 .await
                 .map_err(TreeAvailabilityError::HyperError)?;
+            tracing::info!("Server spawned");
 
             Ok(())
         });
@@ -105,7 +113,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles.push(server_handle);
 
         // Spawn a new task to keep the world tree synced to the chain head
-        handles.push(self.world_tree.spawn().await);
+        handles.push(self.world_tree.spawn());
 
         handles
     }
