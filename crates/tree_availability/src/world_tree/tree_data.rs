@@ -98,15 +98,8 @@ impl TreeData {
         let tree = self.tree.read().await;
 
         // If the root is not specified, use the latest root
-        if root.is_none() {
-            Some(InclusionProof::new(
-                tree.root(),
-                Self::proof(&tree, identity)?,
-                None,
-            ))
-        } else {
-            let root = root.unwrap();
 
+        if let Some(root) = root {
             // If the root is the latest root, use the current version of the tree
             if root == tree.root() {
                 return Some(InclusionProof::new(
@@ -116,7 +109,7 @@ impl TreeData {
                 ));
             } else {
                 let tree_history = self.tree_history.read().await;
-                // // Otherwise, search the tree history for the root and use the corresponding tree
+                // Otherwise, search the tree history for the root and use the corresponding tree
                 for prev_tree in tree_history.iter() {
                     if prev_tree.root() == root {
                         return Some(InclusionProof::new(
@@ -129,6 +122,12 @@ impl TreeData {
             }
 
             None
+        } else {
+            Some(InclusionProof::new(
+                tree.root(),
+                Self::proof(&tree, identity)?,
+                None,
+            ))
         }
     }
 
