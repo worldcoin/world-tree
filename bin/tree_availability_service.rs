@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-
 use clap::Parser;
-use common::metrics::{init_statsd_exporter};
+use common::metrics::init_statsd_exporter;
 use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
@@ -56,7 +55,7 @@ struct Opts {
 }
 
 const SERVICE_NAME: &str = "tree-availability-service";
-const METRICS_HOST: &str = "127.0.0.1";
+const METRICS_HOST: &str = "localhost";
 const METRICS_PORT: u16 = 8125;
 
 #[tokio::main]

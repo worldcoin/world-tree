@@ -10,12 +10,12 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_serde::fields::AsMap;
 use tracing_serde::AsSerde;
 use tracing_subscriber::filter::EnvFilter;
+use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt};
 
 //TODO: add some docs for this
 static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();

@@ -21,7 +21,7 @@ use state_bridge::abi::{
 };
 use state_bridge::bridge::StateBridge;
 use state_bridge::error::StateBridgeError;
-use state_bridge::{StateBridgeService};
+use state_bridge::StateBridgeService;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
