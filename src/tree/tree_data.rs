@@ -1,11 +1,14 @@
 use std::collections::VecDeque;
 
 use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
-use semaphore::poseidon_tree::Proof;
+use semaphore::poseidon_tree::{Branch, Proof};
+use semaphore::Field;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use tokio::sync::RwLock;
 
 use super::{Hash, PoseidonTree};
-use crate::server::InclusionProof;
 
 /// Represents the in-memory state of the World Tree, caching historical roots up to `tree_history_size`.
 pub struct TreeData {
@@ -169,6 +172,49 @@ impl TreeData {
         let idx = tree.leaves().position(|leaf| leaf == identity)?;
 
         Some(tree.proof(idx))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InclusionProof {
+    pub root: Field,
+    //TODO: Open a PR to semaphore-rs to deserialize proof instead of implementing deserialization here
+    #[serde(deserialize_with = "deserialize_proof")]
+    pub proof: Proof,
+    pub message: Option<String>,
+}
+
+impl InclusionProof {
+    pub fn new(
+        root: Field,
+        proof: Proof,
+        message: Option<String>,
+    ) -> InclusionProof {
+        Self {
+            root,
+            proof,
+            message,
+        }
+    }
+}
+
+fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: Value = Deserialize::deserialize(deserializer)?;
+    if let Value::Array(array) = value {
+        let mut branches = vec![];
+        for value in array {
+            let branch = serde_json::from_value::<Branch>(value)
+                .map_err(serde::de::Error::custom)?;
+            branches.push(branch);
+        }
+
+        Ok(semaphore::merkle_tree::Proof(branches))
+    } else {
+        Err(D::Error::custom("Expected an array"))
     }
 }
 

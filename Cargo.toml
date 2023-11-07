@@ -1,28 +1,37 @@
 [package]
-name = "identity-sequencer"
+name = "world-tree"
 version = "0.1.0"
 edition = "2021"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace]
-members = [
-  "crates/common",
-  "crates/sequencer",
-  "crates/state_bridge",
-  "crates/tree_availability"]
-
 [dependencies]
-clap = { version = "4.4.6", features = ["derive"] }
-common = { path = "./crates/common" }
-ethers = "2.0.10"
+anyhow = "1.0.75"
+ethers = { version = "2.0.10", features = ["abigen", "ws", "ipc", "rustls", "openssl"] }
 eyre = "0.6.8"
+hex = "0.4.3"
+ruint = "1.10.1"
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
+    "depth_20",
+] }
+serde = { version = "1.0.189", features = ["derive"] }
+serde_json = "1.0.107"
+take_mut = "0.2.2"
+thiserror = "1.0.49"
+tokio = { version = "1.32.0", features = ["sync", "macros"] }
+tracing = "0.1.37"
+axum = "0.6.20"
 futures = "0.3.28"
-serde = "1.0.188"
-state_bridge = { path = "crates/state_bridge" }
-tokio = { version = "1.33.0", features = ["full"] }
-toml = "0.8.4"
-tracing = "0.1.40"
-tree_availability = { path = "crates/tree_availability" }
+hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
+metrics = "0.21.1"
+opentelemetry = "0.20.0"
+common = { path = "crates/common" }
+bytes = "1.5.0"
+futures-util = "0.3.29"
+
+[dev-dependencies]
+reqwest = { version = "0.11.22", features = ["json"] }
+
 
 [[bin]]
 name = "tree-availability-service"

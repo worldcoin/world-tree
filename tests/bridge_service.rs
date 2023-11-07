@@ -8,17 +8,15 @@ pub use ethers::core::abi::Abi;
 pub use ethers::core::k256::ecdsa::SigningKey;
 pub use ethers::core::rand;
 pub use ethers::prelude::{
-    ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider,
-    Signer, SignerMiddleware, Wallet,
+    ContractFactory, Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, SignerMiddleware,
+    Wallet,
 };
 pub use ethers::providers::{Middleware, StreamExt};
 pub use ethers::types::{Bytes, H256, U256};
 pub use ethers::utils::{Anvil, AnvilInstance};
 pub use serde::{Deserialize, Serialize};
 pub use serde_json::json;
-use state_bridge::abi::{
-    IBridgedWorldID, IStateBridge, IWorldIDIdentityManager,
-};
+use state_bridge::abi::{IBridgedWorldID, IStateBridge, IWorldIDIdentityManager};
 use state_bridge::bridge::StateBridge;
 use state_bridge::error::StateBridgeError;
 use state_bridge::StateBridgeService;
@@ -42,10 +40,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
 
     let relaying_period = std::time::Duration::from_secs(5);
 
-    let world_id = IWorldIDIdentityManager::new(
-        mock_world_id.address(),
-        middleware.clone(),
-    );
+    let world_id = IWorldIDIdentityManager::new(mock_world_id.address(), middleware.clone());
 
     mock_state_bridge.propagate_root().send().await?.await?;
 
@@ -57,11 +52,9 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         .await
         .expect("couldn't create StateBridgeService");
 
-    let state_bridge =
-        IStateBridge::new(state_bridge_address, middleware.clone());
+    let state_bridge = IStateBridge::new(state_bridge_address, middleware.clone());
 
-    let bridged_world_id =
-        IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
+    let bridged_world_id = IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
 
     let block_confirmations: usize = 6usize;
 
@@ -80,8 +73,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         .await
         .expect("failed to spawn a state bridge service");
 
-    let latest_root =
-        U256::from_str("0x12312321321").expect("couldn't parse hexstring");
+    let latest_root = U256::from_str("0x12312321321").expect("couldn't parse hexstring");
 
     mock_world_id.insert_root(latest_root).send().await?.await?;
 
@@ -122,10 +114,7 @@ pub async fn test_no_state_bridge_relay_fails() -> eyre::Result<()> {
         ..
     } = spawn_mock_chain().await?;
 
-    let world_id = IWorldIDIdentityManager::new(
-        mock_world_id.address(),
-        middleware.clone(),
-    );
+    let world_id = IWorldIDIdentityManager::new(mock_world_id.address(), middleware.clone());
 
     let mut state_bridge_service = StateBridgeService::new(world_id)
         .await

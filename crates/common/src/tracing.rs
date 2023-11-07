@@ -5,20 +5,20 @@ use chrono::Utc;
 use opentelemetry::sdk::trace;
 use opentelemetry::sdk::trace::Sampler;
 use opentelemetry::trace::TraceContextExt;
-use serde::ser::{SerializeMap, Serializer as _};
+use serde::ser::SerializeMap;
+use serde::Serializer;
 use tokio::sync::OnceCell;
 use tracing::{Event, Level, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::{OpenTelemetrySpanExt, OtelData};
 use tracing_serde::fields::AsMap;
 use tracing_serde::AsSerde;
-use tracing_subscriber::filter::EnvFilter;
-use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter};
 
 static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
 
@@ -53,7 +53,7 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
     let file_appender = tracing_appender::rolling::RollingFileAppender::new(
         //TODO: do we want this to be dynamic
         tracing_appender::rolling::Rotation::DAILY,
-        get_log_directory(),
+        get_log_directory().expect("TODO:handle this error"),
         format!("{service_name}.log"),
     );
 

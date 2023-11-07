@@ -1,5 +1,6 @@
-pub mod abi;
 pub mod block_scanner;
+pub mod error;
+pub mod service;
 pub mod tree_data;
 pub mod tree_updater;
 
@@ -7,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::{Canonical, LazyMerkleTree};
@@ -17,7 +19,6 @@ use tracing::instrument;
 
 use self::tree_data::TreeData;
 use self::tree_updater::TreeUpdater;
-use crate::error::TreeAvailabilityError;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;

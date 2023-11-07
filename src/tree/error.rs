@@ -4,6 +4,8 @@ use ethers::types::Log;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
+use crate::tree::Hash;
+
 #[derive(Error, Debug)]
 pub enum TreeAvailabilityError<M>
 where

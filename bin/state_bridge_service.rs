@@ -7,16 +7,13 @@ use clap::Parser;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::abi::Address;
 use ethers::prelude::{
-    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
-    SignerMiddleware, H160,
+    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, SignerMiddleware, H160,
 };
 use ethers::providers::Middleware;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use state_bridge::abi::{
-    IBridgedWorldID, IStateBridge, IWorldIDIdentityManager,
-};
+use state_bridge::abi::{IBridgedWorldID, IStateBridge, IWorldIDIdentityManager};
 use state_bridge::bridge::StateBridge;
 use state_bridge::StateBridgeService;
 use tracing::Level;
@@ -118,8 +115,7 @@ async fn spawn_state_bridge_service(
     relaying_period: Duration,
     block_confirmations: usize,
 ) -> eyre::Result<()> {
-    let provider = Provider::<Http>::try_from(rpc_url)
-        .expect("failed to initialize Http provider");
+    let provider = Provider::<Http>::try_from(rpc_url).expect("failed to initialize Http provider");
 
     let chain_id = provider.get_chainid().await?.as_u64();
 
@@ -127,15 +123,12 @@ async fn spawn_state_bridge_service(
     let wallet_address = wallet.address();
 
     let signer_middleware = SignerMiddleware::new(provider, wallet);
-    let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+    let nonce_manager_middleware = NonceManagerMiddleware::new(signer_middleware, wallet_address);
     let middleware = Arc::new(nonce_manager_middleware);
 
-    let world_id_interface =
-        IWorldIDIdentityManager::new(world_id_address, middleware.clone());
+    let world_id_interface = IWorldIDIdentityManager::new(world_id_address, middleware.clone());
 
-    let mut state_bridge_service =
-        StateBridgeService::new(world_id_interface).await?;
+    let mut state_bridge_service = StateBridgeService::new(world_id_interface).await?;
 
     for bridge_config in bridge_configs {
         let BridgeConfig {
@@ -156,19 +149,14 @@ async fn spawn_state_bridge_service(
             .with_chain_id(chain_id);
         let wallet_address = wallet.address();
 
-        let bridged_middleware =
-            SignerMiddleware::new(bridged_provider, wallet);
-        let bridged_middleware =
-            NonceManagerMiddleware::new(bridged_middleware, wallet_address);
+        let bridged_middleware = SignerMiddleware::new(bridged_provider, wallet);
+        let bridged_middleware = NonceManagerMiddleware::new(bridged_middleware, wallet_address);
         let bridged_middleware = Arc::new(bridged_middleware);
 
-        let state_bridge_interface =
-            IStateBridge::new(state_bridge_address, middleware.clone());
+        let state_bridge_interface = IStateBridge::new(state_bridge_address, middleware.clone());
 
-        let bridged_world_id_interface = IBridgedWorldID::new(
-            bridged_world_id_address,
-            bridged_middleware.clone(),
-        );
+        let bridged_world_id_interface =
+            IBridgedWorldID::new(bridged_world_id_address, bridged_middleware.clone());
 
         let state_bridge = StateBridge::new(
             state_bridge_interface,

@@ -9,14 +9,15 @@ use ethers::types::{Selector, Transaction, H160, U256};
 use futures::stream::FuturesOrdered;
 use tracing::instrument;
 
-use super::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
-};
 use super::block_scanner::BlockScanner;
+use super::error::TreeAvailabilityError;
 use super::tree_data::TreeData;
-use crate::error::TreeAvailabilityError;
-use crate::world_tree::abi::DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall;
-use crate::world_tree::Hash;
+use crate::abi::{
+    DeleteIdentitiesCall,
+    DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
+    RegisterIdentitiesCall, TreeChangedFilter,
+};
+use crate::tree::Hash;
 
 /// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {

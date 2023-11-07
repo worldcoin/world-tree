@@ -1,9 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ethers::providers::Middleware;
-use ethers::types::{
-    Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray,
-};
+use ethers::types::{Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray};
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 pub struct BlockScanner<M> {
@@ -20,11 +18,7 @@ where
     M: Middleware,
 {
     /// Initializes a new `BlockScanner`
-    pub const fn new(
-        middleware: M,
-        window_size: u64,
-        current_block: u64,
-    ) -> Self {
+    pub const fn new(middleware: M, window_size: u64, current_block: u64) -> Self {
         Self {
             middleware,
             last_synced_block: AtomicU64::new(current_block),

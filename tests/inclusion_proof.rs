@@ -22,11 +22,9 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     } = spawn_mock_chain().await?;
 
     // Register identities
-    let identity_commitments =
-        vec![U256::from(1), U256::from(2), U256::from(3)];
+    let identity_commitments = vec![U256::from(1), U256::from(2), U256::from(3)];
 
-    let world_tree_creation_block =
-        middleware.get_block_number().await?.as_u64() - 1;
+    let world_tree_creation_block = middleware.get_block_number().await?.as_u64() - 1;
 
     mock_world_id
         .register_identities(
@@ -109,7 +107,9 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         .post("http://127.0.0.1:8080/inclusionProof")
         .json(&InclusionProofRequest {
             identity_commitment: Hash::from(0x01),
-            root: Some(Hash::from_str("0x05c1e52b41a571293b30efacd2afdb7173b20cfaf1f646c4ac9f96eb75848270")?),
+            root: Some(Hash::from_str(
+                "0x05c1e52b41a571293b30efacd2afdb7173b20cfaf1f646c4ac9f96eb75848270",
+            )?),
         })
         .send()
         .await?;
