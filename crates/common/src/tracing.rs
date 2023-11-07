@@ -17,7 +17,6 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 
-//TODO: add some docs for this
 static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
 
 pub fn init_subscriber(level: Level) {
@@ -56,7 +55,7 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
     );
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-    WORKER_GUARD.set(guard).expect("TODO: handle this error");
+    WORKER_GUARD.set(guard).expect("Could not set worker guard");
 
     let dd_layer = fmt::Layer::new()
         .json()
