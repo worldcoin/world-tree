@@ -4,7 +4,9 @@ use opentelemetry::sdk::trace;
 use opentelemetry::sdk::trace::Sampler;
 use opentelemetry::trace::TraceContextExt;
 use serde::ser::{SerializeMap, Serializer as _};
+use tokio::sync::OnceCell;
 use tracing::{Event, Level, Subscriber};
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_serde::fields::AsMap;
 use tracing_serde::AsSerde;
@@ -15,6 +17,9 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, Layer};
+
+//TODO: add some docs for this
+static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
 
 pub fn init_subscriber(level: Level) {
     let fmt_layer = fmt::layer().with_target(false).with_level(true);
@@ -48,10 +53,20 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
 
     let fmt_layer = fmt::layer().with_target(false).with_level(true);
 
+    let file_appender = tracing_appender::rolling::RollingFileAppender::new(
+        //TODO: These need to be args or something so its dynamic, maybe we can also just make this default to something
+        tracing_appender::rolling::Rotation::DAILY,
+        get_log_directory(),
+        format!("{service_name}.log"),
+    );
+
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    WORKER_GUARD.set(guard).expect("TODO: handle this error");
+
     let dd_layer = fmt::Layer::new()
-        .with_writer(std::io::stderr)
         .json()
-        .event_format(DataDogFormat);
+        .event_format(DataDogFormat)
+        .with_writer(non_blocking);
 
     tracing_subscriber::registry()
         .with(filter)
@@ -76,6 +91,18 @@ pub fn trace_to_headers(headers: &mut http::HeaderMap) {
             &mut opentelemetry_http::HeaderInjector(headers),
         );
     });
+}
+
+//TODO: clean this up and use consts
+pub fn get_log_directory() -> PathBuf {
+    let home_dir = dirs::home_dir().expect("Could not find home directory");
+    let log_dir = home_dir.join(".logs");
+    // Create the .logs directory if it does not exist
+    if !log_dir.exists() {
+        fs::create_dir_all(&log_dir).expect("Could not create .logs directory");
+    }
+
+    log_dir
 }
 
 pub struct DataDogFormat;
@@ -115,11 +142,15 @@ where
                 // into a u64 before formatting it.
                 let trace_id = format!("{}", trace_id as u64);
                 serializer.serialize_entry("dd.trace_id", &trace_id)?;
+
+                dbg!(trace_id);
             }
 
             if let Some(span_id) = span_id {
                 let span_id = format!("{}", span_id);
                 serializer.serialize_entry("dd.span_id", &span_id)?;
+
+                dbg!(span_id);
             }
 
             serializer.end()
@@ -205,7 +236,8 @@ where
     span
 }
 
-use std::io;
+use std::path::PathBuf;
+use std::{env, fs, io};
 
 pub struct WriteAdaptor<'a> {
     fmt_write: &'a mut dyn std::fmt::Write,

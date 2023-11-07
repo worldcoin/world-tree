@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::Parser;
 use common::tracing::{
@@ -78,6 +79,7 @@ pub async fn main() -> eyre::Result<()> {
     .serve(opts.port)
     .await;
 
+    std::thread::sleep(Duration::from_secs(10));
     shutdown_tracing_provider();
 
     // let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
