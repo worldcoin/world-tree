@@ -4,9 +4,7 @@ use std::time::Duration;
 use clap::Parser;
 use common::metrics::{self, init_statsd_exporter};
 use common::shutdown_tracer_provider;
-use common::tracing::{
-    init_datadog_subscriber, init_subscriber,
-};
+use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
 use futures::stream::FuturesUnordered;
@@ -58,6 +56,8 @@ struct Opts {
 }
 
 const SERVICE_NAME: &str = "tree-availability-service";
+const METRICS_HOST: &str = "127.0.0.1";
+const METRICS_PORT: u16 = 8125;
 
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
@@ -65,7 +65,7 @@ pub async fn main() -> eyre::Result<()> {
 
     if opts.datadog {
         init_datadog_subscriber(SERVICE_NAME, Level::INFO);
-        init_statsd_exporter(SERVICE_NAME);
+        init_statsd_exporter(METRICS_HOST, METRICS_PORT);
     } else {
         init_subscriber(Level::INFO);
     }

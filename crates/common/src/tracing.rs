@@ -49,7 +49,7 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
     let fmt_layer = fmt::layer().with_target(false).with_level(true);
 
     let file_appender = tracing_appender::rolling::RollingFileAppender::new(
-        //TODO: These need to be args or something so its dynamic, maybe we can also just make this default to something
+        //TODO: do we want this to be dynamic
         tracing_appender::rolling::Rotation::DAILY,
         get_log_directory(),
         format!("{service_name}.log"),
@@ -88,7 +88,7 @@ pub fn trace_to_headers(headers: &mut http::HeaderMap) {
     });
 }
 
-//TODO: clean this up and use consts
+//TODO: clean this up and propagate errors
 pub fn get_log_directory() -> PathBuf {
     let home_dir = dirs::home_dir().expect("Could not find home directory");
     let log_dir = home_dir.join(".logs");
@@ -137,13 +137,11 @@ where
                 // into a u64 before formatting it.
                 let trace_id = format!("{}", trace_id as u64);
                 serializer.serialize_entry("dd.trace_id", &trace_id)?;
-
             }
 
             if let Some(span_id) = span_id {
                 let span_id = format!("{}", span_id);
                 serializer.serialize_entry("dd.span_id", &span_id)?;
-
             }
 
             serializer.end()
