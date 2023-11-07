@@ -138,14 +138,12 @@ where
                 let trace_id = format!("{}", trace_id as u64);
                 serializer.serialize_entry("dd.trace_id", &trace_id)?;
 
-                dbg!(trace_id);
             }
 
             if let Some(span_id) = span_id {
                 let span_id = format!("{}", span_id);
                 serializer.serialize_entry("dd.span_id", &span_id)?;
 
-                dbg!(span_id);
             }
 
             serializer.end()
