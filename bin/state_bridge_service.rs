@@ -105,6 +105,8 @@ async fn main() -> eyre::Result<()> {
     )
     .await?;
 
+    shutdown_tracer_provider();
+
     Ok(())
 }
 
