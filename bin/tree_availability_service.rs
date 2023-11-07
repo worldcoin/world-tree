@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use common::metrics::{self, init_statsd_exporter};
 use common::tracing::init_subscriber;
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
@@ -57,8 +58,8 @@ pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
 
     if opts.datadog {
-        todo!("Initialize datadog tracing backend");
         // init_datadog_subscriber("tree-availability-service", Level::INFO);
+        init_statsd_exporter();
     } else {
         init_subscriber(Level::INFO);
     }
