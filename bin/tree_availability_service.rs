@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use std::time::Duration;
+
 
 use clap::Parser;
-use common::metrics::{self, init_statsd_exporter};
+use common::metrics::{init_statsd_exporter};
 use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};

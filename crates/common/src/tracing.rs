@@ -15,7 +15,7 @@ use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, Layer};
+use tracing_subscriber::{fmt};
 
 //TODO: add some docs for this
 static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
@@ -228,7 +228,7 @@ where
 }
 
 use std::path::PathBuf;
-use std::{env, fs, io};
+use std::{fs, io};
 
 pub struct WriteAdaptor<'a> {
     fmt_write: &'a mut dyn std::fmt::Write,
