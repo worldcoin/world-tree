@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use std::{fs, io};
+
 use chrono::Utc;
 use opentelemetry::sdk::trace;
 use opentelemetry::sdk::trace::Sampler;
@@ -6,7 +9,7 @@ use serde::ser::{SerializeMap, Serializer as _};
 use tokio::sync::OnceCell;
 use tracing::{Event, Level, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing_opentelemetry::{OpenTelemetrySpanExt, OtelData};
 use tracing_serde::fields::AsMap;
 use tracing_serde::AsSerde;
 use tracing_subscriber::filter::EnvFilter;
@@ -14,7 +17,7 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::util::SubscriberInitExt;
 
 static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
@@ -163,9 +166,6 @@ where
     }
 }
 
-use tracing_opentelemetry::OtelData;
-use tracing_subscriber::registry::SpanRef;
-
 /// Finds Otel trace id by going up the span stack until we find a span
 /// with a trace id.
 pub fn opentelemetry_trace_id<S, N>(ctx: &FmtContext<'_, S, N>) -> Option<u128>
@@ -236,9 +236,6 @@ where
 
     span
 }
-
-use std::path::PathBuf;
-use std::{fs, io};
 
 pub struct WriteAdaptor<'a> {
     fmt_write: &'a mut dyn std::fmt::Write,

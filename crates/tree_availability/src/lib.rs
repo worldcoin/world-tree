@@ -82,7 +82,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     /// # Returns
     ///
     /// Vector of `JoinHandle`s for the spawned tasks.
-    #[instrument(skip(self))]
     pub async fn serve(
         self,
         port: u16,
