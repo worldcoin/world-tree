@@ -70,7 +70,7 @@ where
 
         self.last_synced_block.store(to_block, Ordering::SeqCst);
 
-        tracing::info!(?to_block, "Current block updated");
+        tracing::info!(?to_block, "Last synced block updated");
 
         Ok(logs)
     }

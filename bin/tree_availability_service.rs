@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use common::tracing::init_subscriber;
+use common::metrics::init_statsd_exporter;
+use common::shutdown_tracer_provider;
+use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
 use futures::stream::FuturesUnordered;
@@ -52,13 +54,17 @@ struct Opts {
     datadog: bool,
 }
 
+const SERVICE_NAME: &str = "tree-availability-service";
+const METRICS_HOST: &str = "localhost";
+const METRICS_PORT: u16 = 8125;
+
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
 
     if opts.datadog {
-        todo!("Initialize datadog tracing backend");
-        // init_datadog_subscriber("tree-availability-service", Level::INFO);
+        init_datadog_subscriber(SERVICE_NAME, Level::INFO);
+        init_statsd_exporter(METRICS_HOST, METRICS_PORT);
     } else {
         init_subscriber(Level::INFO);
     }
@@ -81,6 +87,8 @@ pub async fn main() -> eyre::Result<()> {
         tracing::error!("TreeAvailabilityError: {:?}", result);
         result??;
     }
+
+    shutdown_tracer_provider();
 
     Ok(())
 }

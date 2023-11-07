@@ -20,6 +20,7 @@ use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 use world_tree::{Hash, PoseidonTree, WorldTree};
 
 use crate::server::{inclusion_proof, synced};
