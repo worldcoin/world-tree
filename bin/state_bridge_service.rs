@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
+use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::abi::Address;
 use ethers::prelude::{
     Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
@@ -18,6 +19,7 @@ use state_bridge::abi::{
 };
 use state_bridge::bridge::StateBridge;
 use state_bridge::StateBridgeService;
+use tracing::Level;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -79,11 +81,19 @@ struct Config {
     block_confirmations: Option<usize>,
 }
 
+const SERVICE_NAME: &str = "state-bridge-service";
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
     let contents = fs::read_to_string(&opts.config)?;
     let config: Config = toml::from_str(&contents)?;
+
+    if opts.datadog {
+        init_datadog_subscriber(SERVICE_NAME, Level::INFO);
+    } else {
+        init_subscriber(Level::INFO);
+    }
 
     spawn_state_bridge_service(
         config.rpc_url,
