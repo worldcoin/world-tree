@@ -1,0 +1,12 @@
+[package]
+name = "ethers-throttle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.74"
+ethers = "2.0.10"
+eyre = "0.6.8"
+governor = "0.6.0"
+serde = { version = "1.0.189", features = ["derive"] }
+

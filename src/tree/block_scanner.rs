@@ -56,6 +56,7 @@ where
                 .from_block(BlockNumber::Number(from_block.into()))
                 .to_block(BlockNumber::Number(to_block.into()));
 
+            //TODO: can probably also use futures ordered here to get all of the logs quickly
             logs.extend(self.middleware.get_logs(&filter).await?);
 
             last_synced_block = to_block;

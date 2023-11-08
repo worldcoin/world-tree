@@ -52,6 +52,8 @@ struct Opts {
     port: u16,
     #[clap(long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
+    #[clap(long, help = "Request per minute limit for rpc endpoint")]
+    throttle: bool,
 }
 
 const SERVICE_NAME: &str = "tree-availability-service";
@@ -69,7 +71,12 @@ pub async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let middleware = Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?);
+    let middleware = if opts.throttle {
+        Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?)
+    } else {
+        Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?)
+    };
+
     let handles = TreeAvailabilityService::new(
         opts.tree_depth,
         opts.dense_prefix_depth,
