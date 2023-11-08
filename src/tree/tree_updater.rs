@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -81,6 +81,8 @@ impl<M: Middleware> TreeUpdater<M> {
         let mut futures = FuturesOrdered::new();
 
         //TODO: update this to use a throttle that can be set by the user, however this is likely only going to result in one log per query
+
+        //TODO: update to use a throttled provider instead of this approach which throttles everyone
         for logs in logs.chunks(20) {
             for log in logs {
                 let tx_hash = log
