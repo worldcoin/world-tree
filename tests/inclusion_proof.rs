@@ -6,11 +6,14 @@ use ethers::types::U256;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use hyper::StatusCode;
-use tree_availability::error::TreeAvailabilityError;
-use tree_availability::server::{InclusionProof, InclusionProofRequest};
-use tree_availability::world_tree::tree_updater::pack_indices;
-use tree_availability::world_tree::Hash;
-use tree_availability::TreeAvailabilityService;
+use world_tree::tree::error::TreeAvailabilityError;
+use world_tree::tree::service::{
+    InclusionProofRequest, TreeAvailabilityService,
+};
+use world_tree::tree::tree_data::InclusionProof;
+use world_tree::tree::tree_updater::pack_indices;
+use world_tree::tree::Hash;
+
 #[tokio::test]
 async fn test_inclusion_proof() -> eyre::Result<()> {
     // Initialize a new mock tree
@@ -22,9 +25,11 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     } = spawn_mock_chain().await?;
 
     // Register identities
-    let identity_commitments = vec![U256::from(1), U256::from(2), U256::from(3)];
+    let identity_commitments =
+        vec![U256::from(1), U256::from(2), U256::from(3)];
 
-    let world_tree_creation_block = middleware.get_block_number().await?.as_u64() - 1;
+    let world_tree_creation_block =
+        middleware.get_block_number().await?.as_u64() - 1;
 
     mock_world_id
         .register_identities(
@@ -66,7 +71,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Spawn the service in a separate task
     let server_handle = tokio::spawn(async move {
-        let handles = tree_availability_service.serve(8080).await;
+        let handles = tree_availability_service.serve(8080);
 
         let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
         while let Some(result) = handles.next().await {
