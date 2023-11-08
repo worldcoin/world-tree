@@ -80,30 +80,22 @@ impl<M: Middleware> TreeUpdater<M> {
 
         let mut futures = FuturesOrdered::new();
 
-        //TODO: update this to use a throttle that can be set by the user, however this is likely only going to result in one log per query
+        for log in logs {
+            let tx_hash = log
+                .transaction_hash
+                .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
 
-        //TODO: update to use a throttled provider instead of this approach which throttles everyone
-        for logs in logs.chunks(20) {
-            for log in logs {
-                let tx_hash = log
-                    .transaction_hash
-                    .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
+            tracing::info!(?tx_hash, "Getting transaction");
 
-                tracing::info!(?tx_hash, "Getting transaction");
+            futures.push_back(self.middleware.get_transaction(tx_hash));
+        }
 
-                futures.push_back(self.middleware.get_transaction(tx_hash));
-            }
+        while let Some(transaction) = futures.next().await {
+            let transaction = transaction
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-            while let Some(transaction) = futures.next().await {
-                let transaction = transaction
-                    .map_err(TreeAvailabilityError::MiddlewareError)?
-                    .ok_or(TreeAvailabilityError::TransactionNotFound)?;
-
-                self.sync_from_transaction(tree_data, &transaction).await?;
-            }
-
-            //TODO: use a better throttle
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            self.sync_from_transaction(tree_data, &transaction).await?;
         }
 
         Ok(())
