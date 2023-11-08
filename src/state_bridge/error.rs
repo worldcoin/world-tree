@@ -1,8 +1,6 @@
 use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
-use ethers::types::Log;
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
 
 use crate::tree::Hash;
 

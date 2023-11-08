@@ -19,7 +19,7 @@ pub use serde_json::json;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
-use world_tree::abi::{IBridgedWorldID, IStateBridge, IWorldIDIdentityManager};
+use world_tree::abi::{IBridgedWorldID, IStateBridge};
 use world_tree::state_bridge::error::StateBridgeError;
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;

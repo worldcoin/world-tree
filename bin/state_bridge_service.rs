@@ -16,7 +16,7 @@ use futures::StreamExt;
 use opentelemetry::global::shutdown_tracer_provider;
 use serde::{Deserialize, Serialize};
 use tracing::Level;
-use world_tree::abi::{IBridgedWorldID, IStateBridge, IWorldIDIdentityManager};
+use world_tree::abi::{IBridgedWorldID, IStateBridge};
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;
 

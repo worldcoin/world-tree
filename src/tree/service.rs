@@ -10,11 +10,7 @@ use axum_middleware::logging;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
-use semaphore::poseidon_tree::{Branch, Proof};
-use semaphore::Field;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use super::error::{TreeAvailabilityError, TreeError};
