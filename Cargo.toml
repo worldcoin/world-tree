@@ -28,6 +28,8 @@ opentelemetry = "0.20.0"
 common = { path = "crates/common" }
 bytes = "1.5.0"
 futures-util = "0.3.29"
+clap = {version  = "4.4.7" , features = ["derive"]}
+toml = "0.8.8"
 
 [dev-dependencies]
 reqwest = { version = "0.11.22", features = ["json"] }

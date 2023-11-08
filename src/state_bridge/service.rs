@@ -1,18 +1,20 @@
 use std::sync::Arc;
 
-use ethers::providers::Middleware;
+use ethers::providers::{Middleware, StreamExt};
 use ethers::types::H160;
+use ruint::Uint;
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 use super::error::StateBridgeError;
 use super::StateBridge;
-use crate::abi::IWorldIDIdentityManager;
+use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};
+use crate::tree::Hash;
 
-//TODO: we dont need this root field and we can spawn the root logic so that this doesnt need to be here, we can simplify this service
 /// Monitors the world tree root for changes and propagates new roots to target Layer 2s
 pub struct StateBridgeService<M: Middleware + 'static> {
-    /// Local state of the world tree root, responsible for listening to TreeChanged events from the`WorldIDIdentityManager`.
-    pub canonical_root: WorldTreeRoot<M>,
+    /// Monitors `TreeChanged` events from `WorldIDIdentityManager` and broadcasts new roots to through the `root_tx`.
+    pub world_id_identity_manager: IWorldIDIdentityManager<M>,
     /// Vec of `StateBridge`, responsible for root propagation to target Layer 2s.
     pub state_bridges: Vec<StateBridge<M>>,
 }
@@ -22,23 +24,15 @@ where
     M: Middleware,
 {
     pub async fn new(
-        world_tree: IWorldIDIdentityManager<M>,
-    ) -> Result<Self, StateBridgeError<M>> {
-        Ok(Self {
-            canonical_root: WorldTreeRoot::new(world_tree).await?,
-            state_bridges: vec![],
-        })
-    }
-
-    pub async fn new_from_parts(
         world_tree_address: H160,
         middleware: Arc<M>,
     ) -> Result<Self, StateBridgeError<M>> {
-        let world_tree =
-            IWorldIDIdentityManager::new(world_tree_address, middleware);
-
+        let world_id_identity_manager = IWorldIDIdentityManager::new(
+            world_tree_address,
+            middleware.clone(),
+        );
         Ok(Self {
-            canonical_root: WorldTreeRoot::new(world_tree).await?,
+            world_id_identity_manager,
             state_bridges: vec![],
         })
     }
@@ -50,18 +44,18 @@ where
 
     /// Spawns the `WorldTreeRoot` task which will listen to changes to the `WorldIDIdentityManager`
     /// [merkle tree root](https://github.com/worldcoin/world-id-contracts/blob/852790da8f348d6a2dbb58d1e29123a644f4aece/src/WorldIDIdentityManagerImplV1.sol#L63).
-    #[allow(clippy::async_yields_async)]
     #[instrument(skip(self))]
-    pub async fn spawn_listener(
+    pub fn listen_for_new_roots(
         &self,
+        root_tx: tokio::sync::broadcast::Sender<Hash>,
     ) -> JoinHandle<Result<(), StateBridgeError<M>>> {
-        let root_tx = self.root_tx.clone();
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         let world_id_identity_manager_address =
             world_id_identity_manager.address();
         tracing::info!(?world_id_identity_manager_address, "Spawning root");
 
+        let root_tx_clone = root_tx.clone();
         tokio::spawn(async move {
             // Event emitted when insertions or deletions are made to the tree
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
@@ -72,7 +66,7 @@ where
             while let Some(Ok((event, _))) = event_stream.next().await {
                 let new_root = event.post_root.0;
                 tracing::info!(?new_root, "New root from chain");
-                root_tx.send(Uint::from_limbs(event.post_root.0))?;
+                root_tx_clone.send(Uint::from_limbs(event.post_root.0))?;
             }
 
             Ok(())
@@ -80,7 +74,7 @@ where
     }
 
     /// Spawns the `StateBridgeService`.
-    pub async fn spawn(
+    pub fn spawn(
         &mut self,
     ) -> Result<
         Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
@@ -90,16 +84,15 @@ where
             return Err(StateBridgeError::BridgesNotInitialized);
         }
 
-        let mut handles = vec![];
+        let (root_tx, _) = tokio::sync::broadcast::channel::<Hash>(1000);
 
+        let mut handles = vec![];
         // Bridges are spawned before the root so that the broadcast channel has active subscribers before the sender is spawned to avoid a SendError
         for bridge in self.state_bridges.iter() {
-            handles.push(
-                bridge.spawn(self.canonical_root.root_tx.subscribe()).await,
-            );
+            handles.push(bridge.spawn(root_tx.subscribe()));
         }
 
-        handles.push(self.canonical_root.spawn().await);
+        handles.push(self.listen_for_new_roots(root_tx));
 
         Ok(handles)
     }
