@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use ethers::providers::Middleware;
 use ethers::types::{
     Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray,
+    H160,
 };
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
@@ -13,6 +14,7 @@ pub struct BlockScanner<M> {
     pub last_synced_block: AtomicU64,
     /// The maximum block range to parse
     window_size: u64,
+    filter: Filter,
 }
 
 impl<M> BlockScanner<M>
@@ -24,11 +26,13 @@ where
         middleware: M,
         window_size: u64,
         current_block: u64,
+        filter: Filter,
     ) -> Self {
         Self {
             middleware,
             last_synced_block: AtomicU64::new(current_block),
             window_size,
+            filter,
         }
     }
 
@@ -38,11 +42,7 @@ where
     ///
     /// * `address` - Optional address to target when fetching logs.
     /// * `topics` - Optional topics to target when fetching logs, enabling granular filtering when looking for specific event signatures or topic values.
-    pub async fn next(
-        &self,
-        address: Option<ValueOrArray<Address>>,
-        topics: [Option<Topic>; 4],
-    ) -> Result<Vec<Log>, M::Error> {
+    pub async fn next(&self) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
 
         let last_synced_block = self.last_synced_block.load(Ordering::SeqCst);
@@ -56,17 +56,13 @@ where
 
         tracing::info!(?from_block, ?to_block, "Scanning blocks");
 
-        let logs = self
-            .middleware
-            .get_logs(&Filter {
-                block_option: FilterBlockOption::Range {
-                    from_block: Some(BlockNumber::Number(from_block.into())),
-                    to_block: Some(BlockNumber::Number(to_block.into())),
-                },
-                address,
-                topics,
-            })
-            .await?;
+        let filter = self
+            .filter
+            .clone()
+            .from_block(BlockNumber::Number(from_block.into()))
+            .to_block(BlockNumber::Number(to_block.into()));
+
+        let logs = self.middleware.get_logs(&filter).await?;
 
         self.last_synced_block.store(to_block, Ordering::SeqCst);
 
