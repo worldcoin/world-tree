@@ -527,6 +527,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-middleware"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytes",
+ "common",
+ "futures-util",
+ "hyper",
+ "tracing",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6027,13 +6039,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "bytes",
+ "axum-middleware",
  "clap 4.4.7",
  "common",
  "ethers",
  "eyre",
  "futures",
- "futures-util",
  "hex",
  "hyper",
  "metrics",

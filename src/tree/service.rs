@@ -1,5 +1,3 @@
-pub mod logging_middleware;
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -8,6 +6,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{middleware, Json};
+use axum_middleware::logging;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
@@ -91,7 +90,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
-            .layer(middleware::from_fn(logging_middleware::middleware))
+            .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
         let address =
