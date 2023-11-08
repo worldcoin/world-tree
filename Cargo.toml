@@ -29,6 +29,9 @@ thiserror = "1.0.49"
 tokio = { version = "1.32.0", features = ["sync", "macros"] }
 toml = "0.8.8"
 tracing = "0.1.37"
+governor = "0.6.0"
+url = "2.4.1"
+
 
 [dev-dependencies]
 reqwest = { version = "0.11.22", features = ["json"] }

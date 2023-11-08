@@ -6125,6 +6125,7 @@ dependencies = [
  "ethers-throttle",
  "eyre",
  "futures",
+ "governor",
  "hex",
  "hyper",
  "metrics",
@@ -6139,6 +6140,7 @@ dependencies = [
  "tokio",
  "toml 0.8.8",
  "tracing",
+ "url",
 ]
 
 [[package]]

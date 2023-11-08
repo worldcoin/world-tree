@@ -29,17 +29,17 @@ impl<P: JsonRpcClient> ThrottledProvider<P> {
         provider: P,
         requests_per_second: u32,
         jitter: Option<Jitter>,
-    ) -> Result<Self, ProviderError> {
+    ) -> Self {
         let throttle = Arc::new(RateLimiter::direct(Quota::per_second(
             NonZeroU32::new(requests_per_second)
                 .expect("Could not initialize NonZeroU32"),
         )));
 
-        Ok(ThrottledProvider {
+        ThrottledProvider {
             throttle,
             jitter,
             inner: provider,
-        })
+        }
     }
 }
 
