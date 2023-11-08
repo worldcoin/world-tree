@@ -9,7 +9,7 @@ use ethers::types::H160;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tracing::Level;
-use tree_availability::TreeAvailabilityService;
+use world_tree::tree::service::TreeAvailabilityService;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -79,8 +79,7 @@ pub async fn main() -> eyre::Result<()> {
         opts.window_size,
         middleware,
     )
-    .serve(opts.port)
-    .await;
+    .serve(opts.port);
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {

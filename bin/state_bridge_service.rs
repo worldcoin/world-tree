@@ -17,6 +17,8 @@ use opentelemetry::global::shutdown_tracer_provider;
 use serde::{Deserialize, Serialize};
 use tracing::Level;
 use world_tree::abi::{IBridgedWorldID, IStateBridge, IWorldIDIdentityManager};
+use world_tree::state_bridge::service::StateBridgeService;
+use world_tree::state_bridge::StateBridge;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -128,11 +130,12 @@ async fn spawn_state_bridge_service(
         NonceManagerMiddleware::new(signer_middleware, wallet_address);
     let middleware = Arc::new(nonce_manager_middleware);
 
-    let world_id_interface =
-        IWorldIDIdentityManager::new(world_id_address, middleware.clone());
-
     let mut state_bridge_service =
-        StateBridgeService::new(world_id_interface).await?;
+        StateBridgeService::new(world_id_address, middleware).await?;
+
+    let wallet = private_key
+        .parse::<LocalWallet>()
+        .expect("couldn't instantiate wallet from private key");
 
     for bridge_config in bridge_configs {
         let BridgeConfig {
@@ -142,29 +145,15 @@ async fn spawn_state_bridge_service(
             ..
         } = bridge_config;
 
-        let bridged_provider = Provider::<Http>::try_from(bridged_rpc_url)
-            .expect("failed to initialize Http provider");
-
-        let chain_id = bridged_provider.get_chainid().await?.as_u64();
-
-        let wallet = private_key
-            .parse::<LocalWallet>()
-            .expect("couldn't instantiate wallet from private key")
-            .with_chain_id(chain_id);
-        let wallet_address = wallet.address();
-
-        let bridged_middleware =
-            SignerMiddleware::new(bridged_provider, wallet);
-        let bridged_middleware =
-            NonceManagerMiddleware::new(bridged_middleware, wallet_address);
-        let bridged_middleware = Arc::new(bridged_middleware);
+        let l2_middleware =
+            initialize_l2_middleware(&bridged_rpc_url, wallet.clone()).await?;
 
         let state_bridge_interface =
-            IStateBridge::new(state_bridge_address, middleware.clone());
+            IStateBridge::new(state_bridge_address, l2_middleware.clone());
 
         let bridged_world_id_interface = IBridgedWorldID::new(
             bridged_world_id_address,
-            bridged_middleware.clone(),
+            l2_middleware.clone(),
         );
 
         let state_bridge = StateBridge::new(
@@ -178,12 +167,36 @@ async fn spawn_state_bridge_service(
     }
 
     tracing::info!("Spawning state bridge service");
-    let handles = state_bridge_service.spawn().await?;
+    let handles = state_bridge_service.spawn()?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
+        tracing::error!("StateBridgeError: {:?}", result);
+
         result??;
     }
 
     Ok(())
+}
+
+pub async fn initialize_l2_middleware(
+    l2_rpc_endpoint: &str,
+    wallet: LocalWallet,
+) -> eyre::Result<
+    Arc<NonceManagerMiddleware<SignerMiddleware<Provider<Http>, LocalWallet>>>,
+> {
+    let l2_provider = Provider::<Http>::try_from(l2_rpc_endpoint)?;
+    let chain_id = l2_provider.get_chainid().await?.as_u64();
+
+    let wallet = wallet.with_chain_id(chain_id);
+    let wallet_address = wallet.address();
+
+    let signer_middleware = SignerMiddleware::new(l2_provider, wallet);
+
+    let nonce_manager_middleware =
+        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+
+    let l2_middleware = Arc::new(nonce_manager_middleware);
+
+    Ok(l2_middleware)
 }
