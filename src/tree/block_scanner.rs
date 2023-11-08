@@ -1,10 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ethers::providers::Middleware;
-use ethers::types::{
-    Address, BlockNumber, Filter, FilterBlockOption, Log, Topic, ValueOrArray,
-    H160,
-};
+use ethers::types::{BlockNumber, Filter, Log};
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 pub struct BlockScanner<M> {

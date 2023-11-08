@@ -1,6 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::time::Duration;
 
 use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
