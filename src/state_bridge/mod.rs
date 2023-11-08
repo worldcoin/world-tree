@@ -1,3 +1,6 @@
+pub mod error;
+pub mod service;
+
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
@@ -8,9 +11,9 @@ use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 use tracing::instrument;
 
+use self::error::StateBridgeError;
 use crate::abi::{IBridgedWorldID, IStateBridge};
-use crate::error::StateBridgeError;
-use crate::root::Hash;
+use crate::tree::Hash;
 
 /// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
 pub struct StateBridge<M: Middleware + 'static> {
@@ -82,9 +85,8 @@ impl<M: Middleware> StateBridge<M> {
     /// # Arguments
     ///
     /// * `root_rx` - Receiver channel for roots from `WorldRoot`.
-    #[allow(clippy::async_yields_async)]
     #[instrument(skip(self, root_rx))]
-    pub async fn spawn(
+    pub fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
     ) -> JoinHandle<Result<(), StateBridgeError<M>>> {

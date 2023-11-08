@@ -6,11 +6,14 @@ use ethers::types::U256;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use hyper::StatusCode;
-use tree_availability::error::TreeAvailabilityError;
-use tree_availability::server::{InclusionProof, InclusionProofRequest};
-use tree_availability::world_tree::tree_updater::pack_indices;
-use tree_availability::world_tree::Hash;
-use tree_availability::TreeAvailabilityService;
+use world_tree::tree::error::TreeAvailabilityError;
+use world_tree::tree::service::{
+    InclusionProofRequest, TreeAvailabilityService,
+};
+use world_tree::tree::tree_data::InclusionProof;
+use world_tree::tree::tree_updater::pack_indices;
+use world_tree::tree::Hash;
+
 #[tokio::test]
 async fn test_inclusion_proof() -> eyre::Result<()> {
     // Initialize a new mock tree
@@ -68,7 +71,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Spawn the service in a separate task
     let server_handle = tokio::spawn(async move {
-        let handles = tree_availability_service.serve(8080).await;
+        let handles = tree_availability_service.serve(8080);
 
         let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
         while let Some(result) = handles.next().await {
@@ -109,7 +112,9 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
         .post("http://127.0.0.1:8080/inclusionProof")
         .json(&InclusionProofRequest {
             identity_commitment: Hash::from(0x01),
-            root: Some(Hash::from_str("0x05c1e52b41a571293b30efacd2afdb7173b20cfaf1f646c4ac9f96eb75848270")?),
+            root: Some(Hash::from_str(
+                "0x05c1e52b41a571293b30efacd2afdb7173b20cfaf1f646c4ac9f96eb75848270",
+            )?),
         })
         .send()
         .await?;

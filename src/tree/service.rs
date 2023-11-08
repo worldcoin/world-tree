@@ -1,29 +1,21 @@
-//! # Tree Availability Service
-//!
-//! The tree availability service is able to create an in-memory representation of the World ID
-//! merkle tree by syncing the state of the World ID contract `registerIdentities` and `deleteIdentities`
-//! function calldata and `TreeChanged` events. Once it syncs the latest state of the state of the tree, it
-//! is able to serve inclusion proofs on the `/inclusionProof` endpoint. It also keeps a historical roots list
-//! of `tree_history_size` size in order to serve proofs against older tree roots (including the roots of
-//! World IDs bridged to other networks).
-
-pub mod error;
-pub mod server;
-pub mod world_tree;
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use axum::middleware;
-use error::TreeAvailabilityError;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::{middleware, Json};
+use axum_middleware::logging;
 use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
-use tracing::instrument;
-use world_tree::{Hash, PoseidonTree, WorldTree};
 
-use crate::server::{inclusion_proof, synced};
+use super::error::{TreeAvailabilityError, TreeError};
+use super::tree_data::InclusionProof;
+use super::{Hash, PoseidonTree, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
@@ -82,7 +74,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     /// # Returns
     ///
     /// Vector of `JoinHandle`s for the spawned tasks.
-    pub async fn serve(
+    pub fn serve(
         self,
         port: u16,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
@@ -94,7 +86,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
-            .layer(middleware::from_fn(server::middleware::logging::middleware))
+            .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
         let address =
@@ -117,5 +109,93 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         handles.push(self.world_tree.spawn());
 
         handles
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InclusionProofRequest {
+    pub identity_commitment: Hash,
+    pub root: Option<Hash>,
+}
+
+impl InclusionProofRequest {
+    pub fn new(
+        identity_commitment: Hash,
+        root: Option<Hash>,
+    ) -> InclusionProofRequest {
+        Self {
+            identity_commitment,
+            root,
+        }
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn inclusion_proof<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+    Json(req): Json<InclusionProofRequest>,
+) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
+    if world_tree.synced.load(Ordering::Relaxed) {
+        let inclusion_proof = world_tree
+            .tree_data
+            .get_inclusion_proof(req.identity_commitment, req.root)
+            .await;
+
+        Ok((StatusCode::OK, inclusion_proof.into()))
+    } else {
+        Err(TreeError::TreeNotSynced)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResponse {
+    pub synced: bool,
+    pub block_number: Option<u64>,
+}
+
+impl SyncResponse {
+    pub fn new(synced: bool, block_number: Option<u64>) -> SyncResponse {
+        Self {
+            synced,
+            block_number,
+        }
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn synced<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> (StatusCode, Json<SyncResponse>) {
+    if world_tree.synced.load(Ordering::Relaxed) {
+        (StatusCode::OK, SyncResponse::new(true, None).into())
+    } else {
+        let latest_synced_block = Some(
+            world_tree
+                .tree_updater
+                .latest_synced_block
+                .load(Ordering::SeqCst),
+        );
+        (
+            StatusCode::OK,
+            SyncResponse::new(false, latest_synced_block).into(),
+        )
+    }
+}
+
+impl TreeError {
+    fn to_status_code(&self) -> StatusCode {
+        match self {
+            TreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
+        }
+    }
+}
+
+impl IntoResponse for TreeError {
+    fn into_response(self) -> axum::response::Response {
+        let status_code = self.to_status_code();
+        let response_body = self.to_string();
+        (status_code, response_body).into_response()
     }
 }

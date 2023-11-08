@@ -2,7 +2,7 @@ use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
 use thiserror::Error;
 
-use crate::root::Hash;
+use crate::tree::Hash;
 
 #[derive(Error, Debug)]
 pub enum StateBridgeError<M>
