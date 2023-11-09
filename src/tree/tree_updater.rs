@@ -1,11 +1,10 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::time::Duration;
 
 use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
-use ethers::types::{Selector, Transaction, H160, U256};
+use ethers::types::{Filter, Selector, Transaction, ValueOrArray, H160, U256};
 use futures::stream::FuturesOrdered;
 use tracing::instrument;
 
@@ -38,6 +37,10 @@ impl<M: Middleware> TreeUpdater<M> {
         window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
+        let filter = Filter::new()
+            .address(address)
+            .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
+
         Self {
             address,
             latest_synced_block: AtomicU64::new(creation_block),
@@ -45,6 +48,7 @@ impl<M: Middleware> TreeUpdater<M> {
                 middleware.clone(),
                 window_size,
                 creation_block,
+                filter,
             ),
             middleware,
         }
@@ -64,15 +68,7 @@ impl<M: Middleware> TreeUpdater<M> {
 
         let logs = self
             .block_scanner
-            .next(
-                Some(self.address.into()),
-                [
-                    Some(TreeChangedFilter::signature().into()),
-                    None,
-                    None,
-                    None,
-                ],
-            )
+            .next()
             .await
             .map_err(TreeAvailabilityError::MiddlewareError)?;
 
@@ -83,28 +79,22 @@ impl<M: Middleware> TreeUpdater<M> {
 
         let mut futures = FuturesOrdered::new();
 
-        //TODO: update this to use a throttle that can be set by the user, however this is likely only going to result in one log per query
-        for logs in logs.chunks(20) {
-            for log in logs {
-                let tx_hash = log
-                    .transaction_hash
-                    .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
+        for log in logs {
+            let tx_hash = log
+                .transaction_hash
+                .ok_or(TreeAvailabilityError::TransactionHashNotFound)?;
 
-                tracing::info!(?tx_hash, "Getting transaction");
+            tracing::info!(?tx_hash, "Getting transaction");
 
-                futures.push_back(self.middleware.get_transaction(tx_hash));
-            }
+            futures.push_back(self.middleware.get_transaction(tx_hash));
+        }
 
-            while let Some(transaction) = futures.next().await {
-                let transaction = transaction
-                    .map_err(TreeAvailabilityError::MiddlewareError)?
-                    .ok_or(TreeAvailabilityError::TransactionNotFound)?;
+        while let Some(transaction) = futures.next().await {
+            let transaction = transaction
+                .map_err(TreeAvailabilityError::MiddlewareError)?
+                .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-                self.sync_from_transaction(tree_data, &transaction).await?;
-            }
-
-            //TODO: use a better throttle
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            self.sync_from_transaction(tree_data, &transaction).await?;
         }
 
         Ok(())

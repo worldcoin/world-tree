@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::Parser;
 use common::metrics::init_statsd_exporter;
@@ -6,9 +7,12 @@ use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers::types::H160;
+use ethers_throttle::ThrottledProvider;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use governor::Jitter;
 use tracing::Level;
+use url::Url;
 use world_tree::tree::service::TreeAvailabilityService;
 
 #[derive(Parser, Debug)]
@@ -52,6 +56,14 @@ struct Opts {
     port: u16,
     #[clap(long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
+
+    #[clap(
+        short,
+        long,
+        help = "Request per minute limit for rpc endpoint",
+        default_value = "0"
+    )]
+    throttle: u32,
 }
 
 const SERVICE_NAME: &str = "tree-availability-service";
@@ -69,7 +81,17 @@ pub async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let middleware = Arc::new(Provider::<Http>::try_from(opts.rpc_endpoint)?);
+    let http_provider = Http::new(Url::parse(&opts.rpc_endpoint)?);
+    let throttled_http_provider = ThrottledProvider::new(
+        http_provider,
+        opts.throttle,
+        Some(Jitter::new(
+            Duration::from_millis(10),
+            Duration::from_millis(100),
+        )),
+    );
+    let middleware = Arc::new(Provider::new(throttled_http_provider));
+
     let handles = TreeAvailabilityService::new(
         opts.tree_depth,
         opts.dense_prefix_depth,
