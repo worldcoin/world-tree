@@ -3,15 +3,17 @@ l1_rpc_endpoint = "http://your_rpc_endpoint.com"
 world_id_address = "0x00"
 block_confirmations = 5
 
+
+# Optimism
 [[state_bridge]]
-name = "Optimism"
 l1_state_bridge = ""
 l2_world_id_address = ""
 l2_rpc_endpoint = ""
 relaying_period_seconds = 3600
 
+
+# Polygon
 [[state_bridge]]
-name = "Polygon"
 l1_state_bridge = ""
 l2_world_id_address = ""
 l2_rpc_endpoint = ""

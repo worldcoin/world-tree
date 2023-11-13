@@ -39,9 +39,8 @@ struct Opts {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct StateBridgeConfig {
-    name: String, //TODO: make this optional
-    l1_state_bridge: String,
-    l2_world_id: String,
+    l1_state_bridge: H160,
+    l2_world_id: H160,
     l2_rpc_endpoint: String,
     relaying_period_seconds: Duration,
 }
@@ -79,40 +78,19 @@ async fn main() -> eyre::Result<()> {
             .await?;
 
     for bridge_config in config.state_bridge {
+        let l2_middleware = initialize_l2_middleware(
+            &bridge_config.l2_rpc_endpoint,
+            wallet.clone(),
+        )
+        .await?;
+
         let state_bridge = StateBridge::new_from_parts(
             bridge_config.l1_state_bridge,
             l1_middleware.clone(),
+            bridge_config.l2_world_id,
+            l2_middleware,
             bridge_config.relaying_period_seconds,
             config.block_confirmations,
-        )?;
-
-        state_bridge_service.add_state_bridge(state_bridge);
-    }
-
-    for bridge_config in bridge_configs {
-        let BridgeConfig {
-            state_bridge_address,
-            bridged_world_id_address,
-            bridged_rpc_url,
-            ..
-        } = bridge_config;
-
-        let l2_middleware =
-            initialize_l2_middleware(&bridged_rpc_url, wallet.clone()).await?;
-
-        let state_bridge_interface =
-            IStateBridge::new(state_bridge_address, l2_middleware.clone());
-
-        let bridged_world_id_interface = IBridgedWorldID::new(
-            bridged_world_id_address,
-            l2_middleware.clone(),
-        );
-
-        let state_bridge = StateBridge::new(
-            state_bridge_interface,
-            bridged_world_id_interface,
-            relaying_period,
-            block_confirmations,
         )?;
 
         state_bridge_service.add_state_bridge(state_bridge);
