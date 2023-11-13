@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::extract::State;
 use clap::Parser;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::abi::Address;
@@ -32,21 +33,23 @@ struct Opts {
         help = "Path to the TOML state bridge service config file"
     )]
     config: PathBuf,
+    #[clap(short, long, help = "")]
+    private_key: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct StateBridgeConfig {
     name: String, //TODO: make this optional
     l1_state_bridge: String,
-    l2_world_id_address: String,
+    l2_world_id: String,
     l2_rpc_endpoint: String,
     relaying_period_seconds: Duration,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Config {
-    rpc_endpoint: String,
-    world_id_address: String,
+    l1_rpc_endpoint: String,
+    world_id_address: H160,
     datadog: bool,
     block_confirmations: usize,
     state_bridge: Vec<StateBridgeConfig>,
@@ -60,52 +63,31 @@ async fn main() -> eyre::Result<()> {
     let contents = fs::read_to_string(&opts.config)?;
     let config: Config = toml::from_str(&contents)?;
 
-    if opts.datadog {
+    if config.datadog {
         init_datadog_subscriber(SERVICE_NAME, Level::INFO);
     } else {
         init_subscriber(Level::INFO);
     }
 
-    spawn_state_bridge_service(
-        config.rpc_endpoint,
-        config.private_key,
-        config.world_id_address,
-        config.state_bridges,
-    )
-    .await?;
-
-    shutdown_tracer_provider();
-
-    Ok(())
-}
-
-async fn spawn_state_bridge_service(
-    rpc_url: String,
-    private_key: String,
-    world_id_address: H160,
-    bridge_configs: Vec<BridgeConfig>,
-    relaying_period: Duration,
-    block_confirmations: usize,
-) -> eyre::Result<()> {
-    let provider = Provider::<Http>::try_from(rpc_url)
-        .expect("failed to initialize Http provider");
-
-    let chain_id = provider.get_chainid().await?.as_u64();
-
-    let wallet = private_key.parse::<LocalWallet>()?.with_chain_id(chain_id);
-    let wallet_address = wallet.address();
-
-    let signer_middleware = SignerMiddleware::new(provider, wallet);
-    let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
-    let middleware = Arc::new(nonce_manager_middleware);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let l1_middleware =
+        initialize_l1_middleware(&config.l1_rpc_endpoint, wallet.clone())
+            .await?;
 
     let mut state_bridge_service =
-        StateBridgeService::new(world_id_address, middleware).await?;
+        StateBridgeService::new(config.world_id_address, l1_middleware.clone())
+            .await?;
 
-    let wallet = private_key
-        .parse::<LocalWallet>()
-        .expect("couldn't instantiate wallet from private key");
+    for bridge_config in config.state_bridge {
+        let state_bridge = StateBridge::new_from_parts(
+            bridge_config.l1_state_bridge,
+            l1_middleware.clone(),
+            bridge_config.relaying_period_seconds,
+            config.block_confirmations,
+        )?;
+
+        state_bridge_service.add_state_bridge(state_bridge);
+    }
 
     for bridge_config in bridge_configs {
         let BridgeConfig {
@@ -146,11 +128,26 @@ async fn spawn_state_bridge_service(
         result??;
     }
 
+    shutdown_tracer_provider();
+
     Ok(())
 }
 
-pub async fn initialize_l1_middleware() {
-    todo!()
+pub async fn initialize_l1_middleware(
+    rpc_endpoint: &str,
+    wallet: LocalWallet,
+) -> eyre::Result<
+    Arc<NonceManagerMiddleware<SignerMiddleware<Provider<Http>, LocalWallet>>>,
+> {
+    let provider = Provider::<Http>::try_from(rpc_endpoint)?;
+    let chain_id = provider.get_chainid().await?.as_u64();
+    let wallet = wallet.with_chain_id(chain_id);
+    let wallet_address = wallet.address();
+    let signer_middleware = SignerMiddleware::new(provider, wallet);
+    let nonce_manager_middleware =
+        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+
+    Ok(Arc::new(nonce_manager_middleware))
 }
 
 pub async fn initialize_l2_middleware(

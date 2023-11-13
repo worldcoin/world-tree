@@ -18,9 +18,9 @@ use crate::tree::Hash;
 /// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
 pub struct StateBridge<M: Middleware + 'static> {
     /// Interface for the `StateBridge` contract
-    pub state_bridge: IStateBridge<M>,
+    pub l1_state_bridge: IStateBridge<M>,
     /// Interface for the `BridgedWorldID` contract
-    pub bridged_world_id: IBridgedWorldID<M>,
+    pub l2_world_id: IBridgedWorldID<M>,
     /// Time delay between `propagateRoot()` transactions
     pub relaying_period: Duration,
     /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
@@ -30,19 +30,19 @@ pub struct StateBridge<M: Middleware + 'static> {
 impl<M: Middleware> StateBridge<M> {
     /// # Arguments
     ///
-    /// * state_bridge - Interface to the StateBridge smart contract.
-    /// * bridged_world_id - Interface to the BridgedWorldID smart contract.
+    /// * l1_state_bridge - Interface to the StateBridge smart contract.
+    /// * l2_world_id - Interface to the BridgedWorldID smart contract.
     /// * relaying_period - Duration between successive propagateRoot() invocations.
     /// * block_confirmations - Number of block confirmations required to consider a propagateRoot() transaction as finalized.
     pub fn new(
-        state_bridge: IStateBridge<M>,
-        bridged_world_id: IBridgedWorldID<M>,
+        l1_state_bridge: IStateBridge<M>,
+        l2_world_id: IBridgedWorldID<M>,
         relaying_period: Duration,
         block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
         Ok(Self {
-            state_bridge,
-            bridged_world_id,
+            l1_state_bridge,
+            l2_world_id,
             relaying_period,
             block_confirmations,
         })
@@ -50,31 +50,26 @@ impl<M: Middleware> StateBridge<M> {
 
     /// # Arguments
     ///
-    /// * `bridge_address` - Address of the StateBridge contract.
-    /// * `canonical_middleware` - Middleware for interacting with the chain where StateBridge is deployed.
-    /// * `bridged_world_id_address` - Address of the BridgedWorldID contract.
-    /// * `derived_middleware` - Middleware for interacting with the chain where BridgedWorldID is deployed.
+    /// * `l1_state_bridge` - Address of the StateBridge contract.
+    /// * `l1_middleware` - Middleware for interacting with the chain where StateBridge is deployed.
+    /// * `l2_world_id` - Address of the BridgedWorldID contract.
+    /// * `l2_middleware` - Middleware for interacting with the chain where BridgedWorldID is deployed.
     /// * `relaying_period` - Duration between `propagateRoot()` transactions.
     /// * `block_confirmations` - Number of block confirmations before a`propagateRoot()` transaction is considered finalized.
     pub fn new_from_parts(
-        bridge_address: H160,
-        canonical_middleware: Arc<M>,
-        bridged_world_id_address: H160,
-        derived_middleware: Arc<M>,
+        l1_state_bridge: H160,
+        l1_middleware: Arc<M>,
+        l2_world_id: H160,
+        l2_middleware: Arc<M>,
         relaying_period: Duration,
         block_confirmations: usize,
     ) -> Result<Self, StateBridgeError<M>> {
-        let state_bridge =
-            IStateBridge::new(bridge_address, canonical_middleware);
-
-        let bridged_world_id = IBridgedWorldID::new(
-            bridged_world_id_address,
-            derived_middleware.clone(),
-        );
+        let l1_state_bridge = IStateBridge::new(l1_state_bridge, l1_middleware);
+        let l2_world_id = IBridgedWorldID::new(l2_world_id, l2_middleware);
 
         Ok(Self {
-            state_bridge,
-            bridged_world_id,
+            l1_state_bridge,
+            l2_world_id,
             relaying_period,
             block_confirmations,
         })
@@ -90,16 +85,16 @@ impl<M: Middleware> StateBridge<M> {
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
     ) -> JoinHandle<Result<(), StateBridgeError<M>>> {
-        let bridged_world_id = self.bridged_world_id.clone();
-        let state_bridge = self.state_bridge.clone();
+        let l2_world_id = self.l2_world_id.clone();
+        let l1_state_bridge = self.l1_state_bridge.clone();
         let relaying_period = self.relaying_period;
         let block_confirmations = self.block_confirmations;
 
-        let bridged_world_id_address = bridged_world_id.address();
-        let state_bridge_address = state_bridge.address();
+        let l2_world_id_address = l2_world_id.address();
+        let l1_state_bridge_address = l1_state_bridge.address();
         tracing::info!(
-            ?bridged_world_id_address,
-            ?state_bridge_address,
+            ?l2_world_id_address,
+            ?l1_state_bridge_address,
             ?relaying_period,
             ?block_confirmations,
             "Spawning bridge"
@@ -132,7 +127,7 @@ impl<M: Middleware> StateBridge<M> {
                     tracing::info!("Relaying period elapsed");
 
                     let latest_bridged_root = Uint::from_limbs(
-                        bridged_world_id.latest_root().call().await?.0,
+                        l2_world_id.latest_root().call().await?.0,
                     );
 
                     if latest_root != latest_bridged_root {
@@ -142,7 +137,7 @@ impl<M: Middleware> StateBridge<M> {
                             "Propagating root"
                         );
 
-                        state_bridge
+                        l1_state_bridge
                             .propagate_root()
                             .send()
                             .await?
