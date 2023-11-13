@@ -33,9 +33,13 @@ struct Opts {
         help = "Path to the TOML state bridge service config file"
     )]
     config: PathBuf,
-    #[clap(short, long, help = "")]
+    #[clap(
+        short,
+        long,
+        help = "Private key for account used to send `propagateRoot()` txs"
+    )]
     private_key: String,
-    #[clap(short, long, help = "")]
+    #[clap(short, long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
 }
 
