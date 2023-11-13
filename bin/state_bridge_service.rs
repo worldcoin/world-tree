@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,9 +16,8 @@ use ethers::providers::Middleware;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use opentelemetry::global::shutdown_tracer_provider;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use tracing::Level;
-use world_tree::abi::{IBridgedWorldID, IStateBridge};
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;
 
@@ -39,7 +39,9 @@ struct Opts {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct StateBridgeConfig {
+    #[serde(deserialize_with = "deserialize_h160")]
     l1_state_bridge: H160,
+    #[serde(deserialize_with = "deserialize_h160")]
     l2_world_id: H160,
     l2_rpc_endpoint: String,
     relaying_period_seconds: Duration,
@@ -48,7 +50,8 @@ struct StateBridgeConfig {
 #[derive(Deserialize, Serialize, Debug)]
 struct Config {
     l1_rpc_endpoint: String,
-    world_id_address: H160,
+    #[serde(deserialize_with = "deserialize_h160")]
+    l1_world_id: H160,
     datadog: bool,
     block_confirmations: usize,
     state_bridge: Vec<StateBridgeConfig>,
@@ -74,7 +77,7 @@ async fn main() -> eyre::Result<()> {
             .await?;
 
     let mut state_bridge_service =
-        StateBridgeService::new(config.world_id_address, l1_middleware.clone())
+        StateBridgeService::new(config.l1_world_id, l1_middleware.clone())
             .await?;
 
     for bridge_config in config.state_bridge {
@@ -148,4 +151,12 @@ pub async fn initialize_l2_middleware(
     let l2_middleware = Arc::new(nonce_manager_middleware);
 
     Ok(l2_middleware)
+}
+
+fn deserialize_h160<'de, D>(deserializer: D) -> Result<H160, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    H160::from_str(&s).map_err(de::Error::custom)
 }

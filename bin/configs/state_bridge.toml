@@ -1,6 +1,6 @@
 
 l1_rpc_endpoint = "http://your_rpc_endpoint.com"
-world_id_address = "0x00"
+l1_world_id = "0x00"
 block_confirmations = 5
 
 
