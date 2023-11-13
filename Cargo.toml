@@ -41,4 +41,4 @@ path = "bin/tree_availability_service.rs"
 
 [[bin]]
 name = "state-bridge-service"
-path = "bin/state_bridge_service.rs"
+path = "bin/state_bridge_service/main.rs"

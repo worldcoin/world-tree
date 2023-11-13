@@ -23,7 +23,7 @@ use world_tree::state_bridge::StateBridge;
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",
-    about = "The state bridge service listens to root changes from the WorldIdIdentityManager and propagates them to each of the corresponding Layer 2s specified in the configuration file."
+    about = "The state bridge service listens to root changes from the `WorldIdIdentityManager` and propagates them to each of the corresponding Layer 2s specified in the configuration file."
 )]
 struct Opts {
     #[clap(
@@ -32,52 +32,24 @@ struct Opts {
         help = "Path to the TOML state bridge service config file"
     )]
     config: PathBuf,
-
-    #[clap(long, help = "Enable datadog backend for instrumentation")]
-    datadog: bool,
 }
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-struct BridgeConfig {
-    name: String, //TODO: do we need this where do we use it?
-    state_bridge_address: Address,
-    bridged_world_id_address: Address,
-    bridged_rpc_url: String,
-}
-
-//TODO: lets update this to be a yaml file and then we can do something like the following:
-// rpc_url: ""
-// private_key: ""
-// world_id_address: ""
-// block_confirmations: ""
-// state_bridges:
-//   optimism:
-//      state_bridge_address: ""
-//      bridged_world_id_address: ""
-//      bridged_rpc_url: ""
-//      relaying_period_seconds: 5
-//
-//   arbitrum:
-//      state_bridge_address: ""
-//      bridged_world_id_address: ""
-//      bridged_rpc_url: ""
-//      relaying_period_seconds: 5
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-struct Config {
-    // RPC URL for the HTTP provider (World ID IdentityManager)
-    rpc_url: String,
-    // Private key to use for the middleware signer
-    private_key: String,
-    // `WorldIDIdentityManager` contract address
-    world_id_address: H160,
-    // List of `StateBridge` and `BridgedWorldID` pair addresses
-    bridge_configs: Vec<BridgeConfig>,
-    // `propagateRoot()` call period time in seconds
+struct StateBridgeConfig {
+    name: String, //TODO: make this optional
+    l1_state_bridge: String,
+    l2_world_id_address: String,
+    l2_rpc_endpoint: String,
     relaying_period_seconds: Duration,
-    // Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
-    // contract
-    block_confirmations: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct Config {
+    rpc_endpoint: String,
+    world_id_address: String,
+    datadog: bool,
+    block_confirmations: usize,
+    state_bridge: Vec<StateBridgeConfig>,
 }
 
 const SERVICE_NAME: &str = "state-bridge-service";
@@ -95,12 +67,10 @@ async fn main() -> eyre::Result<()> {
     }
 
     spawn_state_bridge_service(
-        config.rpc_url,
+        config.rpc_endpoint,
         config.private_key,
         config.world_id_address,
-        config.bridge_configs,
-        config.relaying_period_seconds,
-        config.block_confirmations.unwrap_or(0),
+        config.state_bridges,
     )
     .await?;
 
@@ -177,6 +147,10 @@ async fn spawn_state_bridge_service(
     }
 
     Ok(())
+}
+
+pub async fn initialize_l1_middleware() {
+    todo!()
 }
 
 pub async fn initialize_l2_middleware(
