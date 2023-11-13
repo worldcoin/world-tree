@@ -35,6 +35,8 @@ struct Opts {
     config: PathBuf,
     #[clap(short, long, help = "")]
     private_key: String,
+    #[clap(short, long, help = "")]
+    datadog: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -52,7 +54,6 @@ struct Config {
     l1_rpc_endpoint: String,
     #[serde(deserialize_with = "deserialize_h160")]
     l1_world_id: H160,
-    datadog: bool,
     block_confirmations: usize,
     state_bridge: Vec<StateBridgeConfig>,
 }
@@ -65,7 +66,7 @@ async fn main() -> eyre::Result<()> {
     let contents = fs::read_to_string(&opts.config)?;
     let config: Config = toml::from_str(&contents)?;
 
-    if config.datadog {
+    if opts.datadog {
         init_datadog_subscriber(SERVICE_NAME, Level::INFO);
     } else {
         init_subscriber(Level::INFO);
