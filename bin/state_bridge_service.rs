@@ -4,20 +4,21 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
 use clap::Parser;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
-use ethers::abi::Address;
 use ethers::prelude::{
     Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
     SignerMiddleware, H160,
 };
 use ethers::providers::Middleware;
+use ethers_throttle::ThrottledProvider;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use governor::Jitter;
 use opentelemetry::global::shutdown_tracer_provider;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use tracing::Level;
+use url::Url;
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;
 
@@ -43,16 +44,6 @@ struct Opts {
     datadog: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-struct StateBridgeConfig {
-    #[serde(deserialize_with = "deserialize_h160")]
-    l1_state_bridge: H160,
-    #[serde(deserialize_with = "deserialize_h160")]
-    l2_world_id: H160,
-    l2_rpc_endpoint: String,
-    relaying_period_seconds: Duration,
-}
-
 #[derive(Deserialize, Serialize, Debug)]
 struct Config {
     l1_rpc_endpoint: String,
@@ -60,6 +51,19 @@ struct Config {
     l1_world_id: H160,
     block_confirmations: usize,
     state_bridge: Vec<StateBridgeConfig>,
+    throttle: u32,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct StateBridgeConfig {
+    #[serde(deserialize_with = "deserialize_h160")]
+    l1_state_bridge: H160,
+    #[serde(deserialize_with = "deserialize_h160")]
+    l2_world_id: H160,
+    l2_rpc_endpoint: String,
+    #[serde(deserialize_with = "deserialize_duration_from_seconds")]
+    relaying_period_seconds: Duration,
+    throttle: u32,
 }
 
 const SERVICE_NAME: &str = "state-bridge-service";
@@ -77,9 +81,12 @@ async fn main() -> eyre::Result<()> {
     }
 
     let wallet = opts.private_key.parse::<LocalWallet>()?;
-    let l1_middleware =
-        initialize_l1_middleware(&config.l1_rpc_endpoint, wallet.clone())
-            .await?;
+    let l1_middleware = initialize_l1_middleware(
+        &config.l1_rpc_endpoint,
+        config.throttle,
+        wallet.clone(),
+    )
+    .await?;
 
     let mut state_bridge_service =
         StateBridgeService::new(config.l1_world_id, l1_middleware.clone())
@@ -88,6 +95,7 @@ async fn main() -> eyre::Result<()> {
     for bridge_config in config.state_bridge {
         let l2_middleware = initialize_l2_middleware(
             &bridge_config.l2_rpc_endpoint,
+            bridge_config.throttle,
             wallet.clone(),
         )
         .await?;
@@ -121,11 +129,17 @@ async fn main() -> eyre::Result<()> {
 
 pub async fn initialize_l1_middleware(
     rpc_endpoint: &str,
+    throttle: u32,
     wallet: LocalWallet,
 ) -> eyre::Result<
-    Arc<NonceManagerMiddleware<SignerMiddleware<Provider<Http>, LocalWallet>>>,
+    Arc<
+        NonceManagerMiddleware<
+            SignerMiddleware<Provider<ThrottledProvider<Http>>, LocalWallet>,
+        >,
+    >,
 > {
-    let provider = Provider::<Http>::try_from(rpc_endpoint)?;
+    let provider = initialize_throttled_provider(rpc_endpoint, throttle)?;
+
     let chain_id = provider.get_chainid().await?.as_u64();
     let wallet = wallet.with_chain_id(chain_id);
     let wallet_address = wallet.address();
@@ -138,11 +152,17 @@ pub async fn initialize_l1_middleware(
 
 pub async fn initialize_l2_middleware(
     l2_rpc_endpoint: &str,
+    throttle: u32,
     wallet: LocalWallet,
 ) -> eyre::Result<
-    Arc<NonceManagerMiddleware<SignerMiddleware<Provider<Http>, LocalWallet>>>,
+    Arc<
+        NonceManagerMiddleware<
+            SignerMiddleware<Provider<ThrottledProvider<Http>>, LocalWallet>,
+        >,
+    >,
 > {
-    let l2_provider = Provider::<Http>::try_from(l2_rpc_endpoint)?;
+    let l2_provider = initialize_throttled_provider(l2_rpc_endpoint, throttle)?;
+
     let chain_id = l2_provider.get_chainid().await?.as_u64();
 
     let wallet = wallet.with_chain_id(chain_id);
@@ -158,10 +178,37 @@ pub async fn initialize_l2_middleware(
     Ok(l2_middleware)
 }
 
+pub fn initialize_throttled_provider(
+    rpc_endpoint: &str,
+    throttle: u32,
+) -> eyre::Result<Provider<ThrottledProvider<Http>>> {
+    let http_provider = Http::new(Url::parse(&rpc_endpoint)?);
+    let throttled_http_provider = ThrottledProvider::new(
+        http_provider,
+        throttle,
+        Some(Jitter::new(
+            Duration::from_millis(10),
+            Duration::from_millis(100),
+        )),
+    );
+
+    Ok(Provider::new(throttled_http_provider))
+}
+
 fn deserialize_h160<'de, D>(deserializer: D) -> Result<H160, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
     H160::from_str(&s).map_err(de::Error::custom)
+}
+
+fn deserialize_duration_from_seconds<'de, D>(
+    deserializer: D,
+) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let secs = u64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(secs))
 }
