@@ -18,7 +18,7 @@ governor = "0.6.0"
 hex = "0.4.3"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 metrics = "0.21.1"
-opentelemetry = "0.20.0"
+opentelemetry = "0.21.0"
 ruint = "1.10.1"
 semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
     "depth_20",
