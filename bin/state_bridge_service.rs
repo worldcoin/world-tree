@@ -154,28 +154,11 @@ pub async fn initialize_l2_middleware(
     l2_rpc_endpoint: &str,
     throttle: u32,
     wallet: LocalWallet,
-) -> eyre::Result<
-    Arc<
-        NonceManagerMiddleware<
-            SignerMiddleware<Provider<ThrottledProvider<Http>>, LocalWallet>,
-        >,
-    >,
-> {
-    let l2_provider = initialize_throttled_provider(l2_rpc_endpoint, throttle)?;
-
-    let chain_id = l2_provider.get_chainid().await?.as_u64();
-
-    let wallet = wallet.with_chain_id(chain_id);
-    let wallet_address = wallet.address();
-
-    let signer_middleware = SignerMiddleware::new(l2_provider, wallet);
-
-    let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
-
-    let l2_middleware = Arc::new(nonce_manager_middleware);
-
-    Ok(l2_middleware)
+) -> eyre::Result<Arc<Provider<ThrottledProvider<Http>>>> {
+    Ok(Arc::new(initialize_throttled_provider(
+        l2_rpc_endpoint,
+        throttle,
+    ))?)
 }
 
 pub fn initialize_throttled_provider(

@@ -12,21 +12,25 @@ use crate::abi::{IWorldIDIdentityManager, TreeChangedFilter};
 use crate::tree::Hash;
 
 /// Monitors the world tree root for changes and propagates new roots to target Layer 2s
-pub struct StateBridgeService<M: Middleware + 'static> {
+pub struct StateBridgeService<
+    L1M: Middleware + 'static,
+    L2M: Middleware + 'static,
+> {
     /// Monitors `TreeChanged` events from `WorldIDIdentityManager` and broadcasts new roots to through the `root_tx`.
-    pub world_id_identity_manager: IWorldIDIdentityManager<M>,
+    pub world_id_identity_manager: IWorldIDIdentityManager<L1M>,
     /// Vec of `StateBridge`, responsible for root propagation to target Layer 2s.
-    pub state_bridges: Vec<StateBridge<M>>,
+    pub state_bridges: Vec<StateBridge<L1M, L2M>>,
 }
 
-impl<M> StateBridgeService<M>
+impl<L1M, L2M> StateBridgeService<L1M, L2M>
 where
-    M: Middleware,
+    L1M: Middleware,
+    L2M: Middleware,
 {
     pub async fn new(
         world_tree_address: H160,
-        middleware: Arc<M>,
-    ) -> Result<Self, StateBridgeError<M>> {
+        middleware: Arc<L1M>,
+    ) -> Result<Self, StateBridgeError<L1M, L2M>> {
         let world_id_identity_manager = IWorldIDIdentityManager::new(
             world_tree_address,
             middleware.clone(),
@@ -38,7 +42,7 @@ where
     }
 
     /// Adds a `StateBridge` to orchestrate root propagation to a target Layer 2.
-    pub fn add_state_bridge(&mut self, state_bridge: StateBridge<M>) {
+    pub fn add_state_bridge(&mut self, state_bridge: StateBridge<L1M, L2M>) {
         self.state_bridges.push(state_bridge);
     }
 
@@ -48,7 +52,7 @@ where
     pub fn listen_for_new_roots(
         &self,
         root_tx: tokio::sync::broadcast::Sender<Hash>,
-    ) -> JoinHandle<Result<(), StateBridgeError<M>>> {
+    ) -> JoinHandle<Result<(), StateBridgeError<L1M, L2M>>> {
         let world_id_identity_manager = self.world_id_identity_manager.clone();
 
         let world_id_identity_manager_address =
@@ -60,7 +64,11 @@ where
             // Event emitted when insertions or deletions are made to the tree
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
 
-            let mut event_stream = filter.stream().await?.with_meta();
+            let mut event_stream = filter
+                .stream()
+                .await
+                .map_err(StateBridgeError::L1ContractError)?
+                .with_meta();
 
             // Listen to a stream of events, when a new event is received, update the root and block number
             while let Some(Ok((event, _))) = event_stream.next().await {
@@ -77,8 +85,8 @@ where
     pub fn spawn(
         &mut self,
     ) -> Result<
-        Vec<JoinHandle<Result<(), StateBridgeError<M>>>>,
-        StateBridgeError<M>,
+        Vec<JoinHandle<Result<(), StateBridgeError<L1M, L2M>>>>,
+        StateBridgeError<L1M, L2M>,
     > {
         if self.state_bridges.is_empty() {
             return Err(StateBridgeError::BridgesNotInitialized);

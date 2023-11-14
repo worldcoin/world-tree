@@ -1,9 +1,11 @@
 pub mod error;
 pub mod service;
+pub mod transaction;
 
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
+use ethers::signers::{LocalWallet, Signer};
 use ethers::types::H160;
 use ruint::Uint;
 use tokio::select;
@@ -12,22 +14,27 @@ use tokio::time::{Duration, Instant};
 use tracing::instrument;
 
 use self::error::StateBridgeError;
-use crate::abi::{IBridgedWorldID, IStateBridge};
+use crate::abi::{self, IBridgedWorldID, IStateBridge};
 use crate::tree::Hash;
 
 /// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
-pub struct StateBridge<M: Middleware + 'static> {
-    /// Interface for the `StateBridge` contract
-    pub l1_state_bridge: IStateBridge<M>,
+pub struct StateBridge<L1M: Middleware + 'static, L2M: Middleware + 'static> {
+    //TODO:
+    l1_state_bridge: H160,
+    wallet: LocalWallet,
+    //TODO:
+    l1_middleware: Arc<L1M>,
     /// Interface for the `BridgedWorldID` contract
-    pub l2_world_id: IBridgedWorldID<M>,
+    pub l2_world_id: IBridgedWorldID<L2M>,
     /// Time delay between `propagateRoot()` transactions
     pub relaying_period: Duration,
     /// The number of block confirmations before a `propagateRoot()` transaction is considered finalized
     pub block_confirmations: usize,
 }
 
-impl<M: Middleware> StateBridge<M> {
+impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
+    //TODO: update
+
     /// # Arguments
     ///
     /// * l1_state_bridge - Interface to the StateBridge smart contract.
@@ -35,19 +42,24 @@ impl<M: Middleware> StateBridge<M> {
     /// * relaying_period - Duration between successive propagateRoot() invocations.
     /// * block_confirmations - Number of block confirmations required to consider a propagateRoot() transaction as finalized.
     pub fn new(
-        l1_state_bridge: IStateBridge<M>,
-        l2_world_id: IBridgedWorldID<M>,
+        l1_state_bridge: H160,
+        wallet: LocalWallet,
+        l1_middleware: Arc<L1M>,
+        l2_world_id: IBridgedWorldID<L2M>,
         relaying_period: Duration,
         block_confirmations: usize,
-    ) -> Result<Self, StateBridgeError<M>> {
+    ) -> Result<Self, StateBridgeError<L1M, L2M>> {
         Ok(Self {
             l1_state_bridge,
+            wallet,
+            l1_middleware,
             l2_world_id,
             relaying_period,
             block_confirmations,
         })
     }
 
+    //TODO: update
     /// # Arguments
     ///
     /// * `l1_state_bridge` - Address of the StateBridge contract.
@@ -58,17 +70,19 @@ impl<M: Middleware> StateBridge<M> {
     /// * `block_confirmations` - Number of block confirmations before a`propagateRoot()` transaction is considered finalized.
     pub fn new_from_parts(
         l1_state_bridge: H160,
-        l1_middleware: Arc<M>,
+        wallet: LocalWallet,
+        l1_middleware: Arc<L1M>,
         l2_world_id: H160,
-        l2_middleware: Arc<M>,
+        l2_middleware: Arc<L2M>,
         relaying_period: Duration,
         block_confirmations: usize,
-    ) -> Result<Self, StateBridgeError<M>> {
-        let l1_state_bridge = IStateBridge::new(l1_state_bridge, l1_middleware);
+    ) -> Result<Self, StateBridgeError<L1M, L2M>> {
         let l2_world_id = IBridgedWorldID::new(l2_world_id, l2_middleware);
 
         Ok(Self {
             l1_state_bridge,
+            wallet,
+            l1_middleware,
             l2_world_id,
             relaying_period,
             block_confirmations,
@@ -84,24 +98,33 @@ impl<M: Middleware> StateBridge<M> {
     pub fn spawn(
         &self,
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
-    ) -> JoinHandle<Result<(), StateBridgeError<M>>> {
+    ) -> JoinHandle<Result<(), StateBridgeError<L1M, L2M>>> {
         let l2_world_id = self.l2_world_id.clone();
         let l1_state_bridge = self.l1_state_bridge.clone();
         let relaying_period = self.relaying_period;
         let block_confirmations = self.block_confirmations;
-
+        let wallet = self.wallet.clone();
         let l2_world_id_address = l2_world_id.address();
-        let l1_state_bridge_address = l1_state_bridge.address();
+        let middleware = self.l1_middleware.clone();
+
         tracing::info!(
             ?l2_world_id_address,
-            ?l1_state_bridge_address,
+            ?l1_state_bridge,
             ?relaying_period,
             ?block_confirmations,
             "Spawning bridge"
         );
 
         tokio::spawn(async move {
-            let mut latest_root = Hash::ZERO;
+            let mut latest_root = Uint::from_limbs(
+                l2_world_id
+                    .latest_root()
+                    .call()
+                    .await
+                    .map_err(StateBridgeError::L2ContractError)?
+                    .0,
+            );
+
             let mut last_propagation = Instant::now();
 
             loop {
@@ -127,7 +150,12 @@ impl<M: Middleware> StateBridge<M> {
                     tracing::info!("Relaying period elapsed");
 
                     let latest_bridged_root = Uint::from_limbs(
-                        l2_world_id.latest_root().call().await?.0,
+                        l2_world_id
+                            .latest_root()
+                            .call()
+                            .await
+                            .map_err(StateBridgeError::L2ContractError)?
+                            .0,
                     );
 
                     if latest_root != latest_bridged_root {
@@ -137,12 +165,32 @@ impl<M: Middleware> StateBridge<M> {
                             "Propagating root"
                         );
 
-                        l1_state_bridge
-                            .propagate_root()
-                            .send()
-                            .await?
-                            .confirmations(block_confirmations)
+                        let calldata = abi::ISTATEBRIDGE_ABI
+                            .function("propagateRoot")?
+                            .encode_input(&vec![])?;
+
+                        let tx =
+                            transaction::fill_and_simulate_eip1559_transaction(
+                                calldata.into(),
+                                l1_state_bridge,
+                                wallet.address(),
+                                wallet.chain_id(),
+                                middleware.clone(),
+                            )
                             .await?;
+
+                        let tx_hash = transaction::sign_and_send_transaction(
+                            tx,
+                            &wallet,
+                            middleware.clone(),
+                        )
+                        .await?;
+
+                        transaction::wait_for_transaction_receipt(
+                            tx_hash,
+                            middleware.clone(),
+                        )
+                        .await?;
 
                         last_propagation = Instant::now();
                     } else {
