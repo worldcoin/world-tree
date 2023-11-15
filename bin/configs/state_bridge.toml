@@ -1,17 +1,27 @@
-
-l1_rpc_endpoint = ""
+# Address of the WorldIDIdentityManager contract on L1
 l1_world_id = "0x78eC127A3716D447F4575E9c834d452E397EE9E1"
-block_confirmations = 5
+l1_rpc_endpoint = ""
+# Request per second limit for rpc endpoint
 throttle = 5
+# Number of block confirmations before considering a `propagateRoot()` tx finalized
+block_confirmations = 3
+# Optional max gas price to use when sending `propagateRoot()` txs
+# max_gas_price = 3000000000
 
 
 # Optimism
 [[state_bridge]]
+# Address of the state bridge contract on L1
 l1_state_bridge = "0x39CcB3b670651a14da8b3835f42924f49C2C5986"
+# Address of the WorldID contract on L2
 l2_world_id = "0x715161DB36C260e4bE7094773785A111D11bC5F9"
+# RPC endpoint for L2
 l2_rpc_endpoint = ""
-relaying_period_seconds = 10
+# Request per second limit for rpc endpoint
 throttle = 5
+# Minimum time between `propagateRoot()` transactions
+relaying_period_seconds = 1800
+
 
 
 # Polygon
@@ -19,5 +29,5 @@ throttle = 5
 l1_state_bridge = "0x9e4984bdE7F17aB422Cc4254C08074b3c42160d1"
 l2_world_id = "0xCDfDF72065493bDDb2131478c89C1D5482BD1dF6"
 l2_rpc_endpoint = ""
-relaying_period_seconds = 10
 throttle = 5
+relaying_period_seconds = 1800
