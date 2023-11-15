@@ -177,7 +177,7 @@ pub fn initialize_throttled_provider(
     rpc_endpoint: &str,
     throttle: u32,
 ) -> eyre::Result<Provider<ThrottledProvider<Http>>> {
-    let http_provider = Http::new(Url::parse(&rpc_endpoint)?);
+    let http_provider = Http::new(Url::parse(rpc_endpoint)?);
     let throttled_http_provider = ThrottledProvider::new(
         http_provider,
         throttle,

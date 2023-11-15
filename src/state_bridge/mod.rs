@@ -101,7 +101,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
         mut root_rx: tokio::sync::broadcast::Receiver<Hash>,
     ) -> JoinHandle<Result<(), StateBridgeError<L1M, L2M>>> {
         let l2_world_id = self.l2_world_id.clone();
-        let l1_state_bridge = self.l1_state_bridge.clone();
+        let l1_state_bridge = self.l1_state_bridge;
         let relaying_period = self.relaying_period;
         let block_confirmations = self.block_confirmations;
         let wallet = self.wallet.clone();
@@ -191,7 +191,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
     ) -> Result<(), StateBridgeError<L1M, L2M>> {
         let calldata = abi::ISTATEBRIDGE_ABI
             .function("propagateRoot")?
-            .encode_input(&vec![])?;
+            .encode_input(&[])?;
 
         let tx = transaction::fill_and_simulate_eip1559_transaction(
             calldata.into(),
@@ -204,7 +204,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
 
         transaction::sign_and_send_transaction(
             tx,
-            &wallet,
+            wallet,
             block_confirmations,
             l1_middleware,
         )

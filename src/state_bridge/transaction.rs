@@ -20,24 +20,21 @@ pub async fn sign_and_send_transaction<M: Middleware>(
 ) -> Result<TransactionReceipt, TransactionError<M>> {
     tracing::info!("Signing tx");
     let signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
-    loop {
-        tracing::info!("Sending tx");
-        match middleware.send_raw_transaction(signed_tx.clone()).await {
-            Ok(pending_tx) => {
-                let tx_hash = pending_tx.tx_hash();
-                tracing::info!(?tx_hash, "Pending tx");
+    tracing::info!("Sending tx");
+    match middleware.send_raw_transaction(signed_tx.clone()).await {
+        Ok(pending_tx) => {
+            let tx_hash = pending_tx.tx_hash();
+            tracing::info!(?tx_hash, "Pending tx");
 
-                return wait_for_tx_receipt(pending_tx, block_confirmations)
-                    .await;
-            }
-            Err(err) => {
-                let error_string = err.to_string();
-                if error_string.contains("insufficient funds") {
-                    tracing::error!("Insufficient funds");
-                    return Err(TransactionError::InsufficientWalletFunds);
-                } else {
-                    return Err(err).map_err(TransactionError::MiddlewareError);
-                }
+            return wait_for_tx_receipt(pending_tx, block_confirmations).await;
+        }
+        Err(err) => {
+            let error_string = err.to_string();
+            if error_string.contains("insufficient funds") {
+                tracing::error!("Insufficient funds");
+                return Err(TransactionError::InsufficientWalletFunds);
+            } else {
+                return Err(TransactionError::MiddlewareError(err));
             }
         }
     }
