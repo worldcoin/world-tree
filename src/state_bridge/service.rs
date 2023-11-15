@@ -61,7 +61,7 @@ where
 
         let root_tx_clone = root_tx.clone();
         tokio::spawn(async move {
-            //TODO: add some comments as to what this is doing
+            // Get the latest root from the WorldIdIdentityManager and send it through the channel
             let latest_root = world_id_identity_manager
                 .latest_root()
                 .call()
@@ -70,7 +70,7 @@ where
 
             root_tx_clone.send(Uint::from_limbs(latest_root.0))?;
 
-            // Event emitted when insertions or deletions are made to the tree
+            // Initialize filter to listen for tree changed events
             let filter = world_id_identity_manager.event::<TreeChangedFilter>();
 
             let mut event_stream = filter
@@ -79,7 +79,7 @@ where
                 .map_err(StateBridgeError::L1ContractError)?
                 .with_meta();
 
-            // Listen to a stream of events, when a new event is received, send the new root through the channel
+            // When a new event is received, send the new root through the channel
             while let Some(Ok((event, _))) = event_stream.next().await {
                 let new_root = event.post_root.0;
                 tracing::info!(?new_root, "New root from chain");

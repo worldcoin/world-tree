@@ -20,10 +20,11 @@ use crate::tree::Hash;
 
 /// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
 pub struct StateBridge<L1M: Middleware + 'static, L2M: Middleware + 'static> {
-    //TODO:
+    // Address for the state bridge contract on layer 1
     l1_state_bridge: H160,
+    // Wallet responsible for sending `propagateRoot` transactions
     wallet: LocalWallet,
-    //TODO:
+    // Middleware to interact with layer 1
     l1_middleware: Arc<L1M>,
     /// Interface for the `BridgedWorldID` contract
     pub l2_world_id: IBridgedWorldID<L2M>,
@@ -34,11 +35,11 @@ pub struct StateBridge<L1M: Middleware + 'static, L2M: Middleware + 'static> {
 }
 
 impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
-    //TODO: update
-
     /// # Arguments
     ///
-    /// * l1_state_bridge - Interface to the StateBridge smart contract.
+    /// * l1_state_bridge - Address for the state bridge contract on layer 1.
+    /// * wallet - Wallet responsible for sending `propagateRoot` transactions.
+    /// * l1_middleware - Middleware to interact with layer 1.
     /// * l2_world_id - Interface to the BridgedWorldID smart contract.
     /// * relaying_period - Duration between successive propagateRoot() invocations.
     /// * block_confirmations - Number of block confirmations required to consider a propagateRoot() transaction as finalized.
@@ -60,13 +61,12 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
         })
     }
 
-    //TODO: update
     /// # Arguments
     ///
-    /// * `l1_state_bridge` - Address of the StateBridge contract.
-    /// * `l1_middleware` - Middleware for interacting with the chain where StateBridge is deployed.
+    /// * l1_state_bridge - Address for the state bridge contract on layer 1.
+    /// * l1_middleware - Middleware to interact with layer 1.
     /// * `l2_world_id` - Address of the BridgedWorldID contract.
-    /// * `l2_middleware` - Middleware for interacting with the chain where BridgedWorldID is deployed.
+    /// * `l2_middleware` - Middleware to interact with layer 2.
     /// * `relaying_period` - Duration between `propagateRoot()` transactions.
     /// * `block_confirmations` - Number of block confirmations before a`propagateRoot()` transaction is considered finalized.
     pub fn new_from_parts(

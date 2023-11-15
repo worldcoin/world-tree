@@ -13,13 +13,13 @@ use super::error::TransactionError;
 //Signs and sends transaction, bumps gas if necessary
 #[instrument(skip(wallet_key, block_confirmations, middleware))]
 pub async fn sign_and_send_transaction<M: Middleware>(
-    mut tx: TypedTransaction,
+    tx: TypedTransaction,
     wallet_key: &LocalWallet,
     block_confirmations: usize,
     middleware: Arc<M>,
 ) -> Result<TransactionReceipt, TransactionError<M>> {
     tracing::info!("Signing tx");
-    let mut signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
+    let signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
     loop {
         tracing::info!("Sending tx");
         match middleware.send_raw_transaction(signed_tx.clone()).await {
@@ -32,31 +32,7 @@ pub async fn sign_and_send_transaction<M: Middleware>(
             }
             Err(err) => {
                 let error_string = err.to_string();
-
-                //TODO: this can be alleviated with gasescalator middleware
-                if error_string.contains("transaction underpriced") {
-                    let eip1559_tx = tx.as_eip1559_mut().unwrap();
-                    let updated_max_priority_fee_per_gas =
-                        eip1559_tx.max_priority_fee_per_gas.unwrap() * 150
-                            / 100;
-
-                    let updated_max_fee_per_gas =
-                        eip1559_tx.max_fee_per_gas.unwrap() * 150 / 100;
-
-                    tracing::warn!(
-                        ?updated_max_priority_fee_per_gas,
-                        ?updated_max_fee_per_gas,
-                        "Tx underpriced, bumping gas"
-                    );
-
-                    eip1559_tx.max_priority_fee_per_gas =
-                        Some(updated_max_priority_fee_per_gas);
-                    eip1559_tx.max_fee_per_gas = Some(updated_max_fee_per_gas);
-
-                    tx = eip1559_tx.to_owned().into();
-
-                    signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
-                } else if error_string.contains("insufficient funds") {
+                if error_string.contains("insufficient funds") {
                     tracing::error!("Insufficient funds");
                     return Err(TransactionError::InsufficientWalletFunds);
                 } else {
