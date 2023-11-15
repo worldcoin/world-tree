@@ -2,6 +2,7 @@ pub mod error;
 pub mod service;
 pub mod transaction;
 
+use std::ops::Sub;
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
@@ -14,7 +15,7 @@ use tokio::time::{Duration, Instant};
 use tracing::instrument;
 
 use self::error::StateBridgeError;
-use crate::abi::{self, IBridgedWorldID, IStateBridge};
+use crate::abi::{self, IBridgedWorldID};
 use crate::tree::Hash;
 
 /// The `StateBridge` is responsible for monitoring root changes from the `WorldRoot`, propagating the root to the corresponding Layer 2.
@@ -105,7 +106,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
         let block_confirmations = self.block_confirmations;
         let wallet = self.wallet.clone();
         let l2_world_id_address = l2_world_id.address();
-        let middleware = self.l1_middleware.clone();
+        let l1_middleware = self.l1_middleware.clone();
 
         tracing::info!(
             ?l2_world_id_address,
@@ -116,18 +117,16 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
         );
 
         tokio::spawn(async move {
-            // let mut latest_root = Uint::from_limbs(
-            //     l2_world_id
-            //         .latest_root()
-            //         .call()
-            //         .await
-            //         .map_err(StateBridgeError::L2ContractError)?
-            //         .0,
-            // );
+            let mut latest_root = Uint::from_limbs(
+                l2_world_id
+                    .latest_root()
+                    .call()
+                    .await
+                    .map_err(StateBridgeError::L2ContractError)?
+                    .0,
+            );
 
-            let mut latest_root = Hash::ZERO;
-
-            let mut last_propagation = Instant::now();
+            let mut last_propagation = Instant::now().sub(relaying_period);
 
             loop {
                 select! {
@@ -163,25 +162,11 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
                             "Propagating root"
                         );
 
-                        let calldata = abi::ISTATEBRIDGE_ABI
-                            .function("propagateRoot")?
-                            .encode_input(&vec![])?;
-
-                        let tx =
-                            transaction::fill_and_simulate_eip1559_transaction(
-                                calldata.into(),
-                                l1_state_bridge,
-                                wallet.address(),
-                                wallet.chain_id(),
-                                middleware.clone(),
-                            )
-                            .await?;
-
-                        transaction::sign_and_send_transaction(
-                            tx,
+                        Self::propagate_root(
+                            l1_state_bridge,
                             &wallet,
                             block_confirmations,
-                            middleware.clone(),
+                            l1_middleware.clone(),
                         )
                         .await?;
 
@@ -192,5 +177,35 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
                 }
             }
         })
+    }
+
+    pub async fn propagate_root(
+        l1_state_bridge: H160,
+        wallet: &LocalWallet,
+        block_confirmations: usize,
+        l1_middleware: Arc<L1M>,
+    ) -> Result<(), StateBridgeError<L1M, L2M>> {
+        let calldata = abi::ISTATEBRIDGE_ABI
+            .function("propagateRoot")?
+            .encode_input(&vec![])?;
+
+        let tx = transaction::fill_and_simulate_eip1559_transaction(
+            calldata.into(),
+            l1_state_bridge,
+            wallet.address(),
+            wallet.chain_id(),
+            l1_middleware.clone(),
+        )
+        .await?;
+
+        transaction::sign_and_send_transaction(
+            tx,
+            &wallet,
+            block_confirmations,
+            l1_middleware,
+        )
+        .await?;
+
+        Ok(())
     }
 }
