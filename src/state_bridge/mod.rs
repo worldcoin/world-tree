@@ -131,12 +131,12 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
             loop {
                 select! {
                     root = root_rx.recv() => {
-                        tracing::info!(?root, "Root received from rx");
+                        tracing::info!(?l1_state_bridge, ?root, "Root received from rx");
                         latest_root = root?;
                     }
 
                     _ = tokio::time::sleep(relaying_period) => {
-                        tracing::info!("Sleep time elapsed");
+                        tracing::info!(?l1_state_bridge, "Sleep time elapsed");
                     }
                 }
 
@@ -144,7 +144,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
                     Instant::now() - last_propagation;
 
                 if time_since_last_propagation >= relaying_period {
-                    tracing::info!("Relaying period elapsed");
+                    tracing::info!(?l1_state_bridge, "Relaying period elapsed");
 
                     let latest_bridged_root = Uint::from_limbs(
                         l2_world_id
@@ -157,6 +157,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
 
                     if latest_root != latest_bridged_root {
                         tracing::info!(
+                            ?l1_state_bridge,
                             ?latest_root,
                             ?latest_bridged_root,
                             "Propagating root"
@@ -172,7 +173,10 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
 
                         last_propagation = Instant::now();
                     } else {
-                        tracing::info!("Root already propagated");
+                        tracing::info!(
+                            ?l1_state_bridge,
+                            "Root already propagated"
+                        );
                     }
                 }
             }

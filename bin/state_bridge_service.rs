@@ -6,11 +6,14 @@ use std::time::Duration;
 
 use clap::Parser;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
+use ethers::middleware::gas_escalator::{
+    Frequency, GasEscalatorMiddleware, GeometricGasPrice,
+};
 use ethers::prelude::{
-    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
-    SignerMiddleware, H160,
+    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, H160,
 };
 use ethers::providers::Middleware;
+use ethers::types::U256;
 use ethers_throttle::ThrottledProvider;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -52,6 +55,8 @@ struct Config {
     block_confirmations: usize,
     state_bridge: Vec<StateBridgeConfig>,
     throttle: u32,
+    #[serde(deserialize_with = "deserialize_opt_u256", default)]
+    max_gas_price: Option<U256>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -85,6 +90,7 @@ async fn main() -> eyre::Result<()> {
         &config.l1_rpc_endpoint,
         config.throttle,
         wallet.address(),
+        config.max_gas_price,
     )
     .await?;
 
@@ -134,14 +140,27 @@ pub async fn initialize_l1_middleware(
     rpc_endpoint: &str,
     throttle: u32,
     wallet_address: H160,
-) -> eyre::Result<Arc<NonceManagerMiddleware<Provider<ThrottledProvider<Http>>>>>
-{
-    //TODO: add gas escalator middleware and remove the escalator logic within the tx logic
+    max_gas_price: Option<U256>,
+) -> eyre::Result<
+    Arc<
+        GasEscalatorMiddleware<
+            NonceManagerMiddleware<Provider<ThrottledProvider<Http>>>,
+        >,
+    >,
+> {
     let provider = initialize_throttled_provider(rpc_endpoint, throttle)?;
     let nonce_manager_middleware =
         NonceManagerMiddleware::new(provider, wallet_address);
 
-    Ok(Arc::new(nonce_manager_middleware))
+    let geometric_escalator =
+        GeometricGasPrice::new(1.125, 60_u64, max_gas_price);
+    let gas_escalator_middleware = GasEscalatorMiddleware::new(
+        nonce_manager_middleware,
+        geometric_escalator,
+        Frequency::PerBlock,
+    );
+
+    Ok(Arc::new(gas_escalator_middleware))
 }
 
 pub async fn initialize_l2_middleware(
@@ -187,4 +206,19 @@ where
 {
     let secs = u64::deserialize(deserializer)?;
     Ok(Duration::from_secs(secs))
+}
+
+fn deserialize_opt_u256<'de, D>(
+    deserializer: D,
+) -> Result<Option<U256>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = Option::<String>::deserialize(deserializer)?;
+    match s {
+        Some(value) => U256::from_dec_str(&value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
 }

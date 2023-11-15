@@ -6,10 +6,12 @@ use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::{
     Bytes, Eip1559TransactionRequest, TransactionReceipt, H160,
 };
+use tracing::instrument;
 
 use super::error::TransactionError;
 
 //Signs and sends transaction, bumps gas if necessary
+#[instrument(skip(wallet_key, block_confirmations, middleware))]
 pub async fn sign_and_send_transaction<M: Middleware>(
     mut tx: TypedTransaction,
     wallet_key: &LocalWallet,
@@ -65,6 +67,7 @@ pub async fn sign_and_send_transaction<M: Middleware>(
     }
 }
 
+#[instrument(skip(middleware))]
 pub async fn fill_and_simulate_eip1559_transaction<M: Middleware>(
     calldata: Bytes,
     to: H160,
@@ -112,6 +115,7 @@ pub async fn fill_and_simulate_eip1559_transaction<M: Middleware>(
     Ok(tx)
 }
 
+#[instrument]
 pub async fn wait_for_tx_receipt<'a, M: Middleware, P: JsonRpcClient>(
     pending_tx: PendingTransaction<'a, P>,
     block_confirmations: usize,
