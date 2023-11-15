@@ -96,12 +96,12 @@ async fn main() -> eyre::Result<()> {
         let l2_middleware = initialize_l2_middleware(
             &bridge_config.l2_rpc_endpoint,
             bridge_config.throttle,
-            wallet.clone(),
         )
         .await?;
 
         let state_bridge = StateBridge::new_from_parts(
             bridge_config.l1_state_bridge,
+            wallet.clone(),
             l1_middleware.clone(),
             bridge_config.l2_world_id,
             l2_middleware,
@@ -153,12 +153,11 @@ pub async fn initialize_l1_middleware(
 pub async fn initialize_l2_middleware(
     l2_rpc_endpoint: &str,
     throttle: u32,
-    wallet: LocalWallet,
 ) -> eyre::Result<Arc<Provider<ThrottledProvider<Http>>>> {
     Ok(Arc::new(initialize_throttled_provider(
         l2_rpc_endpoint,
         throttle,
-    ))?)
+    )?))
 }
 
 pub fn initialize_throttled_provider(
