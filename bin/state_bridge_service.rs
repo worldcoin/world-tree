@@ -136,6 +136,7 @@ pub async fn initialize_l1_middleware(
     wallet_address: H160,
 ) -> eyre::Result<Arc<NonceManagerMiddleware<Provider<ThrottledProvider<Http>>>>>
 {
+    //TODO: add gas escalator middleware and remove the escalator logic within the tx logic
     let provider = initialize_throttled_provider(rpc_endpoint, throttle)?;
     let nonce_manager_middleware =
         NonceManagerMiddleware::new(provider, wallet_address);
