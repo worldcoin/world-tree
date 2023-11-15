@@ -1,6 +1,7 @@
 use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
 use ethers::signers::WalletError;
+use ethers::types::H256;
 use thiserror::Error;
 
 use crate::tree::Hash;
@@ -42,8 +43,12 @@ where
 {
     #[error("Middleware error")]
     MiddlewareError(<M as Middleware>::Error),
-    #[error("Middleware error")]
+    #[error("Provider error")]
+    ProviderError(#[from] ethers::providers::ProviderError),
+    #[error("Wallet error")]
     WalletError(#[from] WalletError),
     #[error("Wallet has insufficient funds")]
     InsufficientWalletFunds,
+    #[error("Tx receipt not found")]
+    TxReceiptNotFound(H256),
 }

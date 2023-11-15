@@ -80,13 +80,16 @@ async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let mut wallet = opts.private_key.parse::<LocalWallet>()?;
     let l1_middleware = initialize_l1_middleware(
         &config.l1_rpc_endpoint,
         config.throttle,
-        wallet.clone(),
+        wallet.address(),
     )
     .await?;
+
+    let chain_id = l1_middleware.get_chainid().await?.as_u64();
+    wallet = wallet.with_chain_id(chain_id);
 
     let mut state_bridge_service =
         StateBridgeService::new(config.l1_world_id, l1_middleware.clone())
@@ -130,22 +133,12 @@ async fn main() -> eyre::Result<()> {
 pub async fn initialize_l1_middleware(
     rpc_endpoint: &str,
     throttle: u32,
-    wallet: LocalWallet,
-) -> eyre::Result<
-    Arc<
-        NonceManagerMiddleware<
-            SignerMiddleware<Provider<ThrottledProvider<Http>>, LocalWallet>,
-        >,
-    >,
-> {
+    wallet_address: H160,
+) -> eyre::Result<Arc<NonceManagerMiddleware<Provider<ThrottledProvider<Http>>>>>
+{
     let provider = initialize_throttled_provider(rpc_endpoint, throttle)?;
-
-    let chain_id = provider.get_chainid().await?.as_u64();
-    let wallet = wallet.with_chain_id(chain_id);
-    let wallet_address = wallet.address();
-    let signer_middleware = SignerMiddleware::new(provider, wallet);
     let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+        NonceManagerMiddleware::new(provider, wallet_address);
 
     Ok(Arc::new(nonce_manager_middleware))
 }

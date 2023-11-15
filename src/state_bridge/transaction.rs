@@ -1,40 +1,61 @@
 use std::sync::Arc;
-use std::time::Duration;
 
-use ethers::providers::{Middleware, MiddlewareError, ProviderError};
+use ethers::providers::{JsonRpcClient, Middleware, PendingTransaction};
 use ethers::signers::{LocalWallet, WalletError};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::{Bytes, Eip1559TransactionRequest, H160, H256};
+use ethers::types::{
+    Bytes, Eip1559TransactionRequest, TransactionReceipt, H160,
+};
 
-use super::error::{StateBridgeError, TransactionError};
+use super::error::TransactionError;
 
 //Signs and sends transaction, bumps gas if necessary
 pub async fn sign_and_send_transaction<M: Middleware>(
     mut tx: TypedTransaction,
     wallet_key: &LocalWallet,
+    block_confirmations: usize,
     middleware: Arc<M>,
-) -> Result<H256, TransactionError<M>> {
+) -> Result<TransactionReceipt, TransactionError<M>> {
+    tracing::info!("Signing tx");
     let mut signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
     loop {
+        tracing::info!("Sending tx");
         match middleware.send_raw_transaction(signed_tx.clone()).await {
             Ok(pending_tx) => {
-                return Ok(pending_tx.tx_hash());
+                let tx_hash = pending_tx.tx_hash();
+                tracing::info!(?tx_hash, "Pending tx");
+
+                return wait_for_tx_receipt(pending_tx, block_confirmations)
+                    .await;
             }
             Err(err) => {
                 let error_string = err.to_string();
+
+                //TODO: this can be alleviated with gasescalator middleware
                 if error_string.contains("transaction underpriced") {
                     let eip1559_tx = tx.as_eip1559_mut().unwrap();
-                    eip1559_tx.max_priority_fee_per_gas = Some(
+                    let updated_max_priority_fee_per_gas =
                         eip1559_tx.max_priority_fee_per_gas.unwrap() * 150
-                            / 100,
+                            / 100;
+
+                    let updated_max_fee_per_gas =
+                        eip1559_tx.max_fee_per_gas.unwrap() * 150 / 100;
+
+                    tracing::warn!(
+                        ?updated_max_priority_fee_per_gas,
+                        ?updated_max_fee_per_gas,
+                        "Tx underpriced, bumping gas"
                     );
-                    eip1559_tx.max_fee_per_gas =
-                        Some(eip1559_tx.max_fee_per_gas.unwrap() * 150 / 100);
+
+                    eip1559_tx.max_priority_fee_per_gas =
+                        Some(updated_max_priority_fee_per_gas);
+                    eip1559_tx.max_fee_per_gas = Some(updated_max_fee_per_gas);
 
                     tx = eip1559_tx.to_owned().into();
 
                     signed_tx = raw_signed_transaction(tx.clone(), wallet_key)?;
                 } else if error_string.contains("insufficient funds") {
+                    tracing::error!("Insufficient funds");
                     return Err(TransactionError::InsufficientWalletFunds);
                 } else {
                     return Err(err).map_err(TransactionError::MiddlewareError);
@@ -56,6 +77,12 @@ pub async fn fill_and_simulate_eip1559_transaction<M: Middleware>(
         .await
         .map_err(TransactionError::MiddlewareError)?;
 
+    tracing::info!(
+        ?max_fee_per_gas,
+        ?max_priority_fee_per_gas,
+        "Estimated gas fees"
+    );
+
     let mut tx: TypedTransaction = Eip1559TransactionRequest::new()
         .data(calldata.clone())
         .to(to)
@@ -65,7 +92,6 @@ pub async fn fill_and_simulate_eip1559_transaction<M: Middleware>(
         .max_fee_per_gas(max_fee_per_gas)
         .into();
 
-    //match fill transaction, it will fail if the calldata fails
     middleware
         .fill_transaction(&mut tx, None)
         .await
@@ -73,29 +99,40 @@ pub async fn fill_and_simulate_eip1559_transaction<M: Middleware>(
 
     tx.set_gas(tx.gas().unwrap() * 150 / 100);
 
+    let tx_gas = tx.gas().expect("Could not get tx gas");
+    tracing::info!(?tx_gas, "Gas limit set");
+
     middleware
         .call(&tx, None)
         .await
         .map_err(TransactionError::MiddlewareError)?;
 
+    tracing::info!("Successfully simulated tx");
+
     Ok(tx)
 }
 
-pub async fn wait_for_transaction_receipt<M: Middleware>(
-    tx_hash: H256,
-    middleware: Arc<M>,
-) -> Result<(), TransactionError<M>> {
-    loop {
-        if let Some(tx_receipt) = middleware
-            .get_transaction_receipt(tx_hash)
-            .await
-            .map_err(TransactionError::MiddlewareError)?
-        {
-            tracing::info!(?tx_receipt, "Tx receipt received");
-            return Ok(());
-        }
+pub async fn wait_for_tx_receipt<'a, M: Middleware, P: JsonRpcClient>(
+    pending_tx: PendingTransaction<'a, P>,
+    block_confirmations: usize,
+) -> Result<TransactionReceipt, TransactionError<M>> {
+    let pending_tx = pending_tx.confirmations(block_confirmations);
+    let tx_hash = pending_tx.tx_hash();
 
-        tokio::time::sleep(Duration::from_secs(1)).await;
+    tracing::info!(
+        ?tx_hash,
+        ?block_confirmations,
+        "Waiting for block confirmations"
+    );
+
+    if let Some(tx_receipt) =
+        pending_tx.await.map_err(TransactionError::ProviderError)?
+    {
+        tracing::info!(?tx_receipt, "Tx receipt received");
+
+        return Ok(tx_receipt);
+    } else {
+        return Err(TransactionError::TxReceiptNotFound(tx_hash));
     }
 }
 

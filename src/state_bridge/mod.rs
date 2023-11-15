@@ -116,29 +116,27 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
         );
 
         tokio::spawn(async move {
-            let mut latest_root = Uint::from_limbs(
-                l2_world_id
-                    .latest_root()
-                    .call()
-                    .await
-                    .map_err(StateBridgeError::L2ContractError)?
-                    .0,
-            );
+            // let mut latest_root = Uint::from_limbs(
+            //     l2_world_id
+            //         .latest_root()
+            //         .call()
+            //         .await
+            //         .map_err(StateBridgeError::L2ContractError)?
+            //         .0,
+            // );
+
+            let mut latest_root = Hash::ZERO;
 
             let mut last_propagation = Instant::now();
 
             loop {
-                // will either be positive or zero if difference is negative
-                let sleep_time = relaying_period
-                    .saturating_sub(Instant::now() - last_propagation);
-
                 select! {
                     root = root_rx.recv() => {
                         tracing::info!(?root, "Root received from rx");
                         latest_root = root?;
                     }
 
-                    _ = tokio::time::sleep(sleep_time) => {
+                    _ = tokio::time::sleep(relaying_period) => {
                         tracing::info!("Sleep time elapsed");
                     }
                 }
@@ -146,7 +144,7 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
                 let time_since_last_propagation =
                     Instant::now() - last_propagation;
 
-                if time_since_last_propagation > relaying_period {
+                if time_since_last_propagation >= relaying_period {
                     tracing::info!("Relaying period elapsed");
 
                     let latest_bridged_root = Uint::from_limbs(
@@ -179,15 +177,10 @@ impl<L1M: Middleware, L2M: Middleware> StateBridge<L1M, L2M> {
                             )
                             .await?;
 
-                        let tx_hash = transaction::sign_and_send_transaction(
+                        transaction::sign_and_send_transaction(
                             tx,
                             &wallet,
-                            middleware.clone(),
-                        )
-                        .await?;
-
-                        transaction::wait_for_transaction_receipt(
-                            tx_hash,
+                            block_confirmations,
                             middleware.clone(),
                         )
                         .await?;
