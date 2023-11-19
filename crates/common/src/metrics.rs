@@ -8,5 +8,6 @@ pub fn init_statsd_exporter(host: &str, port: u16) {
         .build(None)
         .expect("Could not create StatsdRecorder");
 
-    metrics::set_boxed_recorder(Box::new(recorder)).expect("TODO:");
+    metrics::set_boxed_recorder(Box::new(recorder))
+        .expect("TODO: Handle this error");
 }

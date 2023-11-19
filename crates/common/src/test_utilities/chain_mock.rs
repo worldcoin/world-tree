@@ -32,6 +32,8 @@ pub struct MockChain<M: Middleware> {
     pub mock_bridged_world_id: MockBridgedWorldID<M>,
     /// Middleware provider
     pub middleware: Arc<TestMiddleware>,
+    /// Wallet used to send transactions to the mock chain
+    pub wallet: LocalWallet,
 }
 
 /// Spawns an anvil local chain with all World ID contracts deployed on it
@@ -48,7 +50,7 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
         LocalWallet::from(chain.keys()[0].clone()).with_chain_id(chain_id);
     let wallet_address = wallet.address();
 
-    let client = SignerMiddleware::new(provider, wallet);
+    let client = SignerMiddleware::new(provider, wallet.clone());
     let client = NonceManagerMiddleware::new(client, wallet_address);
     let client = Arc::new(client);
 
@@ -97,5 +99,6 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
         mock_bridged_world_id,
         mock_world_id,
         middleware: client,
+        wallet: wallet,
     })
 }

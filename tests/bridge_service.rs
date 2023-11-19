@@ -19,8 +19,7 @@ pub use serde_json::json;
 pub use tokio::spawn;
 pub use tokio::task::JoinHandle;
 pub use tracing::{error, info, instrument};
-use world_tree::abi::{IBridgedWorldID, IStateBridge};
-use world_tree::state_bridge::error::StateBridgeError;
+use world_tree::abi::IBridgedWorldID;
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;
 
@@ -36,6 +35,7 @@ pub async fn test_relay_root() -> eyre::Result<()> {
         mock_world_id,
         middleware,
         anvil,
+        wallet,
     } = spawn_mock_chain().await?;
 
     let relaying_period = std::time::Duration::from_secs(5);
@@ -51,16 +51,15 @@ pub async fn test_relay_root() -> eyre::Result<()> {
             .await
             .expect("couldn't create StateBridgeService");
 
-    let state_bridge =
-        IStateBridge::new(state_bridge_address, middleware.clone());
-
     let bridged_world_id =
         IBridgedWorldID::new(bridged_world_id_address, middleware.clone());
 
     let block_confirmations: usize = 6usize;
 
     let state_bridge = StateBridge::new(
-        state_bridge,
+        state_bridge_address,
+        wallet,
+        middleware,
         bridged_world_id,
         relaying_period,
         block_confirmations,
@@ -100,32 +99,6 @@ pub async fn test_relay_root() -> eyre::Result<()> {
     let bridged_world_id_root = await_matching_root.await??;
 
     assert_eq!(latest_root, bridged_world_id_root);
-
-    Ok(())
-}
-
-#[tokio::test]
-pub async fn test_no_state_bridge_relay_fails() -> eyre::Result<()> {
-    // we need anvil to be in scope in order for the middleware provider to not be dropped
-    #[allow(unused_variables)]
-    let MockChain {
-        mock_world_id,
-        middleware,
-        anvil,
-        ..
-    } = spawn_mock_chain().await?;
-
-    let mut state_bridge_service =
-        StateBridgeService::new(mock_world_id.address(), middleware.clone())
-            .await
-            .expect("couldn't create StateBridgeService");
-
-    let error = state_bridge_service.spawn().unwrap_err();
-
-    assert!(
-        matches!(error, StateBridgeError::BridgesNotInitialized),
-        "Didn't error out as expected"
-    );
 
     Ok(())
 }

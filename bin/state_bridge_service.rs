@@ -1,29 +1,34 @@
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
-use ethers::abi::Address;
+use ethers::middleware::gas_escalator::{
+    Frequency, GasEscalatorMiddleware, GeometricGasPrice,
+};
 use ethers::prelude::{
-    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer,
-    SignerMiddleware, H160,
+    Http, LocalWallet, NonceManagerMiddleware, Provider, Signer, H160,
 };
 use ethers::providers::Middleware;
+use ethers::types::U256;
+use ethers_throttle::ThrottledProvider;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use governor::Jitter;
 use opentelemetry::global::shutdown_tracer_provider;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use tracing::Level;
-use world_tree::abi::{IBridgedWorldID, IStateBridge};
+use url::Url;
 use world_tree::state_bridge::service::StateBridgeService;
 use world_tree::state_bridge::StateBridge;
 
 #[derive(Parser, Debug)]
 #[clap(
     name = "State Bridge Service",
-    about = "The state bridge service listens to root changes from the WorldIdIdentityManager and propagates them to each of the corresponding Layer 2s specified in the configuration file."
+    about = "The state bridge service listens to root changes from the `WorldIdIdentityManager` and propagates them to each of the corresponding Layer 2s specified in the configuration file."
 )]
 struct Opts {
     #[clap(
@@ -32,52 +37,38 @@ struct Opts {
         help = "Path to the TOML state bridge service config file"
     )]
     config: PathBuf,
-
-    #[clap(long, help = "Enable datadog backend for instrumentation")]
+    #[clap(
+        short,
+        long,
+        help = "Private key for account used to send `propagateRoot()` txs"
+    )]
+    private_key: String,
+    #[clap(short, long, help = "Enable datadog backend for instrumentation")]
     datadog: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-struct BridgeConfig {
-    name: String, //TODO: do we need this where do we use it?
-    state_bridge_address: Address,
-    bridged_world_id_address: Address,
-    bridged_rpc_url: String,
+#[derive(Deserialize, Serialize, Debug)]
+struct Config {
+    l1_rpc_endpoint: String,
+    #[serde(deserialize_with = "deserialize_h160")]
+    l1_world_id: H160,
+    block_confirmations: usize,
+    state_bridge: Vec<StateBridgeConfig>,
+    throttle: u32,
+    #[serde(deserialize_with = "deserialize_opt_u256", default)]
+    max_gas_price: Option<U256>,
 }
 
-//TODO: lets update this to be a yaml file and then we can do something like the following:
-// rpc_url: ""
-// private_key: ""
-// world_id_address: ""
-// block_confirmations: ""
-// state_bridges:
-//   optimism:
-//      state_bridge_address: ""
-//      bridged_world_id_address: ""
-//      bridged_rpc_url: ""
-//      relaying_period_seconds: 5
-//
-//   arbitrum:
-//      state_bridge_address: ""
-//      bridged_world_id_address: ""
-//      bridged_rpc_url: ""
-//      relaying_period_seconds: 5
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
-struct Config {
-    // RPC URL for the HTTP provider (World ID IdentityManager)
-    rpc_url: String,
-    // Private key to use for the middleware signer
-    private_key: String,
-    // `WorldIDIdentityManager` contract address
-    world_id_address: H160,
-    // List of `StateBridge` and `BridgedWorldID` pair addresses
-    bridge_configs: Vec<BridgeConfig>,
-    // `propagateRoot()` call period time in seconds
+struct StateBridgeConfig {
+    #[serde(deserialize_with = "deserialize_h160")]
+    l1_state_bridge: H160,
+    #[serde(deserialize_with = "deserialize_h160")]
+    l2_world_id: H160,
+    l2_rpc_endpoint: String,
+    #[serde(deserialize_with = "deserialize_duration_from_seconds")]
     relaying_period_seconds: Duration,
-    // Number of block confirmations required for the `propagateRoot` call on the `StateBridge`
-    // contract
-    block_confirmations: Option<usize>,
+    throttle: u32,
 }
 
 const SERVICE_NAME: &str = "state-bridge-service";
@@ -94,73 +85,37 @@ async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    spawn_state_bridge_service(
-        config.rpc_url,
-        config.private_key,
-        config.world_id_address,
-        config.bridge_configs,
-        config.relaying_period_seconds,
-        config.block_confirmations.unwrap_or(0),
+    let mut wallet = opts.private_key.parse::<LocalWallet>()?;
+    let l1_middleware = initialize_l1_middleware(
+        &config.l1_rpc_endpoint,
+        config.throttle,
+        wallet.address(),
+        config.max_gas_price,
     )
     .await?;
 
-    shutdown_tracer_provider();
-
-    Ok(())
-}
-
-async fn spawn_state_bridge_service(
-    rpc_url: String,
-    private_key: String,
-    world_id_address: H160,
-    bridge_configs: Vec<BridgeConfig>,
-    relaying_period: Duration,
-    block_confirmations: usize,
-) -> eyre::Result<()> {
-    let provider = Provider::<Http>::try_from(rpc_url)
-        .expect("failed to initialize Http provider");
-
-    let chain_id = provider.get_chainid().await?.as_u64();
-
-    let wallet = private_key.parse::<LocalWallet>()?.with_chain_id(chain_id);
-    let wallet_address = wallet.address();
-
-    let signer_middleware = SignerMiddleware::new(provider, wallet);
-    let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
-    let middleware = Arc::new(nonce_manager_middleware);
+    let chain_id = l1_middleware.get_chainid().await?.as_u64();
+    wallet = wallet.with_chain_id(chain_id);
 
     let mut state_bridge_service =
-        StateBridgeService::new(world_id_address, middleware).await?;
+        StateBridgeService::new(config.l1_world_id, l1_middleware.clone())
+            .await?;
 
-    let wallet = private_key
-        .parse::<LocalWallet>()
-        .expect("couldn't instantiate wallet from private key");
+    for bridge_config in config.state_bridge {
+        let l2_middleware = initialize_l2_middleware(
+            &bridge_config.l2_rpc_endpoint,
+            bridge_config.throttle,
+        )
+        .await?;
 
-    for bridge_config in bridge_configs {
-        let BridgeConfig {
-            state_bridge_address,
-            bridged_world_id_address,
-            bridged_rpc_url,
-            ..
-        } = bridge_config;
-
-        let l2_middleware =
-            initialize_l2_middleware(&bridged_rpc_url, wallet.clone()).await?;
-
-        let state_bridge_interface =
-            IStateBridge::new(state_bridge_address, l2_middleware.clone());
-
-        let bridged_world_id_interface = IBridgedWorldID::new(
-            bridged_world_id_address,
-            l2_middleware.clone(),
-        );
-
-        let state_bridge = StateBridge::new(
-            state_bridge_interface,
-            bridged_world_id_interface,
-            relaying_period,
-            block_confirmations,
+        let state_bridge = StateBridge::new_from_parts(
+            bridge_config.l1_state_bridge,
+            wallet.clone(),
+            l1_middleware.clone(),
+            bridge_config.l2_world_id,
+            l2_middleware,
+            bridge_config.relaying_period_seconds,
+            config.block_confirmations,
         )?;
 
         state_bridge_service.add_state_bridge(state_bridge);
@@ -176,27 +131,94 @@ async fn spawn_state_bridge_service(
         result??;
     }
 
+    shutdown_tracer_provider();
+
     Ok(())
+}
+
+pub async fn initialize_l1_middleware(
+    rpc_endpoint: &str,
+    throttle: u32,
+    wallet_address: H160,
+    max_gas_price: Option<U256>,
+) -> eyre::Result<
+    Arc<
+        GasEscalatorMiddleware<
+            NonceManagerMiddleware<Provider<ThrottledProvider<Http>>>,
+        >,
+    >,
+> {
+    let provider = initialize_throttled_provider(rpc_endpoint, throttle)?;
+    let nonce_manager_middleware =
+        NonceManagerMiddleware::new(provider, wallet_address);
+
+    let geometric_escalator =
+        GeometricGasPrice::new(1.125, 60_u64, max_gas_price);
+    let gas_escalator_middleware = GasEscalatorMiddleware::new(
+        nonce_manager_middleware,
+        geometric_escalator,
+        Frequency::PerBlock,
+    );
+
+    Ok(Arc::new(gas_escalator_middleware))
 }
 
 pub async fn initialize_l2_middleware(
     l2_rpc_endpoint: &str,
-    wallet: LocalWallet,
-) -> eyre::Result<
-    Arc<NonceManagerMiddleware<SignerMiddleware<Provider<Http>, LocalWallet>>>,
-> {
-    let l2_provider = Provider::<Http>::try_from(l2_rpc_endpoint)?;
-    let chain_id = l2_provider.get_chainid().await?.as_u64();
+    throttle: u32,
+) -> eyre::Result<Arc<Provider<ThrottledProvider<Http>>>> {
+    Ok(Arc::new(initialize_throttled_provider(
+        l2_rpc_endpoint,
+        throttle,
+    )?))
+}
 
-    let wallet = wallet.with_chain_id(chain_id);
-    let wallet_address = wallet.address();
+pub fn initialize_throttled_provider(
+    rpc_endpoint: &str,
+    throttle: u32,
+) -> eyre::Result<Provider<ThrottledProvider<Http>>> {
+    let http_provider = Http::new(Url::parse(rpc_endpoint)?);
+    let throttled_http_provider = ThrottledProvider::new(
+        http_provider,
+        throttle,
+        Some(Jitter::new(
+            Duration::from_millis(10),
+            Duration::from_millis(100),
+        )),
+    );
 
-    let signer_middleware = SignerMiddleware::new(l2_provider, wallet);
+    Ok(Provider::new(throttled_http_provider))
+}
 
-    let nonce_manager_middleware =
-        NonceManagerMiddleware::new(signer_middleware, wallet_address);
+fn deserialize_h160<'de, D>(deserializer: D) -> Result<H160, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    H160::from_str(&s).map_err(de::Error::custom)
+}
 
-    let l2_middleware = Arc::new(nonce_manager_middleware);
+fn deserialize_duration_from_seconds<'de, D>(
+    deserializer: D,
+) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let secs = u64::deserialize(deserializer)?;
+    Ok(Duration::from_secs(secs))
+}
 
-    Ok(l2_middleware)
+fn deserialize_opt_u256<'de, D>(
+    deserializer: D,
+) -> Result<Option<U256>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = Option::<String>::deserialize(deserializer)?;
+    match s {
+        Some(value) => U256::from_dec_str(&value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
 }
