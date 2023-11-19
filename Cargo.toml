@@ -8,7 +8,7 @@ edition = "2021"
 anyhow = "1.0.75"
 axum = "0.6.20"
 axum-middleware = { path = "crates/axum-middleware" }
-clap = { version = "4.4.7", features = ["derive"] }
+clap = { version = "4.4.8", features = ["derive"] }
 common = { path = "crates/common" }
 ethers = { version = "2.0.10", features = [
     "abigen",
