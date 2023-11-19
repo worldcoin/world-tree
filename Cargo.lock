@@ -1002,7 +1002,7 @@ dependencies = [
  "http",
  "metrics",
  "metrics-exporter-statsd",
- "opentelemetry",
+ "opentelemetry 0.20.0",
  "opentelemetry-datadog",
  "opentelemetry-http",
  "serde",
@@ -3265,6 +3265,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e32339a5dc40459130b3bd269e9892439f55b33e772d2a9d402a789baaf4e8a"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "indexmap 2.1.0",
+ "js-sys",
+ "once_cell",
+ "pin-project-lite",
+ "thiserror",
+ "urlencoding",
+]
+
+[[package]]
 name = "opentelemetry-datadog"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3275,7 +3291,7 @@ dependencies = [
  "indexmap 1.9.3",
  "itertools 0.10.5",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.20.0",
  "opentelemetry-http",
  "opentelemetry-semantic-conventions",
  "reqwest",
@@ -3303,7 +3319,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73c9f9340ad135068800e7f1b24e9e09ed9e7143f5bf8518ded3d3ec69789269"
 dependencies = [
- "opentelemetry",
+ "opentelemetry 0.20.0",
 ]
 
 [[package]]
@@ -5270,7 +5286,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75327c6b667828ddc28f5e3f169036cb793c3f588d83bf0f262a7f062ffed3c8"
 dependencies = [
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.20.0",
  "opentelemetry_sdk",
  "smallvec",
  "tracing",
@@ -6129,7 +6145,7 @@ dependencies = [
  "hex",
  "hyper",
  "metrics",
- "opentelemetry",
+ "opentelemetry 0.21.0",
  "reqwest",
  "ruint",
  "semaphore",
