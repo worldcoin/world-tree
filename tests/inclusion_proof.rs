@@ -206,15 +206,13 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
     let tree_data = world_tree.tree_data.clone();
     world_tree.tree_updater.sync_to_head(&tree_data).await?;
 
-    dbg!("Tree is synced");
     // Get random identities from the tree
     let tree = tree_data.tree.read().await;
-    dbg!("Tree");
 
     let random_identities: Vec<ruint::Uint<256, 4>> = tree
         .leaves()
         .filter(|val| *val != Hash::ZERO)
-        .take(1) //TODO: make this 10
+        .take(10)
         .collect::<Vec<Hash>>();
 
     dbg!(&random_identities);
@@ -259,7 +257,6 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
         random_identities.iter().zip(expected_proofs.iter())
     {
         let proof = tree_data
-            //TODO: make a note that we need to account for the mined root since the two roots are different?
             .get_inclusion_proof(*identity, Some(expected_proof.root))
             .await
             .expect("Could not get proof from WorldTree");
@@ -267,15 +264,10 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
         proofs.push(proof);
     }
 
-    dbg!(&proofs);
-    dbg!(&expected_proofs);
-
-    // // Assert proofs are equal
-    // for (proof, expected_proof) in proofs.iter().zip(expected_proofs) {
-    //     assert_eq!(proof.proof, expected_proof);
-    // }
-
-    //TODO: also assert that the root is the same
+    // Assert proofs are equal
+    for (proof, expected_proof) in proofs.iter().zip(expected_proofs) {
+        assert_eq!(*proof, expected_proof);
+    }
 
     Ok(())
 }

@@ -141,9 +141,6 @@ impl<M: Middleware> TreeUpdater<M> {
             tree_data
                 .insert_many_at(start_index as usize, &identities)
                 .await;
-
-            dbg!(tree_data.tree.read().await.root());
-
         } else if function_selector == DeleteIdentitiesCall::selector() {
             tracing::info!("Decoding deleteIdentities calldata");
 

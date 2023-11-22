@@ -52,7 +52,6 @@ impl TreeData {
 
         let mut tree = self.tree.write().await;
 
-        dbg!(start_index);
         for (i, identity) in identities.iter().enumerate() {
             let idx = start_index + i;
             *tree = tree.update(idx, identity);
