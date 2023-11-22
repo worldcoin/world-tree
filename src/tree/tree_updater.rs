@@ -109,7 +109,7 @@ impl<M: Middleware> TreeUpdater<M> {
         }
 
         for tx in sorted_transactions.values() {
-            self.sync_from_transaction(tree_data, &tx).await?;
+            self.sync_from_transaction(tree_data, tx).await?;
         }
 
         Ok(())
