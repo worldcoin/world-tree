@@ -10,6 +10,7 @@ axum = "0.6.20"
 axum-middleware = { path = "crates/axum-middleware" }
 clap = { version = "4.4.8", features = ["derive"] }
 common = { path = "crates/common" }
+criterion = { version = "0.5.1", features = ["async", "async_futures"] }
 ethers = { version = "2.0.10", features = [
     "abigen",
     "ws",
@@ -25,6 +26,7 @@ hex = "0.4.3"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 metrics = "0.21.1"
 opentelemetry = "0.21.0"
+rand = "0.8.5"
 ruint = "1.10.1"
 semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", features = [
     "depth_20",
@@ -48,3 +50,9 @@ path = "bin/tree_availability_service.rs"
 [[bin]]
 name = "state-bridge-service"
 path = "bin/state_bridge_service.rs"
+
+[[bench]]
+name  = "tree_data"
+harness = false
+
+
