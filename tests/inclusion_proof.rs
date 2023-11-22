@@ -1,18 +1,36 @@
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
-use ethers::providers::Middleware;
-use ethers::types::U256;
+use ethers::core::k256::elliptic_curve::bigint::modular::constant_mod::ResidueParams;
+use ethers::providers::{Http, Middleware, Provider};
+use ethers::types::{H160, U256};
+use ethers_throttle::ThrottledProvider;
+use eyre::anyhow;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use governor::Jitter;
 use hyper::StatusCode;
+use rand::seq::IteratorRandom;
+use semaphore::lazy_merkle_tree::Canonical;
+use semaphore::poseidon_tree::Proof;
+use semaphore::Field;
+use serde::{Deserialize, Serialize};
+use tracing::Level;
+use url::Url;
 use world_tree::tree::error::TreeAvailabilityError;
 use world_tree::tree::service::{
     InclusionProofRequest, TreeAvailabilityService,
 };
-use world_tree::tree::tree_data::InclusionProof;
+use world_tree::tree::tree_data::{
+    deserialize_proof, InclusionProof, TreeData,
+};
 use world_tree::tree::tree_updater::pack_indices;
-use world_tree::tree::Hash;
+use world_tree::tree::{Hash, PoseidonTree, WorldTree};
+
+pub const TREE_DEPTH: usize = 30;
+pub const TREE_HISTORY_SIZE: usize = 24;
 
 #[tokio::test]
 async fn test_inclusion_proof() -> eyre::Result<()> {
@@ -142,6 +160,122 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
     // Cleanup the server resources
     server_handle.abort();
+
+    Ok(())
+}
+
+//TODO: check that roots are the same as the tree changed event
+#[tokio::test]
+#[ignore]
+async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
+{
+    let args = std::env::args().collect::<String>();
+    if args.contains("--nocapture") {
+        common::tracing::init_subscriber(Level::INFO);
+    }
+
+    // Initialize a new WorldTree
+    let rpc_endpoint = std::env::var("MAINNET_RPC_ENDPOINT")?;
+    let http_provider = Http::new(Url::parse(&rpc_endpoint)?);
+    let throttled_http_provider = ThrottledProvider::new(
+        http_provider,
+        5,
+        Some(Jitter::new(
+            Duration::from_millis(10),
+            Duration::from_millis(100),
+        )),
+    );
+
+    let middleware = Arc::new(Provider::new(throttled_http_provider));
+
+    let world_tree_address =
+        H160::from_str("0xf7134CE138832c1456F2a91D64621eE90c2bddEa")?;
+    let tree = PoseidonTree::<Canonical>::new(TREE_DEPTH, Hash::ZERO);
+
+    let world_tree: WorldTree<Provider<ThrottledProvider<Http>>> =
+        WorldTree::new(
+            tree,
+            TREE_HISTORY_SIZE,
+            world_tree_address,
+            17636832,
+            10000,
+            middleware,
+        );
+
+    // Sync the WorldTree to chain head
+    let tree_data = world_tree.tree_data.clone();
+    world_tree.tree_updater.sync_to_head(&tree_data).await?;
+
+    dbg!("Tree is synced");
+    // Get random identities from the tree
+    let tree = tree_data.tree.read().await;
+    dbg!("Tree");
+
+    let random_identities: Vec<ruint::Uint<256, 4>> = tree
+        .leaves()
+        .filter(|val| *val != Hash::ZERO)
+        .take(1) //TODO: make this 10
+        .collect::<Vec<Hash>>();
+
+    dbg!(&random_identities);
+
+    // Get expected proofs from the signup sequencer
+    let sequencer_endpoint = std::env::var("SIGNUP_SEQUENCER_ENDPOINT")?;
+    let client = reqwest::Client::new();
+
+    let mut expected_proofs = vec![];
+    for identity in &random_identities {
+        let payload = InclusionProofRequest {
+            identity_commitment: *identity,
+            root: None,
+        };
+
+        let response = client
+            .post(sequencer_endpoint.clone())
+            .json(&payload)
+            .send()
+            .await?;
+
+        let val = response.json::<serde_json::Value>().await?;
+
+        let proof = InclusionProof {
+            root: serde_json::from_value(
+                val.get("root").expect("Could not get root").clone(),
+            )?,
+
+            proof: deserialize_proof(
+                val.get("proof")
+                    .expect("Could not get proof from Signup Sequencer"),
+            )?,
+            message: None,
+        };
+
+        expected_proofs.push(proof);
+    }
+
+    // Get proofs from the WorldTree
+    let mut proofs = vec![];
+    for (identity, expected_proof) in
+        random_identities.iter().zip(expected_proofs.iter())
+    {
+        let proof = tree_data
+            //TODO: make a note that we need to account for the mined root since the two roots are different?
+            .get_inclusion_proof(*identity, Some(expected_proof.root))
+            .await
+            .expect("Could not get proof from WorldTree");
+
+        proofs.push(proof);
+    }
+
+    dbg!(&proofs);
+    dbg!(&expected_proofs);
+
+    // // Assert proofs are equal
+    // for (proof, expected_proof) in proofs.iter().zip(expected_proofs) {
+    //     assert_eq!(proof.proof, expected_proof);
+    // }
+
+    //TODO: also assert that the root is the same
 
     Ok(())
 }

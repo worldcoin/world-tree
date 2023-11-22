@@ -6146,6 +6146,7 @@ dependencies = [
  "hyper",
  "metrics",
  "opentelemetry 0.21.0",
+ "rand",
  "reqwest",
  "ruint",
  "semaphore",

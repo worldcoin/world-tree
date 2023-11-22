@@ -51,6 +51,8 @@ impl TreeData {
         self.cache_tree_history().await;
 
         let mut tree = self.tree.write().await;
+
+        dbg!(start_index);
         for (i, identity) in identities.iter().enumerate() {
             let idx = start_index + i;
             *tree = tree.update(idx, identity);
@@ -175,7 +177,7 @@ impl TreeData {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
@@ -199,7 +201,7 @@ impl InclusionProof {
     }
 }
 
-fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
+pub fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
 where
     D: Deserializer<'de>,
 {
