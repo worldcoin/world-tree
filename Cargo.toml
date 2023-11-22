@@ -51,7 +51,6 @@ path = "bin/tree_availability_service.rs"
 name = "state-bridge-service"
 path = "bin/state_bridge_service.rs"
 
-
 [[bench]]
 name  = "tree_data"
 harness = false

@@ -24,6 +24,7 @@ fn generate_random_identities(num_identities: usize) -> Vec<Hash> {
 
     identities
 }
+
 async fn setup_tree_data() -> TreeData {
     let tree = PoseidonTree::<Canonical>::new(TREE_DEPTH, Hash::ZERO);
     let tree_data = TreeData::new(tree, TREE_HISTORY_SIZE);
