@@ -175,7 +175,7 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
     }
 
     // Initialize a new WorldTree
-    let rpc_endpoint = std::env::var("MAINNET_RPC_ENDPOINT")?;
+    let rpc_endpoint = std::env::var("GOERLI_RPC_ENDPOINT")?;
     let http_provider = Http::new(Url::parse(&rpc_endpoint)?);
     let throttled_http_provider = ThrottledProvider::new(
         http_provider,
@@ -189,7 +189,7 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
     let middleware = Arc::new(Provider::new(throttled_http_provider));
 
     let world_tree_address =
-        H160::from_str("0xf7134CE138832c1456F2a91D64621eE90c2bddEa")?;
+        H160::from_str("0x78eC127A3716D447F4575E9c834d452E397EE9E1")?;
     let tree = PoseidonTree::<Canonical>::new(TREE_DEPTH, Hash::ZERO);
 
     let world_tree: WorldTree<Provider<ThrottledProvider<Http>>> =
@@ -197,7 +197,7 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
             tree,
             TREE_HISTORY_SIZE,
             world_tree_address,
-            17636832,
+            9493502,
             10000,
             middleware,
         );
