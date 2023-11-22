@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
@@ -5,7 +6,7 @@ use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Filter, Selector, Transaction, ValueOrArray, H160, U256};
-use futures::stream::FuturesOrdered;
+use futures::stream::FuturesUnordered;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
@@ -77,7 +78,7 @@ impl<M: Middleware> TreeUpdater<M> {
             return Ok(());
         }
 
-        let mut futures = FuturesOrdered::new();
+        let mut futures = FuturesUnordered::new();
 
         for log in logs {
             let tx_hash = log
@@ -86,15 +87,29 @@ impl<M: Middleware> TreeUpdater<M> {
 
             tracing::info!(?tx_hash, "Getting transaction");
 
-            futures.push_back(self.middleware.get_transaction(tx_hash));
+            futures.push(self.middleware.get_transaction(tx_hash));
         }
+
+        let mut sorted_transactions = BTreeMap::new();
 
         while let Some(transaction) = futures.next().await {
             let transaction = transaction
                 .map_err(TreeAvailabilityError::MiddlewareError)?
                 .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-            self.sync_from_transaction(tree_data, &transaction).await?;
+            let tx_hash = transaction.hash;
+            tracing::info!(?tx_hash, "Transaction received");
+
+            sorted_transactions.insert(
+                transaction
+                    .block_number
+                    .ok_or(TreeAvailabilityError::BlockNumberNotFound)?,
+                transaction,
+            );
+        }
+
+        for tx in sorted_transactions.values() {
+            self.sync_from_transaction(tree_data, &tx).await?;
         }
 
         Ok(())
