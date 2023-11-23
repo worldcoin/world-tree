@@ -105,7 +105,7 @@ fn bench_get_inclusion_proof_historical_root(c: &mut Criterion) {
     });
 
     let tree_history = runtime.block_on(tree_data.tree_history.read());
-    let oldest_root = tree_history.back().unwrap().root();
+    let oldest_root = tree_history.back().unwrap().tree.root();
 
     group.bench_function("get_inclusion_proof at historical root", |b| {
         b.to_async(FuturesExecutor)
