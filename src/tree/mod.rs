@@ -24,6 +24,8 @@ use self::tree_updater::TreeUpdater;
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
+pub const SYNC_TO_HEAD_SLEEP_SECONDS: u64 = 5;
+
 /// An abstraction over a tree with a history of changes
 ///
 /// In our data model the `tree` is the oldest available tree.
@@ -80,22 +82,20 @@ impl<M: Middleware> WorldTree<M> {
         let synced = self.synced.clone();
 
         tokio::spawn(async move {
-            let mut tree_data_guard = tree_data.write().await;
             let start = tokio::time::Instant::now();
-            tree_updater.sync_to_head(&mut tree_data_guard).await?;
-
+            tree_updater.sync_to_head(&tree_data).await?;
             let sync_time = start.elapsed();
 
             tracing::info!(?sync_time, "WorldTree synced to chain head");
             synced.store(true, Ordering::Relaxed);
-            drop(tree_data_guard);
 
             loop {
-                let mut tree_data_guard = tree_data.write().await;
+                tree_updater.sync_to_head(&tree_data).await?;
 
-                tree_updater.sync_to_head(&mut tree_data_guard).await?;
-
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(Duration::from_secs(
+                    SYNC_TO_HEAD_SLEEP_SECONDS,
+                ))
+                .await;
             }
         })
     }

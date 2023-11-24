@@ -6,6 +6,7 @@ use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Filter, Selector, Transaction, ValueOrArray, H160, U256};
 use futures::stream::FuturesOrdered;
+use tokio::sync::RwLock;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
@@ -62,7 +63,7 @@ impl<M: Middleware> TreeUpdater<M> {
     #[instrument(skip(self, tree_data))]
     pub async fn sync_to_head(
         &self,
-        tree_data: &mut TreeData,
+        tree_data: &RwLock<TreeData>,
     ) -> Result<(), TreeAvailabilityError<M>> {
         tracing::info!("Syncing tree to chain head");
 
@@ -77,6 +78,7 @@ impl<M: Middleware> TreeUpdater<M> {
             return Ok(());
         }
 
+        let mut tree_data = tree_data.write().await;
         let mut futures = FuturesOrdered::new();
 
         for log in logs {
@@ -94,7 +96,8 @@ impl<M: Middleware> TreeUpdater<M> {
                 .map_err(TreeAvailabilityError::MiddlewareError)?
                 .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-            self.sync_from_transaction(tree_data, &transaction).await?;
+            self.sync_from_transaction(&mut tree_data, &transaction)
+                .await?;
         }
 
         Ok(())
