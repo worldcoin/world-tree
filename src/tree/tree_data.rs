@@ -1,15 +1,11 @@
 use std::collections::{HashMap, VecDeque};
 
-
-
-
 use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
 use semaphore::poseidon_tree::{Branch, Proof};
 use semaphore::Field;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-
 
 use super::{Hash, PoseidonTree};
 
@@ -31,11 +27,11 @@ pub struct TreeData {
     pub depth: usize,
     /// The number of historical tree roots to cache for serving older proofs.
     pub tree_history_size: usize,
-    //TODO: docs, we probably dont need an atomic here either
+    /// Timestamp representing when the most recent root was received.
     pub latest_root_timestamp: u64,
     /// Cache of historical tree state, used to serve proofs against older roots. If the cache becomes larger than `tree_history_size`, the oldest roots are removed on a FIFO basis.
     pub tree_history: VecDeque<HistoricalTree>,
-    //TODO: docs
+    /// Maintains the valid leaves in tree as well as the timestamp that they were inserted.
     pub leaves: HashMap<Hash, u64>,
 }
 
@@ -73,6 +69,8 @@ impl TreeData {
 
             tracing::info!(?identity, ?idx, "Inserted identity");
         }
+
+        self.latest_root_timestamp = timestamp;
     }
 
     /// Deletes multiple identity commitments at specified indices. The tree state before the delete operation is cached to tree history.
@@ -90,6 +88,8 @@ impl TreeData {
             self.tree = self.tree.update(*idx, &Hash::ZERO);
             tracing::info!(?idx, "Deleted identity");
         }
+
+        self.latest_root_timestamp = current_unix_timestamp!();
     }
 
     /// Caches the current tree state to `tree_history` if `tree_history_size` is greater than 0.
@@ -113,8 +113,6 @@ impl TreeData {
                 self.latest_root_timestamp,
             ));
         }
-
-        self.latest_root_timestamp = current_unix_timestamp!();
     }
 
     /// Fetches the inclusion proof for a given identity against a specified root. If no root is specified, the latest root is used. Returns `None` if root or identity is not found.
@@ -128,7 +126,7 @@ impl TreeData {
         identity: Hash,
         root: Option<Hash>,
     ) -> Option<InclusionProof> {
-        //TODO: add some notes on this
+        // Get the timestamp that the leaf was inserted into the tree. If the leaf does not exist, None will be returned.
         let leaf_timestamp = self.leaves.get(&identity)?;
 
         if let Some(root) = root {
@@ -225,7 +223,6 @@ impl InclusionProof {
     }
 }
 
-//TODO: docs
 #[derive(Clone)]
 pub struct HistoricalTree {
     pub tree: PoseidonTree<Derived>,
