@@ -99,7 +99,7 @@ fn bench_get_inclusion_proof_historical_root(c: &mut Criterion) {
 
     // Insert the target identity
     let identity = generate_random_identity();
-    tree_data.insert_many_at(0, &vec![identity]);
+    tree_data.insert_many_at(0, &[identity]);
 
     // Update the tree history
     for _ in 0..TREE_HISTORY_SIZE {

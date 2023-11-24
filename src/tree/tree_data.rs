@@ -1,15 +1,15 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::Ordering;
-use std::time::SystemTime;
+use std::collections::{HashMap, VecDeque};
 
-use metrics::atomics::AtomicU64;
+
+
+
 use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
 use semaphore::poseidon_tree::{Branch, Proof};
 use semaphore::Field;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
+
 
 use super::{Hash, PoseidonTree};
 
