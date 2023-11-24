@@ -139,6 +139,8 @@ pub async fn inclusion_proof<M: Middleware>(
     if world_tree.synced.load(Ordering::Relaxed) {
         let inclusion_proof = world_tree
             .tree_data
+            .read()
+            .await
             .get_inclusion_proof(req.identity_commitment, req.root)
             .await;
 

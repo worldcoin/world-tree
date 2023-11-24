@@ -14,6 +14,7 @@ use ethers::types::H160;
 use semaphore::lazy_merkle_tree::{Canonical, LazyMerkleTree};
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::instrument;
 
@@ -29,7 +30,7 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 /// The entires in `tree_history` represent new additions to the tree.
 pub struct WorldTree<M: Middleware> {
     /// All the leaves of the tree and their corresponding root hash
-    pub tree_data: Arc<TreeData>,
+    pub tree_data: Arc<RwLock<TreeData>>,
     /// The object in charge of syncing the tree from calldata
     pub tree_updater: Arc<TreeUpdater<M>>,
     /// Boolean to indicate when the tree state is synced wth the chain head upon spawning the `WorldTree`.
@@ -55,7 +56,10 @@ impl<M: Middleware> WorldTree<M> {
         middleware: Arc<M>,
     ) -> Self {
         Self {
-            tree_data: Arc::new(TreeData::new(tree, tree_history_size)),
+            tree_data: Arc::new(RwLock::new(TreeData::new(
+                tree,
+                tree_history_size,
+            ))),
             tree_updater: Arc::new(TreeUpdater::new(
                 address,
                 creation_block,
@@ -76,17 +80,20 @@ impl<M: Middleware> WorldTree<M> {
         let synced = self.synced.clone();
 
         tokio::spawn(async move {
+            let mut tree_data_guard = tree_data.write().await;
             let start = tokio::time::Instant::now();
-
-            tree_updater.sync_to_head(&tree_data).await?;
+            tree_updater.sync_to_head(&mut tree_data_guard).await?;
 
             let sync_time = start.elapsed();
 
             tracing::info!(?sync_time, "WorldTree synced to chain head");
             synced.store(true, Ordering::Relaxed);
+            drop(tree_data_guard);
 
             loop {
-                tree_updater.sync_to_head(&tree_data).await?;
+                let mut tree_data_guard = tree_data.write().await;
+
+                tree_updater.sync_to_head(&mut tree_data_guard).await?;
 
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }

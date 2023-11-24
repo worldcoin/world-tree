@@ -27,7 +27,7 @@ fn generate_random_identities(num_identities: usize) -> Vec<Hash> {
 
 async fn setup_tree_data() -> TreeData {
     let tree = PoseidonTree::<Canonical>::new(TREE_DEPTH, Hash::ZERO);
-    let tree_data = TreeData::new(tree, TREE_HISTORY_SIZE);
+    let mut tree_data = TreeData::new(tree, TREE_HISTORY_SIZE);
 
     tree_data
         .insert_many_at(0, &generate_random_identities(1 << 10))
@@ -40,7 +40,7 @@ fn bench_insert_many_at(c: &mut Criterion) {
     let mut group = c.benchmark_group("TreeData Insertion");
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let tree_data = runtime.block_on(setup_tree_data());
+    let mut tree_data = runtime.block_on(setup_tree_data());
 
     let identities = generate_random_identities(NUMBER_OF_IDENTITIES);
 
@@ -54,7 +54,7 @@ fn bench_delete_many(c: &mut Criterion) {
     let mut group = c.benchmark_group("TreeData Deletion");
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let tree_data = runtime.block_on(setup_tree_data());
+    let mut tree_data = runtime.block_on(setup_tree_data());
 
     let delete_indices: Vec<usize> = (0..NUMBER_OF_IDENTITIES).collect();
 
@@ -70,9 +70,8 @@ fn bench_get_inclusion_proof_latest_root(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let tree_data = runtime.block_on(setup_tree_data());
 
-    let tree = runtime.block_on(tree_data.tree.read());
-
-    let random_identity = tree
+    let random_identity = tree_data
+        .tree
         .leaves()
         .choose(&mut rand::thread_rng())
         .expect("Could not get random identity");
@@ -91,7 +90,7 @@ fn bench_get_inclusion_proof_historical_root(c: &mut Criterion) {
 
     // Insert the target identity
     let identity = generate_random_identity();
-    let tree_data = runtime.block_on(setup_tree_data());
+    let mut tree_data = runtime.block_on(setup_tree_data());
     runtime.block_on(tree_data.insert_many_at(0, &vec![identity]));
 
     // Update the tree history
@@ -104,8 +103,7 @@ fn bench_get_inclusion_proof_historical_root(c: &mut Criterion) {
         tree_data
     });
 
-    let tree_history = runtime.block_on(tree_data.tree_history.read());
-    let oldest_root = tree_history.back().unwrap().tree.root();
+    let oldest_root = tree_data.tree_history.back().unwrap().tree.root();
 
     group.bench_function("get_inclusion_proof at historical root", |b| {
         b.to_async(FuturesExecutor)

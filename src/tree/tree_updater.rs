@@ -62,7 +62,7 @@ impl<M: Middleware> TreeUpdater<M> {
     #[instrument(skip(self, tree_data))]
     pub async fn sync_to_head(
         &self,
-        tree_data: &TreeData,
+        tree_data: &mut TreeData,
     ) -> Result<(), TreeAvailabilityError<M>> {
         tracing::info!("Syncing tree to chain head");
 
@@ -109,7 +109,7 @@ impl<M: Middleware> TreeUpdater<M> {
     #[instrument(skip(self, tree_data, transaction))]
     pub async fn sync_from_transaction(
         &self,
-        tree_data: &TreeData,
+        tree_data: &mut TreeData,
         transaction: &Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
         let tx_hash = transaction.hash;
