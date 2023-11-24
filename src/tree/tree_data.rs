@@ -23,6 +23,7 @@ macro_rules! current_unix_timestamp {
 }
 
 /// Represents the in-memory state of the World Tree, caching historical roots up to `tree_history_size`.
+#[derive(Clone)]
 pub struct TreeData {
     /// A canonical in-memory representation of the World Tree.
     pub tree: PoseidonTree<Derived>,
@@ -61,12 +62,8 @@ impl TreeData {
     ///
     /// * `start_index` - The leaf index in the tree to begin inserting identity commitments.
     /// * `identities` - The array of identity commitments to insert.
-    pub async fn insert_many_at(
-        &mut self,
-        start_index: usize,
-        identities: &[Hash],
-    ) {
-        self.cache_tree_history().await;
+    pub fn insert_many_at(&mut self, start_index: usize, identities: &[Hash]) {
+        self.cache_tree_history();
 
         let timestamp = current_unix_timestamp!();
         for (i, identity) in identities.iter().enumerate() {
@@ -83,8 +80,8 @@ impl TreeData {
     /// # Arguments
     ///
     /// * `delete_indices` - The indices of the leaves in the tree to delete.
-    pub async fn delete_many(&mut self, delete_indices: &[usize]) {
-        self.cache_tree_history().await;
+    pub fn delete_many(&mut self, delete_indices: &[usize]) {
+        self.cache_tree_history();
 
         for idx in delete_indices.iter() {
             let identity = self.tree.get_leaf(*idx);
@@ -96,7 +93,7 @@ impl TreeData {
     }
 
     /// Caches the current tree state to `tree_history` if `tree_history_size` is greater than 0.
-    pub async fn cache_tree_history(&mut self) {
+    pub fn cache_tree_history(&mut self) {
         if self.tree_history_size != 0 {
             if self.tree_history.len() == self.tree_history_size {
                 let historical_tree = self
@@ -126,7 +123,7 @@ impl TreeData {
     ///
     /// * `identity` - The identity commitment for which to fetch the inclusion proof.
     /// * `root` - Optional root hash to serve the inclusion proof against. If `None`, uses the latest root.
-    pub async fn get_inclusion_proof(
+    pub fn get_inclusion_proof(
         &self,
         identity: Hash,
         root: Option<Hash>,
@@ -229,6 +226,7 @@ impl InclusionProof {
 }
 
 //TODO: docs
+#[derive(Clone)]
 pub struct HistoricalTree {
     pub tree: PoseidonTree<Derived>,
     pub root_timestamp: u64,
@@ -298,7 +296,7 @@ mod tests {
         let (mut tree_data, mut ref_tree, identities) =
             initialize_tree_data(TREE_DEPTH, TREE_HISTORY_SIZE, NUM_IDENTITIES);
 
-        tree_data.insert_many_at(0, &identities).await;
+        tree_data.insert_many_at(0, &identities);
 
         for (idx, identity) in identities.iter().enumerate() {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
@@ -316,7 +314,6 @@ mod tests {
         {
             let proof_from_world_tree = tree_data
                 .get_inclusion_proof(*identity, Some(root))
-                .await
                 .unwrap();
 
             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
@@ -336,15 +333,14 @@ mod tests {
 
         // Since the tree state is cached to tree history before a sequence of updates, we need to apply the first 5 updates to
         // ensure that the intermediate root is in the tree history
-        tree_data.insert_many_at(0, &identities[0..5]).await;
+        tree_data.insert_many_at(0, &identities[0..5]);
 
         // Then you can apply the remaining updates
-        tree_data.insert_many_at(5, &identities[5..]).await;
+        tree_data.insert_many_at(5, &identities[5..]);
 
         for (i, _identity) in identities.iter().enumerate().take(5) {
             let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
-                .await
                 .unwrap();
 
             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
@@ -358,7 +354,7 @@ mod tests {
 
         // Apply an update to the tree one identity at a time to apply all changes to the tree history cache
         for (idx, identity) in identities.into_iter().enumerate() {
-            tree_data.insert_many_at(idx, &[identity]).await;
+            tree_data.insert_many_at(idx, &[identity]);
         }
 
         // The tree history should not be larger than the tree history size
@@ -375,7 +371,7 @@ mod tests {
             ref_tree = ref_tree.update_with_mutation(idx, identity);
         }
 
-        tree_data.insert_many_at(0, &identities).await;
+        tree_data.insert_many_at(0, &identities);
 
         // Initialize a vector of indices to delete
         let deleted_identity_idxs = &[3, 7];
@@ -387,7 +383,7 @@ mod tests {
         for idx in deleted_identity_idxs {
             ref_tree = ref_tree.update_with_mutation(*idx, &Hash::ZERO);
         }
-        tree_data.delete_many(deleted_identity_idxs).await;
+        tree_data.delete_many(deleted_identity_idxs);
 
         let root = ref_tree.root();
 
@@ -395,7 +391,6 @@ mod tests {
         for i in non_deleted_identity_idxs {
             let proof_from_world_tree = tree_data
                 .get_inclusion_proof(identities[i], Some(root))
-                .await
                 .unwrap();
 
             assert_eq!(ref_tree.proof(i), proof_from_world_tree.proof);
@@ -403,10 +398,8 @@ mod tests {
 
         // Ensure that an inclusion proof cannot be generated for deleted identities
         for i in deleted_identity_idxs {
-            let proof_from_world_tree = tree_data
-                .get_inclusion_proof(identities[*i], Some(root))
-                .await;
-
+            let proof_from_world_tree =
+                tree_data.get_inclusion_proof(identities[*i], Some(root));
             assert!(proof_from_world_tree.is_none());
         }
     }

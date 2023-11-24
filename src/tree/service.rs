@@ -141,8 +141,7 @@ pub async fn inclusion_proof<M: Middleware>(
             .tree_data
             .read()
             .await
-            .get_inclusion_proof(req.identity_commitment, req.root)
-            .await;
+            .get_inclusion_proof(req.identity_commitment, req.root);
 
         Ok((StatusCode::OK, inclusion_proof.into()))
     } else {

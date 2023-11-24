@@ -139,8 +139,7 @@ impl<M: Middleware> TreeUpdater<M> {
             );
 
             tree_data
-                .insert_many_at(start_index as usize, &identities)
-                .await;
+                .insert_many_at(start_index as usize, &identities);
         } else if function_selector == DeleteIdentitiesCall::selector() {
             tracing::info!("Decoding deleteIdentities calldata");
 
@@ -159,7 +158,7 @@ impl<M: Middleware> TreeUpdater<M> {
             metrics::increment_counter!(
                 "tree_availability.tree_updater.deletion"
             );
-            tree_data.delete_many(&indices).await;
+            tree_data.delete_many(&indices);
 
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
 
@@ -180,7 +179,7 @@ impl<M: Middleware> TreeUpdater<M> {
                 .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
                 .map(|x| x as usize)
                 .collect();
-            tree_data.delete_many(&indices).await;
+            tree_data.delete_many(&indices);
 
 
         } else {
