@@ -78,7 +78,6 @@ impl<M: Middleware> TreeUpdater<M> {
             return Ok(());
         }
 
-        let mut tree_data = tree_data.write().await;
         let mut futures = FuturesOrdered::new();
 
         for log in logs {
@@ -91,6 +90,7 @@ impl<M: Middleware> TreeUpdater<M> {
             futures.push_back(self.middleware.get_transaction(tx_hash));
         }
 
+        let mut tree_data = tree_data.write().await;
         while let Some(transaction) = futures.next().await {
             let transaction = transaction
                 .map_err(TreeAvailabilityError::MiddlewareError)?
