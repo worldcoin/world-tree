@@ -3,29 +3,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common::test_utilities::chain_mock::{spawn_mock_chain, MockChain};
-use ethers::core::k256::elliptic_curve::bigint::modular::constant_mod::ResidueParams;
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::{H160, U256};
 use ethers_throttle::ThrottledProvider;
-use eyre::anyhow;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use governor::Jitter;
 use hyper::StatusCode;
-use rand::seq::IteratorRandom;
 use semaphore::lazy_merkle_tree::Canonical;
-use semaphore::poseidon_tree::Proof;
-use semaphore::Field;
-use serde::{Deserialize, Serialize};
 use tracing::Level;
 use url::Url;
 use world_tree::tree::error::TreeAvailabilityError;
 use world_tree::tree::service::{
     InclusionProofRequest, TreeAvailabilityService,
 };
-use world_tree::tree::tree_data::{
-    deserialize_proof, InclusionProof, TreeData,
-};
+use world_tree::tree::tree_data::{deserialize_proof, InclusionProof};
 use world_tree::tree::tree_updater::pack_indices;
 use world_tree::tree::{Hash, PoseidonTree, WorldTree};
 
@@ -93,7 +85,7 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
 
         let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
         while let Some(result) = handles.next().await {
-            result.expect("TODO: propagate this error")?;
+            result.expect("Error when  serving tree availability service")?;
         }
 
         Ok::<(), TreeAvailabilityError<_>>(())
@@ -164,7 +156,6 @@ async fn test_inclusion_proof() -> eyre::Result<()> {
     Ok(())
 }
 
-//TODO: check that roots are the same as the tree changed event
 #[tokio::test]
 #[ignore]
 async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
@@ -214,8 +205,6 @@ async fn validate_inclusion_proof_against_signup_sequencer() -> eyre::Result<()>
         .filter(|val| *val != Hash::ZERO)
         .take(10)
         .collect::<Vec<Hash>>();
-
-    dbg!(&random_identities);
 
     // Get expected proofs from the signup sequencer
     let sequencer_endpoint = std::env::var("SIGNUP_SEQUENCER_ENDPOINT")?;
