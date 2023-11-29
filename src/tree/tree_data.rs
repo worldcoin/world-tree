@@ -118,7 +118,6 @@ impl TreeData {
                 return Some(InclusionProof::new(
                     root,
                     Self::proof(&tree, identity)?,
-                    None,
                 ));
             } else {
                 let tree_history = self.tree_history.read().await;
@@ -134,7 +133,6 @@ impl TreeData {
                         return Some(InclusionProof::new(
                             root,
                             Self::proof(prev_tree, identity)?,
-                            None,
                         ));
                     }
                 }
@@ -154,7 +152,6 @@ impl TreeData {
             Some(InclusionProof::new(
                 latest_root,
                 Self::proof(&tree, identity)?,
-                None,
             ))
         }
     }
@@ -182,20 +179,11 @@ pub struct InclusionProof {
     //TODO: Open a PR to semaphore-rs to deserialize proof instead of implementing deserialization here
     #[serde(deserialize_with = "deserialize_proof")]
     pub proof: Proof,
-    pub message: Option<String>,
 }
 
 impl InclusionProof {
-    pub fn new(
-        root: Field,
-        proof: Proof,
-        message: Option<String>,
-    ) -> InclusionProof {
-        Self {
-            root,
-            proof,
-            message,
-        }
+    pub fn new(root: Field, proof: Proof) -> InclusionProof {
+        Self { root, proof }
     }
 }
 
