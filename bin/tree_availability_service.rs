@@ -34,7 +34,12 @@ struct Opts {
         help = "Depth of merkle tree that should be represented as a densely populated prefix. The remainder of the tree will be represented with pointer-based structures."
     )]
     dense_prefix_depth: usize,
-    #[clap(short, long, help = "Address of the World Tree")]
+    #[clap(
+        short,
+        long,
+        default_value = "0",
+        help = "Address of the World Tree"
+    )]
     address: H160,
     #[clap(short, long, help = "Creation block of the World Tree")]
     creation_block: u64,

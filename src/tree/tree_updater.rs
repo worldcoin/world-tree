@@ -6,6 +6,7 @@ use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::{Middleware, StreamExt};
 use ethers::types::{Filter, Selector, Transaction, ValueOrArray, H160, U256};
 use futures::stream::FuturesOrdered;
+use tokio::sync::RwLock;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
@@ -62,7 +63,7 @@ impl<M: Middleware> TreeUpdater<M> {
     #[instrument(skip(self, tree_data))]
     pub async fn sync_to_head(
         &self,
-        tree_data: &TreeData,
+        tree_data: &RwLock<TreeData>,
     ) -> Result<(), TreeAvailabilityError<M>> {
         tracing::info!("Syncing tree to chain head");
 
@@ -89,12 +90,14 @@ impl<M: Middleware> TreeUpdater<M> {
             futures.push_back(self.middleware.get_transaction(tx_hash));
         }
 
+        let mut tree_data = tree_data.write().await;
         while let Some(transaction) = futures.next().await {
             let transaction = transaction
                 .map_err(TreeAvailabilityError::MiddlewareError)?
                 .ok_or(TreeAvailabilityError::TransactionNotFound)?;
 
-            self.sync_from_transaction(tree_data, &transaction).await?;
+            self.sync_from_transaction(&mut tree_data, &transaction)
+                .await?;
         }
 
         Ok(())
@@ -109,7 +112,7 @@ impl<M: Middleware> TreeUpdater<M> {
     #[instrument(skip(self, tree_data, transaction))]
     pub async fn sync_from_transaction(
         &self,
-        tree_data: &TreeData,
+        tree_data: &mut TreeData,
         transaction: &Transaction,
     ) -> Result<(), TreeAvailabilityError<M>> {
         let tx_hash = transaction.hash;
@@ -139,8 +142,7 @@ impl<M: Middleware> TreeUpdater<M> {
             );
 
             tree_data
-                .insert_many_at(start_index as usize, &identities)
-                .await;
+                .insert_many_at(start_index as usize, &identities);
         } else if function_selector == DeleteIdentitiesCall::selector() {
             tracing::info!("Decoding deleteIdentities calldata");
 
@@ -159,7 +161,7 @@ impl<M: Middleware> TreeUpdater<M> {
             metrics::increment_counter!(
                 "tree_availability.tree_updater.deletion"
             );
-            tree_data.delete_many(&indices).await;
+            tree_data.delete_many(&indices);
 
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
 
@@ -180,7 +182,7 @@ impl<M: Middleware> TreeUpdater<M> {
                 .into_iter().take_while(|x| *x != 2_u32.pow(tree_data.depth as u32))
                 .map(|x| x as usize)
                 .collect();
-            tree_data.delete_many(&indices).await;
+            tree_data.delete_many(&indices);
 
 
         } else {
