@@ -18,7 +18,7 @@ use world_tree::tree::service::TreeAvailabilityService;
 #[derive(Parser, Debug)]
 #[clap(
     name = "Tree Availability Service",
-    about = "The tree availability service periodically calls propagateRoot() on a World ID StateBridge contract."
+    about = "This service syncs the state of the World Tree and spawns a server that can deliver inclusion proofs for a given identity."
 )]
 struct Opts {
     #[clap(long, help = "Depth of the World Tree")]
