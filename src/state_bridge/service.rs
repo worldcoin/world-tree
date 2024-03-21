@@ -91,6 +91,7 @@ where
     }
 
     /// Spawns the `StateBridgeService`.
+    #[allow(clippy::type_complexity)]
     pub fn spawn(
         &mut self,
     ) -> Result<
