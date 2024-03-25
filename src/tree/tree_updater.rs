@@ -21,6 +21,10 @@ use crate::abi::{
 };
 use crate::tree::Hash;
 
+
+update this mod to be called tree manager
+
+
 /// Manages the synchronization of the World Tree with it's onchain representation.
 pub struct TreeUpdater<M: Middleware> {
     /// Contract address of the `WorldIDIdentityManager`.
@@ -94,6 +98,7 @@ impl<M: Middleware> TreeUpdater<M> {
 
         let mut sorted_transactions = BTreeMap::new();
 
+        //TODO: why are we locking here we should just be locking after getting all transactions?
         let mut tree_data = tree_data.write().await;
         while let Some(transaction) = futures.next().await {
             let transaction = transaction
