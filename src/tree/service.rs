@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 
 use super::error::{TreeAvailabilityError, TreeError};
 use super::tree_data::InclusionProof;
-use super::{Hash, PoseidonTree, WorldTree};
+use super::{Hash, PoseidonTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct TreeAvailabilityService<M: Middleware + 'static> {
@@ -85,7 +85,6 @@ impl<M: Middleware> TreeAvailabilityService<M> {
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            .route("/synced", axum::routing::post(synced))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
@@ -131,22 +130,19 @@ impl InclusionProofRequest {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(world_tree))]
+#[tracing::instrument(level = "debug", skip(identity_tree))]
 pub async fn inclusion_proof<M: Middleware>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
+    State(identity_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    if world_tree.synced.load(Ordering::Relaxed) {
-        let inclusion_proof = world_tree
-            .tree_data
-            .read()
-            .await
-            .get_inclusion_proof(req.identity_commitment, req.root);
+    //TODO:
+    // let inclusion_proof = identity_tree
+    //     .tree_data
+    //     .read()
+    //     .await
+    //     .get_inclusion_proof(req.identity_commitment, req.root);
 
-        Ok((StatusCode::OK, inclusion_proof.into()))
-    } else {
-        Err(TreeError::TreeNotSynced)
-    }
+    todo!()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -162,26 +158,6 @@ impl SyncResponse {
             synced,
             block_number,
         }
-    }
-}
-
-#[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn synced<M: Middleware>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
-) -> (StatusCode, Json<SyncResponse>) {
-    if world_tree.synced.load(Ordering::Relaxed) {
-        (StatusCode::OK, SyncResponse::new(true, None).into())
-    } else {
-        let latest_synced_block = Some(
-            world_tree
-                .tree_updater
-                .latest_synced_block
-                .load(Ordering::SeqCst),
-        );
-        (
-            StatusCode::OK,
-            SyncResponse::new(false, latest_synced_block).into(),
-        )
     }
 }
 

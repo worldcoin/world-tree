@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
@@ -6,7 +7,7 @@ use ethers::types::{BlockNumber, Filter, Log};
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 pub struct BlockScanner<M> {
     /// The onchain data provider
-    middleware: M,
+    pub middleware: Arc<M>,
     /// The block from which to start parsing a given event
     pub last_synced_block: AtomicU64,
     /// The maximum block range to parse
@@ -21,7 +22,7 @@ where
 {
     /// Initializes a new `BlockScanner`
     pub const fn new(
-        middleware: M,
+        middleware: Arc<M>,
         window_size: u64,
         current_block: u64,
         filter: Filter,
@@ -41,6 +42,7 @@ where
             self.last_synced_block.load(Ordering::SeqCst);
         let mut logs = Vec::new();
 
+        //TODO: do this concurrently
         while last_synced_block < latest_block {
             let from_block = last_synced_block + 1;
             let to_block = (from_block + self.window_size).min(latest_block);

@@ -10,11 +10,6 @@ abigen!(
         function deleteIdentities(uint256[8] calldata deletionProof, uint32 batchSize, bytes calldata packedDeletionIndices, uint256 preRoot, uint256 postRoot) external
     ]"#;
 
-    IStateBridge,
-    r#"[
-        function propagateRoot() external
-    ]"#;
-
     IBridgedWorldID,
     r#"[
         event RootAdded(uint256 root, uint128 timestamp)
