@@ -63,8 +63,7 @@ pub struct ProviderConfig {
     #[serde(with = "crate::serde_utils::url")]
     pub rpc_endpoint: Url,
     /// Request per minute limit
-    #[serde(default = "default::throttle")]
-    pub throttle: u32,
+    pub throttle: Option<u32>,
 }
 
 mod default {
@@ -76,9 +75,5 @@ mod default {
 
     pub fn window_size() -> u64 {
         1000
-    }
-
-    pub fn throttle() -> u32 {
-        0
     }
 }

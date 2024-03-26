@@ -1,9 +1,9 @@
 pub mod block_scanner;
+pub mod config;
 pub mod error;
 pub mod service;
 pub mod tree_data;
 pub mod tree_updater;
-pub mod config;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
