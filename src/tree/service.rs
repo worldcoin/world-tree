@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -76,12 +76,12 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     /// Vector of `JoinHandle`s for the spawned tasks.
     pub fn serve(
         self,
-        port: u16,
+        addr: SocketAddr,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
-        tracing::info!(?port, "Initializing axum server");
+        tracing::info!(?addr, "Initializing axum server");
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
@@ -89,12 +89,9 @@ impl<M: Middleware> TreeAvailabilityService<M> {
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
-        let address =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            axum::Server::bind(&address)
+            axum::Server::bind(&addr)
                 .serve(router.into_make_service())
                 .await
                 .map_err(TreeAvailabilityError::HyperError)?;
