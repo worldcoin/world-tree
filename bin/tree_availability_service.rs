@@ -49,14 +49,16 @@ pub async fn main() -> eyre::Result<()> {
     }
 
     let http_provider = Http::new(config.provider.rpc_endpoint);
+
     let throttled_http_provider = ThrottledProvider::new(
         http_provider,
-        config.provider.throttle,
+        config.provider.throttle.unwrap_or(u32::MAX),
         Some(Jitter::new(
             Duration::from_millis(10),
             Duration::from_millis(100),
         )),
     );
+
     let middleware = Arc::new(Provider::new(throttled_http_provider));
 
     let handles = TreeAvailabilityService::new(
