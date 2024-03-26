@@ -1,0 +1,7 @@
+.github/
+target/
+.git
+.env
+.env.example
+Dockerfile
+README.md
