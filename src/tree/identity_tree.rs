@@ -14,12 +14,10 @@ use tokio::sync::mpsc::Sender;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
-use super::tree_manager::TreeManager;
+use super::tree_manager::{IdentityUpdates, Root, TreeManager};
 use super::Hash;
 use crate::abi::IBridgedWorldID;
 use crate::tree::tree_manager::extract_identity_updates;
-
-pub type IdentityUpdates = HashMap<u32, Hash>;
 
 pub struct IdentityTree<M: Middleware> {
     // NOTE: update comments describing the canonical tree, it is the greatest common root across all trees
@@ -154,32 +152,47 @@ where
         if pivot == logs.len() {
             let identity_updates =
                 extract_identity_updates(&logs, middleware).await?;
-            //TODO: flatten all updates so there are no dups and then apply all updates to the tree
+            let flattened_updates = flatten_updates(&identity_updates, None);
+            //TODO: apply all updates
         } else {
             let (canonical_logs, pending_logs) = logs.split_at(pivot);
             let canonical_updates =
-                extract_identity_updates(&logs, middleware.clone()).await?;
-            //TODO: flatten all updates so there are no dups and then apply all updates to the tree
+                extract_identity_updates(&canonical_logs, middleware.clone())
+                    .await?;
+            let flattened_updates = flatten_updates(&canonical_updates, None);
+            //TODO: apply all updates
 
-            //TODO: you also need the root here
             let pending_updates =
-                extract_identity_updates(&logs, middleware).await?;
+                extract_identity_updates(&pending_logs, middleware).await?;
+
+            self.tree_updates.extend(pending_updates);
         }
 
         Ok(())
     }
 }
 
-#[derive(PartialEq, PartialOrd, Eq)]
-pub struct Root {
-    pub root: Hash,
-    pub block_number: u64,
-}
+fn flatten_updates(
+    identity_updates: &BTreeMap<Root, HashMap<u32, Hash>>,
+    root: Option<Hash>,
+) -> HashMap<u32, &Hash> {
+    let mut flattened_updates = HashMap::new();
 
-//TODO: ord the root by block timestamp so that they can have order in tree state
+    let bound = if let Some(root) = root {
+        std::ops::Bound::Included(root)
+    } else {
+        std::ops::Bound::Unbounded
+    };
 
-impl Ord for Root {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.block_number.cmp(&other.block_number)
+    // Create a range up to and including `specific_root`
+    let sub_tree = identity_updates.range((std::ops::Bound::Unbounded, bound));
+
+    // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
+    for (_, updates) in sub_tree.rev() {
+        for (index, hash) in updates.iter() {
+            flattened_updates.entry(*index).or_insert(hash);
+        }
     }
+
+    Ok(flattened_updates)
 }

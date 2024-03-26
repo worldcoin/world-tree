@@ -22,13 +22,35 @@ use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
 use super::error::TreeAvailabilityError;
-use super::identity_tree::{IdentityUpdates, Root};
 use super::tree_data::TreeData;
 use super::Hash;
 use crate::abi::{
     DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
     IBridgedWorldID, TreeChangedFilter,
 };
+
+
+
+pub type IdentityUpdates = HashMap<u32, Hash>;
+
+
+#[derive(PartialEq, PartialOrd, Eq)]
+pub struct Root {
+    pub root: Hash,
+    pub block_number: u64,
+}
+
+impl Ord for Root {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.block_number.cmp(&other.block_number)
+    }
+}
+
+impl std::hash::Hash for Root {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.root.hash(state);
+    }
+}
 
 pub struct TreeManager<M: Middleware> {
     pub canonical_tree_manager: CanonicalTreeManager<M>,
@@ -177,6 +199,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     Ok(tree_updates)
 }
 
+
 /// Unpacks a contiguous byte array into a vector of 32-bit indices.
 ///
 /// # Arguments
@@ -211,6 +234,9 @@ pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     packed
 }
 
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,3 +254,4 @@ mod tests {
         assert_eq!(unpacked, indices);
     }
 }
+
