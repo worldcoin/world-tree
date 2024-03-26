@@ -13,7 +13,7 @@ common = { path = "crates/common" }
 config = "0.13.4"
 criterion = { version = "0.5.1", features = ["async", "async_futures"] }
 dotenv = "0.15.0"
-ethers = { version = "2.0.10", features = [
+ethers = { version = "2.0.14", features = [
     "abigen",
     "ws",
     "ipc",
