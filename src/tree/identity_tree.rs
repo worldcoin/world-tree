@@ -153,15 +153,19 @@ where
             let identity_updates =
                 extract_identity_updates(&logs, middleware).await?;
             let flattened_updates = flatten_updates(&identity_updates, None);
-            //TODO: apply all updates
+            for (leaf_index, value) in flattened_updates.into_iter() {
+                self.canonical_tree.set_leaf(leaf_index as usize, *value);
+            }
         } else {
             let (canonical_logs, pending_logs) = logs.split_at(pivot);
             let canonical_updates =
                 extract_identity_updates(&canonical_logs, middleware.clone())
                     .await?;
             let flattened_updates = flatten_updates(&canonical_updates, None);
-            //TODO: apply all updates
 
+            for (leaf_index, value) in flattened_updates.into_iter() {
+                self.canonical_tree.set_leaf(leaf_index as usize, *value);
+            }
             let pending_updates =
                 extract_identity_updates(&pending_logs, middleware).await?;
 
