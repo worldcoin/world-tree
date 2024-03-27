@@ -14,16 +14,40 @@ use tokio::sync::mpsc::Sender;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
-use super::tree_manager::{IdentityUpdates, Root, TreeManager};
+use super::tree_manager::{
+    BridgedTree, CanonicalTree, TreeManager, TreeVersion,
+};
 use super::Hash;
 use crate::abi::IBridgedWorldID;
 use crate::tree::tree_manager::extract_identity_updates;
 
+pub type IdentityUpdates = HashMap<u32, Hash>;
+
+#[derive(PartialEq, PartialOrd, Eq)]
+pub struct Root {
+    pub root: Hash,
+    pub block_number: u64,
+}
+
+impl Ord for Root {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.block_number.cmp(&other.block_number)
+    }
+}
+
+impl std::hash::Hash for Root {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.root.hash(state);
+    }
+}
+
 pub struct IdentityTree<M: Middleware> {
     pub canonical_tree: DynamicMerkleTree<PoseidonHash>,
     pub tree_updates: BTreeMap<Root, IdentityUpdates>,
-    //NOTE: we could also just ahve the canoncial_tree_manager and the bridged_tree_manager directly here instead
-    pub tree_manager: TreeManager<M>,
+
+    pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
+    pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+
     pub chain_state: HashMap<u64, Hash>,
     pub leaves: HashSet<Hash>,
 }
@@ -39,45 +63,49 @@ where
 
         self.sync_to_head().await?;
 
-        let (mut identity_rx, mut root_rx, tree_handles) =
-            self.tree_manager.spawn();
+        let (identity_tx, identity_rx) = tokio::sync::mpsc::channel(100);
+        let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
+
+        // Spawn the tree managers for the canonical and bridged trees
+        let mut handles = vec![];
+        handles.push(self.canonical_tree_manager.spawn(identity_tx));
+
+        for bridged_tree in self.bridged_tree_manager.iter() {
+            handles.push(bridged_tree.spawn(root_tx.clone()));
+        }
 
         loop {
-            tokio::select! {
+            //     tokio::select! {
 
-                //TODO: this should be a group of identity updates not a single one
-                            identity_update = identity_rx.recv() => {
-                                if let Some((root, updates)) = identity_update {
+            //         //TODO: this should be a group of identity updates not a single one
+            //                     identity_update = identity_rx.recv() => {
+            //                         if let Some((root, updates)) = identity_update {
 
-                                    for (leaf_index, val) in updates {
+            //                             for (leaf_index, val) in updates {
 
-                                        if val == Hash::ZERO{
-                                            let leaf = self.canonical_tree.get_leaf(leaf_index as usize);
-                                            self.leaves.remove(&val);
-                                        }else{
+            //                                 if val == Hash::ZERO{
+            //                                     let leaf = self.canonical_tree.get_leaf(leaf_index as usize);
+            //                                     self.leaves.remove(&val);
+            //                                 }else{
 
-                                            //TODO: handle insertions
+            //                                     //TODO: handle insertions
 
-                                        }
+            //                                 }
 
-                                    }
+            //                             }
 
+            //                     }
 
+            //                 }
 
-                            }
+            //                     bridged_root = root_rx.recv() => {
+            //                         if let Some((chain_id, root)) = bridged_root {
+            //                         //TODO: check if updates need to be applied to the tree
 
-                        }
+            //                     }
 
-                            bridged_root = root_rx.recv() => {
-                                if let Some((chain_id, root)) = bridged_root {
-                                //TODO: check if updates need to be applied to the tree
-
-                            }
-
-
-
-                }
-            }
+            //         }
+            //     }
         }
     }
 
@@ -86,7 +114,7 @@ where
     ) -> eyre::Result<HashMap<u64, Uint<256, 4>>> {
         let mut tree_data = vec![];
 
-        for bridged_tree in self.tree_manager.bridged_tree_manager.iter() {
+        for bridged_tree in self.bridged_tree_manager.iter() {
             let bridged_world_id = IBridgedWorldID::new(
                 bridged_tree.address,
                 bridged_tree.block_scanner.middleware.clone(),
@@ -96,14 +124,10 @@ where
         }
 
         tree_data.push((
-            self.tree_manager.canonical_tree_manager.chain_id,
+            self.canonical_tree_manager.chain_id,
             IBridgedWorldID::new(
-                self.tree_manager.canonical_tree_manager.address,
-                self.tree_manager
-                    .canonical_tree_manager
-                    .block_scanner
-                    .middleware
-                    .clone(),
+                self.canonical_tree_manager.address,
+                self.canonical_tree_manager.block_scanner.middleware.clone(),
             ),
         ));
 
@@ -136,12 +160,7 @@ where
             .collect::<HashSet<_>>();
 
         // Get all logs from the canonical tree
-        let logs = self
-            .tree_manager
-            .canonical_tree_manager
-            .block_scanner
-            .next()
-            .await?;
+        let logs = self.canonical_tree_manager.block_scanner.next().await?;
 
         if logs.is_empty() {
             return Ok(());
@@ -160,33 +179,32 @@ where
             }
         }
 
-        let middleware = self
-            .tree_manager
-            .canonical_tree_manager
-            .block_scanner
-            .middleware
-            .clone();
+        let canonical_middleware =
+            self.canonical_tree_manager.block_scanner.middleware.clone();
 
         // If all logs are already bridged to all chains, then sync the canonical tree
         if pivot == logs.len() {
             let identity_updates =
-                extract_identity_updates(&logs, middleware).await?;
+                extract_identity_updates(&logs, canonical_middleware).await?;
             let flattened_updates = flatten_updates(&identity_updates, None)?;
             for (leaf_index, value) in flattened_updates.into_iter() {
                 self.canonical_tree.set_leaf(leaf_index as usize, *value);
             }
         } else {
             let (canonical_logs, pending_logs) = logs.split_at(pivot);
-            let canonical_updates =
-                extract_identity_updates(&canonical_logs, middleware.clone())
-                    .await?;
+            let canonical_updates = extract_identity_updates(
+                &canonical_logs,
+                canonical_middleware.clone(),
+            )
+            .await?;
             let flattened_updates = flatten_updates(&canonical_updates, None)?;
 
             for (leaf_index, value) in flattened_updates.into_iter() {
                 self.canonical_tree.set_leaf(leaf_index as usize, *value);
             }
             let pending_updates =
-                extract_identity_updates(&pending_logs, middleware).await?;
+                extract_identity_updates(&pending_logs, canonical_middleware)
+                    .await?;
 
             self.tree_updates.extend(pending_updates);
         }

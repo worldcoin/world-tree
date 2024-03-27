@@ -14,114 +14,94 @@ use ethers::providers::{Middleware, MiddlewareError, StreamExt};
 use ethers::types::{
     Filter, Log, Selector, Transaction, ValueOrArray, H160, U256,
 };
-use futures::stream::FuturesUnordered;
-use ruint::Uint;
-use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
-use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::RwLock;
-use tokio::task::JoinSet;
-use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
-use super::error::TreeAvailabilityError;
-use super::tree_data::TreeData;
+use super::identity_tree::{IdentityUpdates, Root};
 use super::Hash;
 use crate::abi::{
     DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
     IBridgedWorldID, TreeChangedFilter,
 };
 
-pub type IdentityUpdates = HashMap<u32, Hash>;
+pub trait TreeVersion: Default {
+    type ChannelData;
 
-#[derive(PartialEq, PartialOrd, Eq)]
-pub struct Root {
-    pub root: Hash,
-    pub block_number: u64,
+    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>>;
+    async fn poll_for_updates();
 }
 
-impl Ord for Root {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.block_number.cmp(&other.block_number)
-    }
+pub struct TreeManager<M: Middleware, T: TreeVersion> {
+    pub address: H160,
+    pub block_scanner: BlockScanner<M>,
+    pub chain_id: u64,
+    tree_version: T,
 }
 
-impl std::hash::Hash for Root {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.root.hash(state);
-    }
-}
-
-pub struct TreeManager<M: Middleware> {
-    pub canonical_tree_manager: CanonicalTreeManager<M>,
-    pub bridged_tree_manager: Vec<BridgedTreeManager<M>>,
-}
-
-impl<M> TreeManager<M>
+impl<M, T> TreeManager<M, T>
 where
-    M: Middleware,
+    M: Middleware + 'static,
+    T: TreeVersion,
 {
+    pub async fn new(
+        address: H160,
+        window_size: u64,
+        last_synced_block: u64,
+        middleware: Arc<M>,
+    ) -> eyre::Result<Self> {
+        let chain_id = middleware.get_chainid().await?.as_u64();
+
+        let filter = Filter::new()
+            .address(address)
+            .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
+
+        let block_scanner = BlockScanner::new(
+            middleware,
+            window_size,
+            last_synced_block,
+            filter,
+        );
+
+        Ok(Self {
+            address,
+            block_scanner,
+            chain_id,
+            tree_version: T::default(),
+        })
+    }
+
     pub fn spawn(
         &self,
-    ) -> (
-        Receiver<(Root, IdentityUpdates)>,
-        Receiver<(u64, U256)>,
-        Vec<JoinHandle<eyre::Result<()>>>,
-    ) {
-        let (identity_tx, identity_rx) = tokio::sync::mpsc::channel(100);
-        let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
-
-        let mut handles = vec![];
-        handles.push(self.canonical_tree_manager.spawn(identity_tx));
-
-        for bridge_manager in self.bridged_tree_manager.iter() {
-            handles.push(bridge_manager.spawn(root_tx.clone()));
-        }
-
-        (identity_rx, root_rx, handles)
+        tx: Sender<T::ChannelData>,
+    ) -> JoinHandle<eyre::Result<()>> {
+        T::spawn(tx)
     }
 }
 
-pub struct CanonicalTreeManager<M: Middleware> {
-    pub address: H160,
-    pub block_scanner: BlockScanner<M>,
-    pub chain_id: u64,
-}
+#[derive(Default)]
+pub struct CanonicalTree;
+impl TreeVersion for CanonicalTree {
+    type ChannelData = (Root, IdentityUpdates);
 
-impl<M> CanonicalTreeManager<M>
-where
-    M: Middleware,
-{
-    pub fn new() -> Self {}
-
-    fn spawn(
-        &self,
-        identity_tx: Sender<(Root, IdentityUpdates)>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>> {
         todo!()
     }
 
-    async fn poll_for_updates() {}
+    async fn poll_for_updates() { /* Canonical update implementation */
+    }
 }
 
-pub struct BridgedTreeManager<M: Middleware> {
-    pub address: H160,
-    pub block_scanner: BlockScanner<M>,
-    pub chain_id: u64,
-}
+#[derive(Default)]
+pub struct BridgedTree;
+impl TreeVersion for BridgedTree {
+    type ChannelData = (u64, U256);
 
-impl<M> BridgedTreeManager<M>
-where
-    M: Middleware,
-{
-    fn spawn(
-        &self,
-        root_tx: Sender<(u64, U256)>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>> {
         todo!()
     }
 
-    async fn poll_for_updates() {}
+    async fn poll_for_updates() { /* Bridged update implementation */
+    }
 }
 
 pub async fn extract_identity_updates<M: Middleware + 'static>(
