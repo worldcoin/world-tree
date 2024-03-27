@@ -61,17 +61,13 @@ where
         let canonical_tree =
             DynamicMerkleTree::new((), tree_depth, &Hash::ZERO);
 
-        let chain_state = HashMap::new();
-        let leaves = HashSet::new();
-        let tree_updates = BTreeMap::new();
-
         Self {
             canonical_tree,
-            tree_updates,
             canonical_tree_manager,
             bridged_tree_manager,
-            chain_state,
-            leaves,
+            tree_updates: BTreeMap::new(),
+            chain_state: HashMap::new(),
+            leaves: HashSet::new(),
         }
     }
 
@@ -114,25 +110,20 @@ where
                 bridged_root = root_rx.recv() => {
                     let (chain_id, new_root) = bridged_root.expect("TODO: handle this case");
 
-                    // Sort the roots by block timestamp and get the oldest root
-                    let mut roots = self.chain_state
+                    let oldest_root: (&u64, &Root) = self.chain_state
                         .iter()
-                        .map(|(k, v)| (*k, *v))
-                        .collect::<Vec<(u64, Root)>>();
-                    roots.sort_by(|a, b| a.1.cmp(&b.1));
+                        .min_by_key(|&(_, v)| v)
+                        .expect("TODO: handle case ");
 
-                    let oldest_root = roots[0];
 
                     // Check if the new root is updating the oldest root, if so apply the updates to the canonical tree up to the oldest root
-                    if chain_id == oldest_root.0 {
+                    if chain_id == *oldest_root.0 {
                         let updates = self.tree_updates
                             .range((std::ops::Bound::Unbounded, std::ops::Bound::Included(oldest_root.1)))
                             .map(|(_, updates)| updates.clone())
                             .collect::<Vec<IdentityUpdates>>();
 
                         for update in updates.iter() {
-
-                            //TODO: split and take ownership of the updates
                             let first_update = update.iter().take(1).next().expect("TODO: handle this case");
                                 if *first_update.1 == Hash::ZERO {
                                     for (leaf_index, _) in update.iter() {
@@ -145,10 +136,22 @@ where
                                 }
                         }
 
-                        self.tree_updates = self.tree_updates.split_off(&new_root);
+
+                        // Insert the new root and recalculate the oldest root
+                        self.chain_state.insert(chain_id, new_root);
+
+                        let oldest_root: (&u64, &Root) = self.chain_state
+                            .iter()
+                            .min_by_key(|&(_, v)| v)
+                            .expect("TODO: handle case ");
+
+                        // split off the tree updates up to the new oldest root
+                        self.tree_updates = self.tree_updates.split_off(oldest_root.1);
+                    }else{
+                        self.chain_state.insert(chain_id, new_root);
+
                     }
 
-                    self.chain_state.insert(chain_id, new_root);
 
                 }
             }
@@ -223,7 +226,7 @@ where
         for log in logs.iter() {
             //TODO: check if le bytes or not
 
-            // We can set post root block number to 0 since the Hash implementation of Root only handles the `root` field
+            // We can set post root block number to 0 since the Hash implementation of Root only evaluates the `root` field
             let post_root = Root {
                 root: Hash::from_le_bytes(log.topics[3].0),
                 block_number: 0,

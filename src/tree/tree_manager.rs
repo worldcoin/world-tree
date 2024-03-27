@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::DerefMut;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::time::Duration;
 use std::vec;
 
 use common::test_utilities::abi::{
@@ -14,9 +14,11 @@ use ethers::providers::{Middleware, MiddlewareError, StreamExt};
 use ethers::types::{
     Filter, Log, Selector, Transaction, ValueOrArray, H160, U256,
 };
+use futures::stream::FuturesUnordered;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::task::JoinHandle;
 
-use super::block_scanner::BlockScanner;
+use super::block_scanner::{self, BlockScanner};
 use super::identity_tree::{IdentityUpdates, Root};
 use super::Hash;
 use crate::abi::{
@@ -24,16 +26,20 @@ use crate::abi::{
     IBridgedWorldID, TreeChangedFilter,
 };
 
+pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
+
 pub trait TreeVersion: Default {
     type ChannelData;
 
-    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>>;
-    async fn poll_for_updates();
+    fn spawn<M: Middleware>(
+        tx: Sender<Self::ChannelData>,
+        block_scanner: Arc<BlockScanner<M>>,
+    ) -> JoinHandle<eyre::Result<()>>;
 }
 
 pub struct TreeManager<M: Middleware, T: TreeVersion> {
     pub address: H160,
-    pub block_scanner: BlockScanner<M>,
+    pub block_scanner: Arc<BlockScanner<M>>,
     pub chain_id: u64,
     tree_version: T,
 }
@@ -55,12 +61,12 @@ where
             .address(address)
             .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
 
-        let block_scanner = BlockScanner::new(
+        let block_scanner = Arc::new(BlockScanner::new(
             middleware,
             window_size,
             last_synced_block,
             filter,
-        );
+        ));
 
         Ok(Self {
             address,
@@ -74,7 +80,7 @@ where
         &self,
         tx: Sender<T::ChannelData>,
     ) -> JoinHandle<eyre::Result<()>> {
-        T::spawn(tx)
+        T::spawn(tx, self.block_scanner.clone())
     }
 }
 
@@ -83,23 +89,77 @@ pub struct CanonicalTree;
 impl TreeVersion for CanonicalTree {
     type ChannelData = (Root, IdentityUpdates);
 
-    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>> {
-        todo!()
-    }
+    fn spawn<M>(
+        tx: Sender<Self::ChannelData>,
+        block_scanner: Arc<BlockScanner<M>>,
+    ) -> JoinHandle<eyre::Result<()>> {
+        tokio::spawn(async move {
+            loop {
+                let logs = block_scanner.next().await.expect("TODO:");
 
-    async fn poll_for_updates() {}
+                if logs.is_empty() {
+                    continue;
+                }
+
+                let identity_updates = extract_identity_updates(
+                    &logs,
+                    block_scanner.middleware.clone(),
+                )
+                .await?;
+
+                for update in identity_updates {
+                    tx.send(update).await?;
+                }
+
+                tokio::time::sleep(Duration::from_secs(
+                    BLOCK_SCANNER_SLEEP_TIME,
+                ))
+                .await;
+            }
+        })
+    }
 }
 
 #[derive(Default)]
 pub struct BridgedTree;
 impl TreeVersion for BridgedTree {
     type ChannelData = (u64, Root);
+    fn spawn<M>(
+        tx: Sender<Self::ChannelData>,
+        block_scanner: Arc<BlockScanner<M>>,
+    ) -> JoinHandle<eyre::Result<()>> {
+        tokio::spawn(async move {
+            let chain_id =
+                block_scanner.middleware.get_chainid().await?.as_u64();
 
-    fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>> {
-        todo!()
+            loop {
+                let logs = block_scanner.next().await.expect("TODO:");
+
+                if logs.is_empty() {
+                    continue;
+                }
+
+                for log in logs {
+                    let block_number = log
+                        .block_number
+                        .expect("TODO: handle this case")
+                        .as_u64();
+
+                    let root = Root {
+                        root: Hash::from_le_bytes(log.topics[3].0),
+                        block_number,
+                    };
+
+                    tx.send((chain_id, root)).await?;
+                }
+
+                tokio::time::sleep(Duration::from_secs(
+                    BLOCK_SCANNER_SLEEP_TIME,
+                ))
+                .await;
+            }
+        })
     }
-
-    async fn poll_for_updates() {}
 }
 
 pub async fn extract_identity_updates<M: Middleware + 'static>(
@@ -124,6 +184,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
         tracing::info!(?tx_hash, "Getting transaction");
 
+        //TODO: you can get all transactions concurrently
         let transaction = middleware
             .get_transaction(tx_hash)
             .await?
