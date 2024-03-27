@@ -1,10 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
-use common::test_utilities::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall,
-};
-use ethers::abi::AbiDecode;
-use ethers::contract::ContractError;
+use anyhow::Context;
 use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{Log, Selector, H160, U256};
 use ruint::Uint;
@@ -23,7 +20,7 @@ use crate::tree::tree_manager::extract_identity_updates;
 
 pub type IdentityUpdates = HashMap<u32, Hash>;
 
-#[derive(PartialEq, PartialOrd, Eq)]
+#[derive(PartialEq, PartialOrd, Eq, Clone, Copy)]
 pub struct Root {
     pub root: Hash,
     pub block_number: u64,
@@ -48,7 +45,7 @@ pub struct IdentityTree<M: Middleware> {
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
 
-    pub chain_state: HashMap<u64, Hash>,
+    pub chain_state: HashMap<u64, Root>,
     pub leaves: HashSet<Hash>,
 }
 
@@ -56,15 +53,35 @@ impl<M> IdentityTree<M>
 where
     M: Middleware + 'static,
 {
-    fn new() {}
+    pub fn new(
+        tree_depth: usize,
+        canonical_tree_manager: TreeManager<M, CanonicalTree>,
+        bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+    ) -> Self {
+        let canonical_tree =
+            DynamicMerkleTree::new((), tree_depth, &Hash::ZERO);
 
-    async fn spawn(&mut self) -> eyre::Result<()> {
+        let chain_state = HashMap::new();
+        let leaves = HashSet::new();
+        let tree_updates = BTreeMap::new();
+
+        Self {
+            canonical_tree,
+            tree_updates,
+            canonical_tree_manager,
+            bridged_tree_manager,
+            chain_state,
+            leaves,
+        }
+    }
+
+    pub async fn spawn(&mut self) -> eyre::Result<()> {
         //TODO: sync tree from cache
 
         self.sync_to_head().await?;
 
-        let (identity_tx, identity_rx) = tokio::sync::mpsc::channel(100);
-        let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
+        let (identity_tx, mut identity_rx) = tokio::sync::mpsc::channel(100);
+        let (root_tx, mut root_rx) = tokio::sync::mpsc::channel(100);
 
         // Spawn the tree managers for the canonical and bridged trees
         let mut handles = vec![];
@@ -75,43 +92,39 @@ where
         }
 
         loop {
-            //     tokio::select! {
+            tokio::select! {
+            identity_update = identity_rx.recv() => {
+                let (root, updates) = identity_update.expect("TODO: handle this case");
+                let first_update = updates.iter().take(1).next().expect("TODO: handle this case");
+                    if *first_update.1 == Hash::ZERO {
+                        for (leaf_index, _) in updates.iter() {
+                            let leaf = self.canonical_tree.get_leaf(*leaf_index as usize);
+                            self.leaves.remove(&leaf);
+                        }
+                    }else{
+                        for (_, val) in updates.iter() {
+                            self.leaves.insert(val.clone());
+                        }
+                    }
 
-            //         //TODO: this should be a group of identity updates not a single one
-            //                     identity_update = identity_rx.recv() => {
-            //                         if let Some((root, updates)) = identity_update {
+                    self.tree_updates.insert(root, updates);
+                }
 
-            //                             for (leaf_index, val) in updates {
 
-            //                                 if val == Hash::ZERO{
-            //                                     let leaf = self.canonical_tree.get_leaf(leaf_index as usize);
-            //                                     self.leaves.remove(&val);
-            //                                 }else{
+                bridged_root = root_rx.recv() => {
+                    let (chain_id, new_root) = bridged_root.expect("TODO: handle this case");
 
-            //                                     //TODO: handle insertions
+                    //TODO: sort self.chains by root
 
-            //                                 }
+                    //TODO: check if the new root is for the chain with the oldest root, if so update the tree with updates to new_root - 1, consuming the updates
 
-            //                             }
-
-            //                     }
-
-            //                 }
-
-            //                     bridged_root = root_rx.recv() => {
-            //                         if let Some((chain_id, root)) = bridged_root {
-            //                         //TODO: check if updates need to be applied to the tree
-
-            //                     }
-
-            //         }
-            //     }
+                    //TODO: update chain state
+                }
+            }
         }
     }
 
-    pub async fn get_latest_roots(
-        &self,
-    ) -> eyre::Result<HashMap<u64, Uint<256, 4>>> {
+    pub async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Root>> {
         let mut tree_data = vec![];
 
         for bridged_tree in self.bridged_tree_manager.iter() {
@@ -143,8 +156,15 @@ where
         let roots = futures::future::try_join_all(futures)
             .await?
             .into_iter()
-            .map(|(chain_id, root)| (chain_id, root))
-            .collect::<HashMap<u64, Uint<256, 4>>>();
+            .map(|(chain_id, root)| {
+                let root = Root {
+                    root,
+                    block_number: 0, //TODO: ensure its ok to set 0 here initially
+                };
+
+                (chain_id, root)
+            })
+            .collect::<HashMap<u64, Root>>();
 
         Ok(roots)
     }
@@ -156,7 +176,7 @@ where
         let roots = self
             .chain_state
             .iter()
-            .map(|(_, root)| *root)
+            .map(|(_, root)| root.clone())
             .collect::<HashSet<_>>();
 
         // Get all logs from the canonical tree
@@ -171,7 +191,13 @@ where
         let mut pivot = 0;
         for log in logs.iter() {
             //TODO: check if le bytes or not
-            let post_root = Hash::from_le_bytes(log.topics[3].0);
+
+            // We can set post root block number to 0 since the Hash implementation of Root only handles the `root` field
+            let post_root = Root {
+                root: Hash::from_le_bytes(log.topics[3].0),
+                block_number: 0,
+            };
+
             pivot += 1;
 
             if roots.contains(&post_root) {
@@ -225,7 +251,6 @@ fn flatten_updates(
         std::ops::Bound::Unbounded
     };
 
-    // Create a range up to and including `specific_root`
     let sub_tree = identity_updates.range((std::ops::Bound::Unbounded, bound));
 
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first

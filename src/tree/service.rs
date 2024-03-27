@@ -28,20 +28,14 @@ impl<M: Middleware> InclusionProofService<M> {
     /// Initializes new instance of `InclusionProofService`,
     ///
     /// # Arguments
-    ///
-    /// * `tree_depth` - Depth of the merkle tree
-    /// * `dense_prefix_depth`: Depth of the tree that is densely populated. Nodes beyond the `dense_prefix_depth` will be stored through pointer based structures.
-    /// * `tree_history_size`: Number of historical roots to store in memory. This is used to serve proofs against historical roots.
-    /// * `world_tree_address`: Address of the `WorldIDIdentityManager` contract onchain
-    /// * `world_tree_creation_block`: Block number where `WorldIDIdentityManager` was deployed
-    /// * `middleware`: Provider to interact with Ethereum
+    ///TODO:
     ///
     /// # Returns
     ///
     /// New instance of `InclusionProofService`.
     pub fn new(
         canonical_tree_address: H160,
-        world_tree_creation_block: u64,
+        last_synced_block: u64,
         window_size: u64,
         middleware: Arc<M>,
     ) -> Self {

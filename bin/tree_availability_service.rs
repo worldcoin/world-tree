@@ -13,7 +13,7 @@ use futures::StreamExt;
 use governor::Jitter;
 use tracing::Level;
 use world_tree::tree::config::ServiceConfig;
-use world_tree::tree::service::TreeAvailabilityService;
+use world_tree::tree::service::InclusionProofService;
 
 /// This service syncs the state of the World Tree and spawns a server that can deliver inclusion proofs for a given identity.
 #[derive(Parser, Debug)]
@@ -35,50 +35,50 @@ const METRICS_PORT: u16 = 8125;
 
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
-    dotenv::dotenv().ok();
+    // dotenv::dotenv().ok();
 
-    let opts = Opts::parse();
+    // let opts = Opts::parse();
 
-    let config = ServiceConfig::load(opts.config.as_deref())?;
+    // let config = ServiceConfig::load(opts.config.as_deref())?;
 
-    if opts.datadog {
-        init_datadog_subscriber(SERVICE_NAME, Level::INFO);
-        init_statsd_exporter(METRICS_HOST, METRICS_PORT);
-    } else {
-        init_subscriber(Level::INFO);
-    }
+    // if opts.datadog {
+    //     init_datadog_subscriber(SERVICE_NAME, Level::INFO);
+    //     init_statsd_exporter(METRICS_HOST, METRICS_PORT);
+    // } else {
+    //     init_subscriber(Level::INFO);
+    // }
 
-    let http_provider = Http::new(config.provider.rpc_endpoint);
+    // let http_provider = Http::new(config.provider.rpc_endpoint);
 
-    let throttled_http_provider = ThrottledProvider::new(
-        http_provider,
-        config.provider.throttle.unwrap_or(u32::MAX),
-        Some(Jitter::new(
-            Duration::from_millis(10),
-            Duration::from_millis(100),
-        )),
-    );
+    // let throttled_http_provider = ThrottledProvider::new(
+    //     http_provider,
+    //     config.provider.throttle.unwrap_or(u32::MAX),
+    //     Some(Jitter::new(
+    //         Duration::from_millis(10),
+    //         Duration::from_millis(100),
+    //     )),
+    // );
 
-    let middleware = Arc::new(Provider::new(throttled_http_provider));
+    // let middleware = Arc::new(Provider::new(throttled_http_provider));
 
-    let handles = TreeAvailabilityService::new(
-        config.world_tree.tree_depth,
-        config.world_tree.dense_prefix_depth,
-        config.world_tree.tree_history_size,
-        config.world_tree.world_id_contract_address,
-        config.world_tree.creation_block,
-        config.world_tree.window_size,
-        middleware,
-    )
-    .serve(config.world_tree.socket_address);
+    // let handles = InclusionProofService::new(
+    //     config.world_tree.tree_depth,
+    //     config.world_tree.dense_prefix_depth,
+    //     config.world_tree.tree_history_size,
+    //     config.world_tree.world_id_contract_address,
+    //     config.world_tree.creation_block,
+    //     config.world_tree.window_size,
+    //     middleware,
+    // )
+    // .serve(config.world_tree.socket_address);
 
-    let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
-    while let Some(result) = handles.next().await {
-        tracing::error!("TreeAvailabilityError: {:?}", result);
-        result??;
-    }
+    // let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
+    // while let Some(result) = handles.next().await {
+    //     tracing::error!("TreeAvailabilityError: {:?}", result);
+    //     result??;
+    // }
 
-    shutdown_tracer_provider();
+    // shutdown_tracer_provider();
 
     Ok(())
 }

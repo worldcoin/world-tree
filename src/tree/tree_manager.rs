@@ -87,21 +87,19 @@ impl TreeVersion for CanonicalTree {
         todo!()
     }
 
-    async fn poll_for_updates() { /* Canonical update implementation */
-    }
+    async fn poll_for_updates() {}
 }
 
 #[derive(Default)]
 pub struct BridgedTree;
 impl TreeVersion for BridgedTree {
-    type ChannelData = (u64, U256);
+    type ChannelData = (u64, Root);
 
     fn spawn(tx: Sender<Self::ChannelData>) -> JoinHandle<eyre::Result<()>> {
         todo!()
     }
 
-    async fn poll_for_updates() { /* Bridged update implementation */
-    }
+    async fn poll_for_updates() {}
 }
 
 pub async fn extract_identity_updates<M: Middleware + 'static>(
