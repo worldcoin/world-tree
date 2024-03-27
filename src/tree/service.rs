@@ -18,6 +18,8 @@ use super::identity_tree::IdentityTree;
 use super::tree_data::InclusionProof;
 use super::{Hash, PoseidonTree};
 
+pub type ChainId = u64;
+
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
@@ -33,13 +35,10 @@ impl<M: Middleware> InclusionProofService<M> {
     /// # Returns
     ///
     /// New instance of `InclusionProofService`.
-    pub fn new(
-        canonical_tree_address: H160,
-        last_synced_block: u64,
-        window_size: u64,
-        middleware: Arc<M>,
-    ) -> Self {
-        todo!()
+    pub fn new(identity_tree: IdentityTree<M>) -> Self {
+        Self {
+            identity_tree: Arc::new(identity_tree),
+        }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for a given World ID. This function also spawns a new task to keep the world tree synced to the chain head.
@@ -92,17 +91,17 @@ impl<M: Middleware> InclusionProofService<M> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InclusionProofRequest {
     pub identity_commitment: Hash,
-    pub root: Option<Hash>,
+    chain_id: Option<ChainId>,
 }
 
 impl InclusionProofRequest {
     pub fn new(
         identity_commitment: Hash,
-        root: Option<Hash>,
+        chain_id: Option<ChainId>,
     ) -> InclusionProofRequest {
         Self {
             identity_commitment,
-            root,
+            chain_id,
         }
     }
 }
@@ -120,22 +119,6 @@ pub async fn inclusion_proof<M: Middleware>(
     //     .get_inclusion_proof(req.identity_commitment, req.root);
 
     todo!()
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncResponse {
-    pub synced: bool,
-    pub block_number: Option<u64>,
-}
-
-impl SyncResponse {
-    pub fn new(synced: bool, block_number: Option<u64>) -> SyncResponse {
-        Self {
-            synced,
-            block_number,
-        }
-    }
 }
 
 impl TreeError {

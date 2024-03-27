@@ -73,7 +73,6 @@ where
 
     pub async fn spawn(&mut self) -> eyre::Result<()> {
         //TODO: sync tree from cache
-
         self.sync_to_head().await?;
 
         let (identity_tx, mut identity_rx) = tokio::sync::mpsc::channel(100);
@@ -87,6 +86,7 @@ where
             handles.push(bridged_tree.spawn(root_tx.clone()));
         }
 
+        //TODO: abstract into a function and return join handles
         loop {
             tokio::select! {
                 identity_update = identity_rx.recv() => {
@@ -104,6 +104,8 @@ where
                         }
 
                         self.tree_updates.insert(root, updates);
+
+                        //TODO: we also need to account for if mainnet
                     }
 
 
@@ -151,8 +153,6 @@ where
                         self.chain_state.insert(chain_id, new_root);
 
                     }
-
-
                 }
             }
         }

@@ -12,5 +12,3 @@ use semaphore::poseidon_tree::PoseidonHash;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
-
-pub const SYNC_TO_HEAD_SLEEP_SECONDS: u64 = 5;
