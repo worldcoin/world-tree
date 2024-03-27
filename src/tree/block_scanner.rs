@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -5,7 +6,8 @@ use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
-pub struct BlockScanner<M> {
+#[derive(Debug)]
+pub struct BlockScanner<M: Middleware> {
     /// The onchain data provider
     pub middleware: Arc<M>,
     /// The block from which to start parsing a given event
@@ -18,7 +20,7 @@ pub struct BlockScanner<M> {
 
 impl<M> BlockScanner<M>
 where
-    M: Middleware,
+    M: Middleware + Send + Sync + Debug,
 {
     /// Initializes a new `BlockScanner`
     pub const fn new(

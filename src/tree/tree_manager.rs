@@ -10,11 +10,10 @@ use common::test_utilities::abi::{
 };
 use ethers::abi::AbiDecode;
 use ethers::contract::{ContractError, EthCall, EthEvent};
-use ethers::providers::{Middleware, MiddlewareError, StreamExt};
+use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{
     Filter, Log, Selector, Transaction, ValueOrArray, H160, U256,
 };
-use futures::stream::FuturesUnordered;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
@@ -31,7 +30,7 @@ pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
 pub trait TreeVersion: Default {
     type ChannelData;
 
-    fn spawn<M: Middleware>(
+    fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
     ) -> JoinHandle<eyre::Result<()>>;
@@ -89,7 +88,7 @@ pub struct CanonicalTree;
 impl TreeVersion for CanonicalTree {
     type ChannelData = (Root, IdentityUpdates);
 
-    fn spawn<M>(
+    fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
     ) -> JoinHandle<eyre::Result<()>> {
@@ -124,7 +123,7 @@ impl TreeVersion for CanonicalTree {
 pub struct BridgedTree;
 impl TreeVersion for BridgedTree {
     type ChannelData = (u64, Root);
-    fn spawn<M>(
+    fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
     ) -> JoinHandle<eyre::Result<()>> {
