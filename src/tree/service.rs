@@ -11,19 +11,20 @@ use ethers::providers::Middleware;
 use ethers::types::H160;
 use semaphore::lazy_merkle_tree::Canonical;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use super::error::{TreeAvailabilityError, TreeError};
 use super::identity_tree::IdentityTree;
 use super::tree_data::InclusionProof;
-use super::{Hash, PoseidonTree};
+use super::{Hash, PoseidonTree, WorldTree};
 
 pub type ChainId = u64;
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
-    pub identity_tree: Arc<IdentityTree<M>>,
+    pub world_tree: WorldTree<M>,
 }
 
 impl<M: Middleware> InclusionProofService<M> {
@@ -35,10 +36,8 @@ impl<M: Middleware> InclusionProofService<M> {
     /// # Returns
     ///
     /// New instance of `InclusionProofService`.
-    pub fn new(identity_tree: IdentityTree<M>) -> Self {
-        Self {
-            identity_tree: Arc::new(identity_tree),
-        }
+    pub fn new(world_tree: WorldTree<M>) -> Self {
+        Self { world_tree }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for a given World ID. This function also spawns a new task to keep the world tree synced to the chain head.
@@ -55,6 +54,10 @@ impl<M: Middleware> InclusionProofService<M> {
         addr: SocketAddr,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
+
+        //TODO: spawn the world tree
+
+        //TODO: serve proofs
 
         // // Initialize a new router and spawn the server
         // tracing::info!(?port, "Initializing axum server");
@@ -106,9 +109,9 @@ impl InclusionProofRequest {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(identity_tree))]
+#[tracing::instrument(level = "debug", skip(world_tree))]
 pub async fn inclusion_proof<M: Middleware>(
-    State(identity_tree): State<Arc<IdentityTree<M>>>,
+    State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
     //TODO:
