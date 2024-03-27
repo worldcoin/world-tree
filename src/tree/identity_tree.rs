@@ -93,32 +93,63 @@ where
 
         loop {
             tokio::select! {
-            identity_update = identity_rx.recv() => {
-                let (root, updates) = identity_update.expect("TODO: handle this case");
-                let first_update = updates.iter().take(1).next().expect("TODO: handle this case");
-                    if *first_update.1 == Hash::ZERO {
-                        for (leaf_index, _) in updates.iter() {
-                            let leaf = self.canonical_tree.get_leaf(*leaf_index as usize);
-                            self.leaves.remove(&leaf);
+                identity_update = identity_rx.recv() => {
+                    let (root, updates) = identity_update.expect("TODO: handle this case");
+                    let first_update = updates.iter().take(1).next().expect("TODO: handle this case");
+                        if *first_update.1 == Hash::ZERO {
+                            for (leaf_index, _) in updates.iter() {
+                                let leaf = self.canonical_tree.get_leaf(*leaf_index as usize);
+                                self.leaves.remove(&leaf);
+                            }
+                        }else{
+                            for (_, val) in updates.iter() {
+                                self.leaves.insert(val.clone());
+                            }
                         }
-                    }else{
-                        for (_, val) in updates.iter() {
-                            self.leaves.insert(val.clone());
-                        }
-                    }
 
-                    self.tree_updates.insert(root, updates);
-                }
+                        self.tree_updates.insert(root, updates);
+                    }
 
 
                 bridged_root = root_rx.recv() => {
                     let (chain_id, new_root) = bridged_root.expect("TODO: handle this case");
 
-                    //TODO: sort self.chains by root
+                    // Sort the roots by block timestamp and get the oldest root
+                    let mut roots = self.chain_state
+                        .iter()
+                        .map(|(k, v)| (*k, *v))
+                        .collect::<Vec<(u64, Root)>>();
+                    roots.sort_by(|a, b| a.1.cmp(&b.1));
 
-                    //TODO: check if the new root is for the chain with the oldest root, if so update the tree with updates to new_root - 1, consuming the updates
+                    let oldest_root = roots[0];
 
-                    //TODO: update chain state
+                    // Check if the new root is updating the oldest root, if so apply the updates to the canonical tree up to the oldest root
+                    if chain_id == oldest_root.0 {
+                        let updates = self.tree_updates
+                            .range((std::ops::Bound::Unbounded, std::ops::Bound::Included(oldest_root.1)))
+                            .map(|(_, updates)| updates.clone())
+                            .collect::<Vec<IdentityUpdates>>();
+
+                        for update in updates.iter() {
+
+                            //TODO: split and take ownership of the updates
+                            let first_update = update.iter().take(1).next().expect("TODO: handle this case");
+                                if *first_update.1 == Hash::ZERO {
+                                    for (leaf_index, _) in update.iter() {
+                                        self.canonical_tree.set_leaf(*leaf_index as usize, Hash::ZERO);
+                                    }
+                                }else{
+                                    for (_, val) in update.iter() {
+                                        self.canonical_tree.push(*val)?;
+                                    }
+                                }
+                        }
+
+                        self.tree_updates = self.tree_updates.split_off(&new_root);
+                    }
+
+                    self.chain_state.insert(chain_id, new_root);
+
                 }
             }
         }
