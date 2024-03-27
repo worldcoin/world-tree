@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::DerefMut;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::thread::JoinHandle;
+use std::vec;
 
 use common::test_utilities::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall,
@@ -16,8 +18,9 @@ use futures::stream::FuturesUnordered;
 use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tokio::task::JoinSet;
 use tracing::instrument;
 
 use super::block_scanner::BlockScanner;
@@ -29,10 +32,7 @@ use crate::abi::{
     IBridgedWorldID, TreeChangedFilter,
 };
 
-
-
 pub type IdentityUpdates = HashMap<u32, Hash>;
-
 
 #[derive(PartialEq, PartialOrd, Eq)]
 pub struct Root {
@@ -61,22 +61,26 @@ impl<M> TreeManager<M>
 where
     M: Middleware,
 {
-    //TODO: return join handles and receivers
-    pub async fn spawn(&self) -> eyre::Result<()> {
-        todo!();
+    pub fn spawn(
+        &self,
+    ) -> (
+        Receiver<(Root, IdentityUpdates)>,
+        Receiver<(u64, U256)>,
+        Vec<JoinHandle<eyre::Result<()>>>,
+    ) {
+        let (identity_tx, identity_rx) = tokio::sync::mpsc::channel(100);
+        let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
+
+        let mut handles = vec![];
+        handles.push(self.canonical_tree_manager.spawn(identity_tx));
+
+        for bridge_manager in self.bridged_tree_manager.iter() {
+            handles.push(bridge_manager.spawn(root_tx.clone()));
+        }
+        (identity_rx, root_rx, handles)
     }
 }
 
-impl<M> CanonicalTreeManager<M>
-where
-    M: Middleware,
-{
-    async fn spawn() {
-        //TODO: poll for updates for each of these, sending data down the channels
-    }
-}
-
-//TODO: ^^ write some spawn function that spawns a new block scanner, then sends the id updates through the tx
 pub struct CanonicalTreeManager<M: Middleware> {
     pub identity_update_tx: Sender<(Root, IdentityUpdates)>,
     pub address: H160,
@@ -88,6 +92,13 @@ impl<M> CanonicalTreeManager<M>
 where
     M: Middleware,
 {
+    fn spawn(
+        &self,
+        identity_tx: Sender<(Root, IdentityUpdates)>,
+    ) -> JoinHandle<eyre::Result<()>> {
+        todo!()
+    }
+
     async fn poll_for_updates() {}
 }
 
@@ -102,13 +113,15 @@ impl<M> BridgedTreeManager<M>
 where
     M: Middleware,
 {
+    fn spawn(
+        &self,
+        root_tx: Sender<(u64, U256)>,
+    ) -> JoinHandle<eyre::Result<()>> {
+        todo!()
+    }
+
     async fn poll_for_updates() {}
 }
-
-//TODO: ^^ write some spawn function that spawns a new block scanner, then sends the root for that chain through the tx with the chainid. TODO: get the chainid for the middleware upon spawning
-
-//- first we get the state of all bridged tree roots to get the latest root
-//- then we sync the state of the canonical tree to the latest root, caching the updates from the lcd root along the way
 
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
@@ -152,7 +165,6 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             let identities = register_identities_call.identity_commitments;
 
             for (i, identity) in identities.into_iter().take_while(|x| *x != U256::zero()).enumerate(){
-                
                 identity_updates.insert(start_index +  i as u32, Hash::from_limbs(identity.0));
             }
 
@@ -172,9 +184,6 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
                 for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
                     identity_updates.insert(  i , Hash::ZERO);
                 }
-
-    
-
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
 
             tracing::info!("Decoding deleteIdentities calldata");
@@ -198,7 +207,6 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
     Ok(tree_updates)
 }
-
 
 /// Unpacks a contiguous byte array into a vector of 32-bit indices.
 ///
@@ -234,9 +242,6 @@ pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     packed
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,4 +259,3 @@ mod tests {
         assert_eq!(unpacked, indices);
     }
 }
-

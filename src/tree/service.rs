@@ -14,17 +14,18 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use super::error::{TreeAvailabilityError, TreeError};
+use super::identity_tree::IdentityTree;
 use super::tree_data::InclusionProof;
 use super::{Hash, PoseidonTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
-pub struct TreeAvailabilityService<M: Middleware + 'static> {
+pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
-    pub world_tree: Arc<WorldTree<M>>,
+    pub identity_tree: Arc<IdentityTree<M>>,
 }
 
-impl<M: Middleware> TreeAvailabilityService<M> {
-    /// Initializes new instance of `TreeAvailabilityService`,
+impl<M: Middleware> InclusionProofService<M> {
+    /// Initializes new instance of `InclusionProofService`,
     ///
     /// # Arguments
     ///
@@ -37,32 +38,14 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ///
     /// # Returns
     ///
-    /// New instance of `TreeAvailabilityService`.
+    /// New instance of `InclusionProofService`.
     pub fn new(
-        tree_depth: usize,
-        dense_prefix_depth: usize,
-        tree_history_size: usize,
-        world_tree_address: H160,
+        canonical_tree_address: H160,
         world_tree_creation_block: u64,
         window_size: u64,
         middleware: Arc<M>,
     ) -> Self {
-        let tree = PoseidonTree::<Canonical>::new_with_dense_prefix(
-            tree_depth,
-            dense_prefix_depth,
-            &Hash::ZERO,
-        );
-
-        let world_tree = Arc::new(WorldTree::new(
-            tree,
-            tree_history_size,
-            world_tree_address,
-            world_tree_creation_block,
-            window_size,
-            middleware,
-        ));
-
-        Self { world_tree }
+        todo!()
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for a given World ID. This function also spawns a new task to keep the world tree synced to the chain head.
@@ -80,32 +63,32 @@ impl<M: Middleware> TreeAvailabilityService<M> {
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 
-        // Initialize a new router and spawn the server
-        tracing::info!(?port, "Initializing axum server");
+        // // Initialize a new router and spawn the server
+        // tracing::info!(?port, "Initializing axum server");
 
-        let router = axum::Router::new()
-            .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            .layer(middleware::from_fn(logging::middleware))
-            .with_state(self.world_tree.clone());
+        // let router = axum::Router::new()
+        //     .route("/inclusionProof", axum::routing::post(inclusion_proof))
+        //     .layer(middleware::from_fn(logging::middleware))
+        //     .with_state(self.world_tree.clone());
 
-        let address =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        // let address =
+        //     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
-        let server_handle = tokio::spawn(async move {
-            tracing::info!("Spawning server");
-            axum::Server::bind(&address)
-                .serve(router.into_make_service())
-                .await
-                .map_err(TreeAvailabilityError::HyperError)?;
-            tracing::info!("Server spawned");
+        // let server_handle = tokio::spawn(async move {
+        //     tracing::info!("Spawning server");
+        //     axum::Server::bind(&address)
+        //         .serve(router.into_make_service())
+        //         .await
+        //         .map_err(TreeAvailabilityError::HyperError)?;
+        //     tracing::info!("Server spawned");
 
-            Ok(())
-        });
+        //     Ok(())
+        // });
 
-        handles.push(server_handle);
+        // handles.push(server_handle);
 
-        // Spawn a new task to keep the world tree synced to the chain head
-        handles.push(self.world_tree.spawn());
+        // // Spawn a new task to keep the world tree synced to the chain head
+        // handles.push(self.world_tree.spawn());
 
         handles
     }
@@ -132,7 +115,7 @@ impl InclusionProofRequest {
 
 #[tracing::instrument(level = "debug", skip(identity_tree))]
 pub async fn inclusion_proof<M: Middleware>(
-    State(identity_tree): State<Arc<WorldTree<M>>>,
+    State(identity_tree): State<Arc<IdentityTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
     //TODO:

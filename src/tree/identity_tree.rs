@@ -38,26 +38,60 @@ impl<M> IdentityTree<M>
 where
     M: Middleware + 'static,
 {
+    fn new() {}
+
     //TODO: going to need mutex instead of mut
     async fn spawn(&mut self) -> eyre::Result<()> {
-        // let (identity_update_tx, identity_update_rx) =
-        //     tokio::sync::mpsc::channel(100);
-
-        // let (bridged_root_tx, bridged_root_rx) =
-        //     tokio::sync::mpsc::channel(100);
         //TODO: sync tree from cache
 
         self.sync_to_head().await?;
 
         //TODO: spawn the tree manager to poll for updates
-        self.tree_manager.spawn();
+        let (mut identity_rx, mut root_rx, tree_handles) =
+            self.tree_manager.spawn();
 
-        // which calls poll for upates on the canonical tree manager and the bridged tree manager
+        loop {
+            tokio::select! {
 
-        // some loop and tokio select! where we handle the bridged tree messages and the canonical tree messages
-        // the canonical tree messages will append to the tree state
-        // the bridged tree messages will update the root for the chain, as well as check the lcd across all of the roots and if there is a new common root,
-        // the logic will advance the state of the canonical tree by consuming the next tree state into the canonical tree.
+                //TODO: this should be a group of identity updates not a single one
+                            identity_update = identity_rx.recv() => {
+                                if let Some((root, updates)) = identity_update {
+
+                                    for (leaf_index, val) in updates {
+
+                                        if val == Hash::ZERO{
+                                            let leaf = self.canonical_tree.get_leaf(leaf_index as usize);
+                                            self.leaves.remove(&val);
+                                        }else{
+
+                                            //TODO: handle insertions
+
+                                        }
+
+                                    }
+
+
+
+                            }
+
+                        }
+
+                            bridged_root = root_rx.recv() => {
+                                if let Some((chain_id, root)) = bridged_root {
+                                //TODO: check if updates need to be applied to the tree
+
+                            }
+
+
+
+                }
+            }
+
+            // some loop and tokio select! where we handle the bridged tree messages and the canonical tree messages
+            // the canonical tree messages will append to the tree state
+            // the bridged tree messages will update the root for the chain, as well as check the lcd across all of the roots and if there is a new common root,
+            // the logic will advance the state of the canonical tree by consuming the next tree state into the canonical tree.
+        }
 
         Ok(())
     }
