@@ -1,4 +1,5 @@
 pub mod block_scanner;
+pub mod config;
 pub mod error;
 pub mod identity_tree;
 pub mod service;

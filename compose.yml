@@ -1,0 +1,27 @@
+services:
+  blockchain:
+    hostname: blockchain
+    image: ghcr.io/foundry-rs/foundry:latest
+    ports:
+      - "8545:8545"
+    command: ["anvil --host 0.0.0.0 --block-time 2 --fork-url https://eth.llamarpc.com@17638489"]
+
+  world-tree:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - blockchain
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=full
+      - WLD__WORLD_TREE__WORLD_ID_CONTRACT_ADDRESS=0xf7134CE138832c1456F2a91D64621eE90c2bddEa
+      - WLD__WORLD_TREE__CREATION_BLOCK=17636832
+      - WLD__WORLD_TREE__TREE_HISTORY_SIZE=5
+      - WLD__WORLD_TREE__TREE_DEPTH=30
+      - WLD__WORLD_TREE__DENSE_PREFIX_DEPTH=20
+      - WLD__PROVIDER__RPC_ENDPOINT=http://blockchain:8545
+      - WLD__WORLD_TREE__SOCKET_ADDRESS=0.0.0.0:8080

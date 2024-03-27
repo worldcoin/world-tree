@@ -8,10 +8,12 @@ edition = "2021"
 anyhow = "1.0"
 axum = "0.6"
 axum-middleware = { path = "crates/axum-middleware" }
-clap = { version = "4.4.8", features = ["derive"] }
+clap = { version = "4.4.8", features = [ "derive", "env" ] }
 common = { path = "crates/common" }
+config = "0.13.4"
 criterion = { version = "0.5.1", features = ["async", "async_futures"] }
-ethers = { version = "2.0.14", features = [
+dotenv = "0.15.0"
+ethers = { version = "2.0.10", features = [
     "abigen",
     "ws",
     "ipc",
@@ -45,7 +47,6 @@ reqwest = { version = "0.11.22", features = ["json"] }
 [[bin]]
 name = "tree-availability-service"
 path = "bin/tree_availability_service.rs"
-
 
 [[bench]]
 name  = "tree_data"

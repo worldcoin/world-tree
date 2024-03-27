@@ -77,12 +77,12 @@ where
         for bridge_manager in self.bridged_tree_manager.iter() {
             handles.push(bridge_manager.spawn(root_tx.clone()));
         }
+
         (identity_rx, root_rx, handles)
     }
 }
 
 pub struct CanonicalTreeManager<M: Middleware> {
-    pub identity_update_tx: Sender<(Root, IdentityUpdates)>,
     pub address: H160,
     pub block_scanner: BlockScanner<M>,
     pub chain_id: u64,
@@ -92,6 +92,8 @@ impl<M> CanonicalTreeManager<M>
 where
     M: Middleware,
 {
+    pub fn new() -> Self {}
+
     fn spawn(
         &self,
         identity_tx: Sender<(Root, IdentityUpdates)>,
@@ -103,7 +105,6 @@ where
 }
 
 pub struct BridgedTreeManager<M: Middleware> {
-    pub root_tx: Sender<Root>,
     pub address: H160,
     pub block_scanner: BlockScanner<M>,
     pub chain_id: u64,

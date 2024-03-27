@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -59,7 +59,7 @@ impl<M: Middleware> InclusionProofService<M> {
     /// Vector of `JoinHandle`s for the spawned tasks.
     pub fn serve(
         self,
-        port: u16,
+        addr: SocketAddr,
     ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
         let mut handles = vec![];
 

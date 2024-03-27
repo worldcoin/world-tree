@@ -230,19 +230,21 @@ fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let value: Value = Deserialize::deserialize(deserializer)?;
-    if let Value::Array(array) = value {
-        let mut branches = vec![];
-        for value in array {
-            let branch = serde_json::from_value::<Branch>(value)
-                .map_err(serde::de::Error::custom)?;
-            branches.push(branch);
-        }
+    // let value: Value = Deserialize::deserialize(deserializer)?;
+    // if let Value::Array(array) = value {
+    //     let mut branches = vec![];
+    //     for value in array {
+    //         let branch = serde_json::from_value::<Branch>(value)
+    //             .map_err(serde::de::Error::custom)?;
+    //         branches.push(branch);
+    //     }
 
-        Ok(semaphore::merkle_tree::Proof(branches))
-    } else {
-        Err(D::Error::custom("Expected an array"))
-    }
+    //     Ok(semaphore::merkle_tree::Proof(branches))
+    // } else {
+    //     Err(D::Error::custom("Expected an array"))
+    // }
+
+    todo!()
 }
 
 #[cfg(test)]

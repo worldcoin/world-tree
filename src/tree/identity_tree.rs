@@ -20,18 +20,12 @@ use crate::abi::IBridgedWorldID;
 use crate::tree::tree_manager::extract_identity_updates;
 
 pub struct IdentityTree<M: Middleware> {
-    // NOTE: update comments describing the canonical tree, it is the greatest common root across all trees
     pub canonical_tree: DynamicMerkleTree<PoseidonHash>,
-    //NOTE: update comment to describe the tree updates to be applied to the canonical tree
     pub tree_updates: BTreeMap<Root, IdentityUpdates>,
-    /// NOTE: update comment about updating the tree updates and canonical tree
+    //NOTE: we could also just ahve the canoncial_tree_manager and the bridged_tree_manager directly here instead
     pub tree_manager: TreeManager<M>,
-    //NOTE: update to describe this tracks the state of the tree on different chains for querying inclusion proofs.
     pub chain_state: HashMap<u64, Hash>,
-
-    pub leaves: HashSet<Hash>, //NOTE: quick access to leaves to have a fast response for inclusion proofs in case the leaf is not there
-                               //NOTE: if the leaf is deleted from the canonical tree, then you will not be able to get a proof for it even if the new root is not bridged yet, due to this hashset
-                               // NOTE: also nice that we can return an error message that is specific when the leaf is present but not yet bridged to the chain!
+    pub leaves: HashSet<Hash>,
 }
 
 impl<M> IdentityTree<M>
@@ -40,13 +34,11 @@ where
 {
     fn new() {}
 
-    //TODO: going to need mutex instead of mut
     async fn spawn(&mut self) -> eyre::Result<()> {
         //TODO: sync tree from cache
 
         self.sync_to_head().await?;
 
-        //TODO: spawn the tree manager to poll for updates
         let (mut identity_rx, mut root_rx, tree_handles) =
             self.tree_manager.spawn();
 
@@ -86,14 +78,7 @@ where
 
                 }
             }
-
-            // some loop and tokio select! where we handle the bridged tree messages and the canonical tree messages
-            // the canonical tree messages will append to the tree state
-            // the bridged tree messages will update the root for the chain, as well as check the lcd across all of the roots and if there is a new common root,
-            // the logic will advance the state of the canonical tree by consuming the next tree state into the canonical tree.
         }
-
-        Ok(())
     }
 
     pub async fn get_latest_roots(
@@ -186,7 +171,7 @@ where
         if pivot == logs.len() {
             let identity_updates =
                 extract_identity_updates(&logs, middleware).await?;
-            let flattened_updates = flatten_updates(&identity_updates, None);
+            let flattened_updates = flatten_updates(&identity_updates, None)?;
             for (leaf_index, value) in flattened_updates.into_iter() {
                 self.canonical_tree.set_leaf(leaf_index as usize, *value);
             }
@@ -195,7 +180,7 @@ where
             let canonical_updates =
                 extract_identity_updates(&canonical_logs, middleware.clone())
                     .await?;
-            let flattened_updates = flatten_updates(&canonical_updates, None);
+            let flattened_updates = flatten_updates(&canonical_updates, None)?;
 
             for (leaf_index, value) in flattened_updates.into_iter() {
                 self.canonical_tree.set_leaf(leaf_index as usize, *value);
@@ -212,8 +197,8 @@ where
 
 fn flatten_updates(
     identity_updates: &BTreeMap<Root, HashMap<u32, Hash>>,
-    root: Option<Hash>,
-) -> HashMap<u32, &Hash> {
+    root: Option<Root>,
+) -> eyre::Result<HashMap<u32, &Hash>> {
     let mut flattened_updates = HashMap::new();
 
     let bound = if let Some(root) = root {
