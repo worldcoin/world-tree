@@ -34,7 +34,7 @@ pub struct WorldTree<M: Middleware> {
     pub identity_tree: Arc<RwLock<IdentityTree>>,
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
-    pub chain_state: HashMap<u64, Root>,
+    pub chain_state: Arc<RwLock<HashMap<u64, Root>>>,
 }
 
 impl<M> WorldTree<M>
@@ -46,16 +46,13 @@ where
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
     ) -> Self {
-        let canonical_tree =
-            DynamicMerkleTree::new((), tree_depth, &Hash::ZERO);
-
         let identity_tree = IdentityTree::new(tree_depth);
 
         Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_manager,
-            chain_state: HashMap::new(),
+            chain_state: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -104,7 +101,9 @@ where
                 bridged_root = root_rx.recv() => {
                     let (chain_id, new_root) = bridged_root.expect("TODO: handle this case");
 
-                    let oldest_root: (&u64, &Root) = self.chain_state
+                    let mut chain_state = self.chain_state.write().await;
+
+                    let oldest_root: (&u64, &Root) = chain_state
                         .iter()
                         .min_by_key(|&(_, v)| v)
                         .expect("TODO: handle case ");
@@ -135,9 +134,9 @@ where
 
 
                         // Insert the new root and recalculate the oldest root
-                        self.chain_state.insert(chain_id, new_root);
+                        chain_state.insert(chain_id, new_root);
 
-                        let oldest_root: (&u64, &Root) = self.chain_state
+                        let oldest_root: (&u64, &Root) = chain_state
                             .iter()
                             .min_by_key(|&(_, v)| v)
                             .expect("TODO: handle case ");
@@ -145,7 +144,7 @@ where
                         // split off the tree updates up to the new oldest root
                         identity_tree.tree_updates = identity_tree.tree_updates.split_off(oldest_root.1);
                     }else{
-                        self.chain_state.insert(chain_id, new_root);
+                        chain_state.insert(chain_id, new_root);
 
                     }
                 }
@@ -200,10 +199,10 @@ where
 
     #[instrument(skip(self))]
     pub async fn sync_to_head(&mut self) -> eyre::Result<()> {
-        self.chain_state = self.get_latest_roots().await?;
+        let mut chain_state = self.chain_state.write().await;
+        *chain_state = self.get_latest_roots().await?;
 
-        let roots = self
-            .chain_state
+        let roots = chain_state
             .iter()
             .map(|(_, root)| root.clone())
             .collect::<HashSet<_>>();
