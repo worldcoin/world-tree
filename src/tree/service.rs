@@ -1,6 +1,4 @@
-use std::collections::{HashMap, VecDeque};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::Ordering;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -9,19 +7,11 @@ use axum::response::IntoResponse;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
-use ethers::types::H160;
-use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
-use semaphore::poseidon_tree::{Branch, Proof};
-use semaphore::Field;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
-use tokio::sync::RwLock;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use super::error::{TreeAvailabilityError, TreeError};
-use super::identity_tree::IdentityTree;
-use super::{Hash, InclusionProof, PoseidonTree, WorldTree};
+use super::error::TreeError;
+use super::{Hash, InclusionProof, WorldTree};
 
 pub type ChainId = u64;
 

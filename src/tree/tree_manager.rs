@@ -18,11 +18,11 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
 use super::block_scanner::{self, BlockScanner};
-use super::identity_tree::{IdentityUpdates, Root};
+use super::identity_tree::{LeafUpdates, Root};
 use super::Hash;
 use crate::abi::{
     DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
-    IBridgedWorldID, TreeChangedFilter,
+    TreeChangedFilter,
 };
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
@@ -56,6 +56,7 @@ where
     ) -> eyre::Result<Self> {
         let chain_id = middleware.get_chainid().await?.as_u64();
 
+        //FIXME: Update to use RootAdded filter for bridged tree
         let filter = Filter::new()
             .address(address)
             .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
@@ -86,7 +87,7 @@ where
 #[derive(Default)]
 pub struct CanonicalTree;
 impl TreeVersion for CanonicalTree {
-    type ChannelData = (Root, IdentityUpdates);
+    type ChannelData = (Root, LeafUpdates);
 
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
@@ -153,7 +154,7 @@ impl TreeVersion for BridgedTree {
                     //FIXME: we also can not use the timestamp in the root added log since it is when the root is received
                     //We need to be able to get the block number or timestamp of when the root was added to the canonical tree
                     let root = Root {
-                        hash: Hash::from_le_bytes(log.topics[3].0),
+                        hash: Hash::from_le_bytes(log.topics[1].0),
                         block_number,
                     };
 
@@ -167,7 +168,7 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
-) -> eyre::Result<BTreeMap<Root, IdentityUpdates>> {
+) -> eyre::Result<BTreeMap<Root, LeafUpdates>> {
     let mut tree_updates = BTreeMap::new();
 
     //TODO: you can do this concurrently

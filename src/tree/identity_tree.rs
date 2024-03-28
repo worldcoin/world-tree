@@ -1,24 +1,14 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::{BTreeMap, HashMap};
 
-use anyhow::Context;
-use ethers::providers::{Middleware, MiddlewareError};
-use ethers::types::{Log, Selector, H160, U256};
-use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
-use semaphore::poseidon_tree::PoseidonHash;
-use tokio::sync::mpsc::Sender;
-use tracing::instrument;
+use semaphore::poseidon_tree::{PoseidonHash, Proof};
+use semaphore::Field;
+use serde::{Deserialize, Deserializer, Serialize};
 
-use super::block_scanner::BlockScanner;
-use super::tree_manager::{
-    BridgedTree, CanonicalTree, TreeManager, TreeVersion,
-};
 use super::Hash;
-use crate::abi::IBridgedWorldID;
-use crate::tree::tree_manager::extract_identity_updates;
 
-pub type IdentityUpdates = HashMap<u32, Hash>;
+pub type LeafUpdates = HashMap<u32, Hash>;
+pub type NodeUpdates = HashMap<u32, Hash>;
 
 #[derive(PartialEq, PartialOrd, Eq, Clone, Copy)]
 pub struct Root {
@@ -40,7 +30,7 @@ impl std::hash::Hash for Root {
 
 pub struct IdentityTree {
     pub tree: DynamicMerkleTree<PoseidonHash>,
-    pub tree_updates: BTreeMap<Root, IdentityUpdates>,
+    pub tree_updates: BTreeMap<Root, NodeUpdates>,
     pub leaves: HashMap<Hash, usize>,
 }
 
@@ -54,7 +44,16 @@ impl IdentityTree {
             leaves: HashMap::new(),
         }
     }
-    //TODO: get proof
+
+    pub fn inclusion_proof(
+        &self,
+        leaf: Hash,
+        root: Option<&Root>,
+    ) -> eyre::Result<Option<InclusionProof>> {
+        // Get leaf index from leaves
+
+        todo!()
+    }
 
     pub fn insert(&mut self, index: usize, value: Hash) {
         self.leaves.insert(value, index);
@@ -92,24 +91,61 @@ impl IdentityTree {
         }
     }
 
-    //TODO: function to append updates. We need to decide if the updates are going to be be all intermediate nodes from all prev updates or just from prev update to this one.
-    //NOTE: it depends on if we want to just have it ready to index or flatten when a proof comes in, probably ready to index im thinking
+    fn leaf_to_arr_index(&self, leaf_idx: u32) -> u32 {
+        let total_nodes = 1 << self.tree.depth() + 1;
+        let num_leaves = 1 << self.tree.depth();
+        total_nodes - num_leaves + leaf_idx
+    }
+
+    // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
+    pub fn append_updates(&mut self, mut updates: LeafUpdates) {
+        // Flatten the last updates and the new leaf updates
+        if let Some(last_update) = self.tree_updates.iter().last() {
+            for (node_idx, value) in last_update.1 {
+                updates.entry(*node_idx).or_insert(*value);
+            }
+        }
+
+        // Calculate the affected nodes from the new leaf updates
+        //NOTE:TODO: With this approach, when there are two updates that are siblings, we are doing duplicate work
+        for (leaf_idx, value) in updates {
+            // Collect the affected intermediate nodes
+
+            // While index > 0{
+            // Get the current idx sibling coordinates
+
+            // Fetch the sibling from the updates. If not present, get the sibling from the tree
+
+            // Calculate the parent hash and insert the value into the updates
+
+            // }
+        }
+    }
 
     // Applies updates up to the specified root, inclusive
     pub fn apply_updates_to_root(&mut self, root: Hash) -> eyre::Result<()> {
-        let flattened_updates = flatten_updates(
-            &self.tree_updates,
-            Some(Root {
-                hash: root,
-                block_number: 0,
-            }),
-        )?;
+        // We can set the block number to 0 since the hash implementation for Root only uses the hash
+        let root = Root {
+            hash: root,
+            block_number: 0,
+        };
 
-        //TODO: delete many
+        // Get the update at the specified root and apply to the tree
+        let update = self.tree_updates.get(&root).expect("TODO: handle error");
 
-        //TODO: insert many
+        for (node_idx, value) in update {
+            // TODO: set node value
+        }
 
-        //TODO: split off at new oldest root
+        // Separate leaf updates from intermediate node updates
+
+        // Split leaf insertions and deletions
+
+        // Insert leaves
+
+        // Delete leaves
+
+        // Split off tree updates at the new root
 
         Ok(())
     }
@@ -137,4 +173,40 @@ pub fn flatten_updates(
     }
 
     Ok(flattened_updates)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InclusionProof {
+    pub root: Field,
+    //TODO: Open a PR to semaphore-rs to deserialize proof instead of implementing deserialization here
+    #[serde(deserialize_with = "deserialize_proof")]
+    pub proof: Proof,
+}
+
+impl InclusionProof {
+    pub fn new(root: Field, proof: Proof) -> InclusionProof {
+        Self { root, proof }
+    }
+}
+
+fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // let value: Value = Deserialize::deserialize(deserializer)?;
+    // if let Value::Array(array) = value {
+    //     let mut branches = vec![];
+    //     for value in array {
+    //         let branch = serde_json::from_value::<Branch>(value)
+    //             .map_err(serde::de::Error::custom)?;
+    //         branches.push(branch);
+    //     }
+
+    //     Ok(semaphore::merkle_tree::Proof(branches))
+    // } else {
+    //     Err(D::Error::custom("Expected an array"))
+    // }
+
+    todo!()
 }

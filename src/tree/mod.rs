@@ -25,12 +25,13 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::instrument;
 
-use self::identity_tree::{flatten_updates, IdentityTree, Root};
+use self::identity_tree::{
+    flatten_updates, IdentityTree, InclusionProof, LeafUpdates, Root,
+};
 use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
 use crate::abi::IBridgedWorldID;
-use crate::tree::identity_tree::IdentityUpdates;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
@@ -67,25 +68,26 @@ where
         //TODO: sync tree from cache
         self.sync_to_head().await?;
 
-        let (identity_tx, identity_rx) = tokio::sync::mpsc::channel(100);
+        let (leaf_updates_tx, leaf_updates_rx) =
+            tokio::sync::mpsc::channel(100);
         let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
 
         // Spawn the tree managers for the canonical and bridged trees
         let mut handles = vec![];
-        handles.push(self.canonical_tree_manager.spawn(identity_tx));
+        handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
 
         for bridged_tree in self.bridged_tree_manager.iter() {
             handles.push(bridged_tree.spawn(root_tx.clone()));
         }
 
-        handles.push(self.handle_tree_updates(identity_rx, root_rx));
+        handles.push(self.handle_tree_updates(leaf_updates_rx, root_rx));
 
         Ok(handles)
     }
 
     fn handle_tree_updates(
         &self,
-        mut identity_rx: Receiver<(Root, IdentityUpdates)>,
+        mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
         mut root_rx: Receiver<(u64, Root)>,
     ) -> JoinHandle<eyre::Result<()>> {
         let identity_tree = self.identity_tree.clone();
@@ -95,12 +97,12 @@ where
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    identity_update = identity_rx.recv() => {
+                    leaf_updates = leaf_updates_rx.recv() => {
                         let mut identity_tree = identity_tree.write().await;
 
-                        let (root, updates) = identity_update.expect("TODO: handle this case");
+                        let (root, updates) = leaf_updates.expect("TODO: handle this case");
 
-                       //FIXME: write this to be more succinct
+                       //FIXME: update to be more succinct
                         let first_update = updates.iter().take(1).next().expect("TODO: handle this case");
 
                             if *first_update.1 == Hash::ZERO {
@@ -111,8 +113,7 @@ where
                                 identity_tree.insert_many_leaves(&leaves);
                             }
 
-                            //FIXME: we need to fix this where the updates are actually all affected nodes, not just leaf updates
-                            identity_tree.tree_updates.insert(root, updates);
+                            identity_tree.append_updates(updates);
 
                             // Update the root for the canonical chain
                             chain_state.write().await.insert(canonical_chain_id, root);
@@ -262,20 +263,27 @@ where
                 canonical_middleware.clone(),
             )
             .await?;
-            let flattened_updates = flatten_updates(&canonical_updates, None)?
-                .into_iter()
-                .map(|(idx, hash)| (idx as usize, *hash))
-                .collect::<Vec<_>>();
+            let flattened_canonical_updates =
+                flatten_updates(&canonical_updates, None)?
+                    .into_iter()
+                    .map(|(idx, hash)| (idx as usize, *hash))
+                    .collect::<Vec<_>>();
 
-            identity_tree.insert_many(&flattened_updates);
+            identity_tree.insert_many(&flattened_canonical_updates);
 
             let pending_updates =
                 extract_identity_updates(&pending_logs, canonical_middleware)
                     .await?;
 
-            identity_tree.tree_updates.extend(pending_updates);
+            let flattened_pending_updates =
+                flatten_updates(&pending_updates, None)?
+                    .into_iter()
+                    .map(|(idx, hash)| (idx as usize, *hash))
+                    .collect::<Vec<_>>();
 
-            //FIXME: we also need to add leaves for pending updates, we also need to do this when handling after synced
+            identity_tree.insert_many_leaves(&flattened_pending_updates);
+
+            identity_tree.tree_updates.extend(pending_updates);
         }
 
         Ok(())
@@ -286,76 +294,12 @@ where
         identity_commitment: Hash,
         chain_id: u64,
     ) -> eyre::Result<Option<InclusionProof>> {
-        // let identity_tree = self.identity_tree.read().clone();
         let identity_tree = self.identity_tree.read().await;
-
         let chain_state = self.chain_state.read().await;
 
         let target_root =
             chain_state.get(&chain_id).expect("TODO: handle this case");
 
-        if target_root.hash == identity_tree.tree.root() {
-            //TODO: get proof directly from tree
-            //TODO: get the leaf index from leaves
-        } else {
-            //TODO: flatten updates from root and get proof against tree
-        }
-
-        // let updates = identity_tree
-        //     .tree_updates
-        //     .range((
-        //         std::ops::Bound::Unbounded,
-        //         std::ops::Bound::Included(chain_state),
-        //     ))
-        //     .map(|(_, updates)| updates.clone())
-        //     .collect::<Vec<IdentityUpdates>>();
-
-        // let flattened_updates = flatten_updates(&updates, Some(*chain_state))?;
-
-        // let inclusion_proof = identity_tree.tree.get_inclusion_proof(
-        //     identity_commitment,
-        //     root,
-        //     flattened_updates,
-        // )?;
-
-        // Ok(Some(inclusion_proof))
-
-        todo!()
+        identity_tree.inclusion_proof(identity_commitment, Some(target_root))
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InclusionProof {
-    pub root: Field,
-    //TODO: Open a PR to semaphore-rs to deserialize proof instead of implementing deserialization here
-    #[serde(deserialize_with = "deserialize_proof")]
-    pub proof: Proof,
-}
-
-impl InclusionProof {
-    pub fn new(root: Field, proof: Proof) -> InclusionProof {
-        Self { root, proof }
-    }
-}
-
-fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // let value: Value = Deserialize::deserialize(deserializer)?;
-    // if let Value::Array(array) = value {
-    //     let mut branches = vec![];
-    //     for value in array {
-    //         let branch = serde_json::from_value::<Branch>(value)
-    //             .map_err(serde::de::Error::custom)?;
-    //         branches.push(branch);
-    //     }
-
-    //     Ok(semaphore::merkle_tree::Proof(branches))
-    // } else {
-    //     Err(D::Error::custom("Expected an array"))
-    // }
-
-    todo!()
 }
