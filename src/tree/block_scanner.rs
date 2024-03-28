@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 #[derive(Debug)]
@@ -42,9 +45,8 @@ where
         let latest_block = self.middleware.get_block_number().await?.as_u64();
         let mut last_synced_block =
             self.last_synced_block.load(Ordering::SeqCst);
-        let mut logs = Vec::new();
 
-        //TODO: do this concurrently
+        let mut tasks = FuturesUnordered::new();
         while last_synced_block < latest_block {
             let from_block = last_synced_block + 1;
             let to_block = (from_block + self.window_size).min(latest_block);
@@ -57,10 +59,23 @@ where
                 .from_block(BlockNumber::Number(from_block.into()))
                 .to_block(BlockNumber::Number(to_block.into()));
 
-            logs.extend(self.middleware.get_logs(&filter).await?);
+            let middleware = self.middleware.clone();
+            tasks.push(async move { middleware.get_logs(&filter).await });
 
             last_synced_block = to_block;
         }
+
+        //Sort all of the results
+        let mut sorted_logs = BTreeMap::new();
+
+        while let Some(result) = tasks.next().await {
+            let logs = result?;
+            for log in logs {
+                sorted_logs.insert(log.block_number, log);
+            }
+        }
+
+        let logs = sorted_logs.into_iter().map(|(_, log)| log).collect();
 
         self.last_synced_block
             .store(last_synced_block, Ordering::SeqCst);

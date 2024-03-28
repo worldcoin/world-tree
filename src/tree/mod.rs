@@ -259,14 +259,27 @@ where
             let identity_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
 
-            let flattened_updates = flatten_updates(&identity_updates, None)?
-                .into_iter()
-                .map(|(idx, hash)| (idx as usize, *hash))
+            let mut flattened_updates =
+                flatten_updates(&identity_updates, None)?
+                    .into_iter()
+                    .map(|(idx, hash)| (idx as usize, *hash))
+                    .collect::<Vec<_>>();
+
+            flattened_updates.sort_by_key(|(idx, _)| *idx);
+
+            let leaves = flattened_updates
+                .iter()
+                .map(|(_, hash)| *hash)
                 .collect::<Vec<_>>();
 
-            //TODO:FIXME: sort all of the updates and create a new tree from leaves
+            let tree = DynamicMerkleTree::new_with_leaves(
+                (),
+                identity_tree.tree.depth(),
+                &Hash::ZERO,
+                &leaves,
+            );
 
-            identity_tree.insert_many(&flattened_updates);
+            identity_tree.tree = tree;
         } else {
             // Split the logs into canonical and pending logs
             let (canonical_logs, pending_logs) = logs.split_at(pivot);
@@ -275,14 +288,27 @@ where
                 canonical_middleware.clone(),
             )
             .await?;
-            let flattened_canonical_updates =
+            let mut flattened_canonical_updates =
                 flatten_updates(&canonical_updates, None)?
                     .into_iter()
                     .map(|(idx, hash)| (idx as usize, *hash))
                     .collect::<Vec<_>>();
 
-            //TODO:FIXME: sort all of the updates and create a new tree from leaves
-            identity_tree.insert_many(&flattened_canonical_updates);
+            flattened_canonical_updates.sort_by_key(|(idx, _)| *idx);
+
+            let leaves = flattened_canonical_updates
+                .iter()
+                .map(|(_, hash)| *hash)
+                .collect::<Vec<_>>();
+
+            let tree = DynamicMerkleTree::new_with_leaves(
+                (),
+                identity_tree.tree.depth(),
+                &Hash::ZERO,
+                &leaves,
+            );
+
+            identity_tree.tree = tree;
 
             let pending_updates =
                 extract_identity_updates(&pending_logs, canonical_middleware)
