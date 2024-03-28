@@ -14,6 +14,8 @@ use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{
     Filter, Log, Selector, Transaction, ValueOrArray, H160, H256, U256,
 };
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
@@ -170,29 +172,39 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 ) -> eyre::Result<BTreeMap<Root, LeafUpdates>> {
     let mut tree_updates = BTreeMap::new();
 
-    //TODO: you can do this concurrently
+    let mut tasks = FuturesUnordered::new();
+
+    let mut roots = HashMap::new();
     for log in logs {
-        let block_number =
-            log.block_number.expect("TODO: handle this case").as_u64();
-
-        let root = Root {
-            hash: Hash::from_le_bytes(log.topics[3].0),
-            block_number,
-        };
-
-        let mut identity_updates = HashMap::new();
-
         let tx_hash = log.transaction_hash.expect("TODO: handle this case");
 
         tracing::info!(?tx_hash, "Getting transaction");
 
-        //TODO: you can get all transactions concurrently
-        let transaction = middleware
-            .get_transaction(tx_hash)
-            .await?
-            .expect("TODO: Handle this case");
+        let block_number =
+            log.block_number.expect("TODO: handle this case").as_u64();
 
+        roots.insert(block_number, Hash::from_le_bytes(log.topics[3].0));
+        tasks.push(middleware.get_transaction(tx_hash));
+    }
+
+    let mut sorted_transactions = BTreeMap::new();
+
+    while let Some(transaction) = tasks.next().await {
+        let transaction = transaction?.expect("TODO: handle this case");
+
+        let tx_hash = transaction.hash;
+        tracing::info!(?tx_hash, "Transaction received");
+
+        sorted_transactions.insert(
+            transaction.block_number.expect("TODO: handle this case"),
+            transaction,
+        );
+    }
+
+    for (block_number, transaction) in sorted_transactions {
         let calldata = &transaction.input;
+
+        let mut identity_updates = HashMap::new();
 
         let function_selector = Selector::try_from(&calldata[0..4])
             .expect("Transaction data does not contain a function selector");
@@ -243,6 +255,16 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             identity_updates.insert(  i , Hash::ZERO);
         }
     }
+
+        let block_number = block_number.as_u64();
+        let hash = roots
+            .get(&block_number)
+            .expect("Block number not in roots map");
+
+        let root = Root {
+            hash: *hash,
+            block_number,
+        };
 
         tree_updates.insert(root, identity_updates);
     }
