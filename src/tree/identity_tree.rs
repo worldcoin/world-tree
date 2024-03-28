@@ -99,7 +99,7 @@ impl IdentityTree {
     }
 
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
-    pub fn append_updates(&mut self, mut updates: LeafUpdates) {
+    pub fn append_updates(&mut self, root: Root, mut updates: LeafUpdates) {
         // Flatten the last updates and the new leaf updates
         if let Some(last_update) = self.tree_updates.iter().last() {
             for (node_idx, value) in last_update.1 {
@@ -122,7 +122,7 @@ impl IdentityTree {
             // }
         }
 
-        //TODO: calculate root and insert into tree updates
+        //TODO: calculate root and ensure it matches the expected root
     }
 
     // Applies updates up to the specified root, inclusive

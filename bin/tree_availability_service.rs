@@ -52,7 +52,7 @@ pub async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let world_tree = Arc::new(initialize_world_tree(&config).await?);
+    let world_tree = initialize_world_tree(&config).await?;
 
     let handles = InclusionProofService::new(world_tree)
         .serve(config.socket_address)
@@ -71,7 +71,7 @@ pub async fn main() -> eyre::Result<()> {
 
 async fn initialize_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<WorldTree<Provider<Http>>> {
+) -> eyre::Result<Arc<WorldTree<Provider<Http>>>> {
     let http_provider =
         Http::new(config.canonical_tree.provider.rpc_endpoint.clone());
     let canonical_middleware = Arc::new(Provider::new(http_provider));
@@ -105,9 +105,9 @@ async fn initialize_world_tree(
         }
     }
 
-    Ok(WorldTree::new(
+    Ok(Arc::new(WorldTree::new(
         config.tree_depth,
         canonical_tree_manager,
         bridged_tree_managers,
-    ))
+    )))
 }

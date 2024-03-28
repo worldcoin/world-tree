@@ -100,56 +100,54 @@ where
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                        leaf_updates = leaf_updates_rx.recv() => {
+                            leaf_updates = leaf_updates_rx.recv() => {
+                                if let Some((root, leaf_updates)) = leaf_updates{
+                                    let mut identity_tree = identity_tree.write().await;
 
-                            if let Some((root, leaf_updates)) = leaf_updates{
-                            let mut identity_tree = identity_tree.write().await;
+                                    //TODO:FIXME: update to be more succinct
+                                    let first_update = leaf_updates.iter().take(1).next().expect("TODO: handle this case");
+
+                                    if *first_update.1 == Hash::ZERO {
+                                        let leaves = leaf_updates.iter().map(|(_, leaf)| *leaf).collect::<Vec<_>>();
+                                        identity_tree.remove_many_leaves(&leaves);
+                                    }else{
+                                        let leaves = leaf_updates.iter().map(|(idx, leaf)| (*idx as usize, *leaf)).collect::<Vec<_>>();
+                                        identity_tree.insert_many_leaves(&leaves);
+                                    }
+
+                                    identity_tree.append_updates(root, leaf_updates);
+
+                                    // Update the root for the canonical chain
+                                    chain_state.write().await.insert(canonical_chain_id, root);
+                                }
+                            }
 
 
-                           //TODO:FIXME: update to be more succinct
-                            let first_update = leaf_updates.iter().take(1).next().expect("TODO: handle this case");
+                            bridged_root = bridged_root_rx.recv() => {
+                              if let Some((chain_id, bridged_root)) = bridged_root{
 
-                                if *first_update.1 == Hash::ZERO {
-                                    let leaves = leaf_updates.iter().map(|(_, leaf)| *leaf).collect::<Vec<_>>();
-                                    identity_tree.remove_many_leaves(&leaves);
-                                }else{
-                                    let leaves = leaf_updates.iter().map(|(idx, leaf)| (*idx as usize, *leaf)).collect::<Vec<_>>();
-                                    identity_tree.insert_many_leaves(&leaves);
+                                // Get the oldest root across all chains
+                                let mut chain_state = chain_state.write().await;
+                                let oldest_root: (&u64, &Root) = chain_state
+                                    .iter()
+                                    .min_by_key(|&(_, v)| v)
+                                    .expect("No roots in chain state");
+
+                                // If the update is for the chain with the oldest root, apply the updates to the tree
+                                if chain_id == *oldest_root.0 {
+                                    let mut identity_tree = identity_tree.write().await;
+                                    identity_tree.apply_updates_to_root(oldest_root.1)?;
                                 }
 
-                                identity_tree.append_updates(leaf_updates);
 
-                                // Update the root for the canonical chain
-                                chain_state.write().await.insert(canonical_chain_id, root);
-                            }
+                                let  identity_tree = identity_tree.read().await;
+                                // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                               let new_root = identity_tree.get_root_update_by_hash(&bridged_root).expect("Could not get root update");
+
+                                // Update chain state with the new root
+                                chain_state.insert(chain_id, *new_root);
+                              }
                         }
-
-
-                        bridged_root = bridged_root_rx.recv() => {
-                          if let Some((chain_id, bridged_root)) = bridged_root{
-
-                            // Get the oldest root across all chains
-                            let mut chain_state = chain_state.write().await;
-                            let oldest_root: (&u64, &Root) = chain_state
-                                .iter()
-                                .min_by_key(|&(_, v)| v)
-                                .expect("No roots in chain state");
-
-                            // If the update is for the chain with the oldest root, apply the updates to the tree
-                            if chain_id == *oldest_root.0 {
-                                let mut identity_tree = identity_tree.write().await;
-                                identity_tree.apply_updates_to_root(oldest_root.1)?;
-                            }
-
-
-                            let  identity_tree = identity_tree.read().await;
-                            // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                           let new_root = identity_tree.get_root_update_by_hash(&bridged_root).expect("Could not get root update");
-
-                            // Update chain state with the new root
-                            chain_state.insert(chain_id, *new_root);
-                          }
-                    }
                 }
             }
         })
@@ -306,14 +304,18 @@ where
     pub async fn inclusion_proof(
         &self,
         identity_commitment: Hash,
-        chain_id: u64,
+        chain_id: Option<u64>,
     ) -> eyre::Result<Option<InclusionProof>> {
-        let identity_tree = self.identity_tree.read().await;
-        let chain_state = self.chain_state.read().await;
+        if let Some(chain_id) = chain_id {
+            let chain_state = self.chain_state.read().await;
 
-        let target_root =
-            chain_state.get(&chain_id).expect("TODO: handle this case");
+            if let Some(root) = chain_state.get(&chain_id) {
+            } else {
+                return Ok(None);
+            }
+        } else {
+        }
 
-        identity_tree.inclusion_proof(identity_commitment, Some(target_root))
+        todo!()
     }
 }

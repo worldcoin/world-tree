@@ -6,13 +6,13 @@ use std::time::Duration;
 use std::vec;
 
 use common::test_utilities::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall,
+    DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
 };
 use ethers::abi::AbiDecode;
 use ethers::contract::{ContractError, EthCall, EthEvent};
 use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{
-    Filter, Log, Selector, Transaction, ValueOrArray, H160, U256,
+    Filter, Log, Selector, Transaction, ValueOrArray, H160, H256, U256,
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -34,6 +34,8 @@ pub trait TreeVersion: Default {
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
     ) -> JoinHandle<eyre::Result<()>>;
+
+    fn tree_changed_signature() -> H256;
 }
 
 pub struct TreeManager<M: Middleware, T: TreeVersion> {
@@ -59,7 +61,7 @@ where
         //FIXME: Update to use RootAdded filter for bridged tree
         let filter = Filter::new()
             .address(address)
-            .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
+            .topic0(ValueOrArray::Value(T::tree_changed_signature()));
 
         let block_scanner = Arc::new(BlockScanner::new(
             middleware,
@@ -118,6 +120,10 @@ impl TreeVersion for CanonicalTree {
             }
         })
     }
+
+    fn tree_changed_signature() -> H256 {
+        TreeChangedFilter::signature()
+    }
 }
 
 #[derive(Default)]
@@ -151,6 +157,10 @@ impl TreeVersion for BridgedTree {
                 }
             }
         })
+    }
+
+    fn tree_changed_signature() -> H256 {
+        RootAddedFilter::signature()
     }
 }
 

@@ -90,12 +90,9 @@ pub async fn inclusion_proof<M: Middleware>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    //TODO:
-    // let inclusion_proof = identity_tree
-    //     .tree_data
-    //     .read()
+    // let inclusion_proof = world_tree
+    //     .inclusion_proof(identity_commitment, chain_id)
     //     .await
-    //     .get_inclusion_proof(req.identity_commitment, req.root);
 
     todo!()
 }
