@@ -1,4 +1,5 @@
-use std::net::SocketAddr;
+use std::collections::{HashMap, VecDeque};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -9,34 +10,29 @@ use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
 use ethers::types::H160;
-use semaphore::lazy_merkle_tree::Canonical;
-use serde::{Deserialize, Serialize};
+use semaphore::lazy_merkle_tree::{Canonical, Derived, VersionMarker};
+use semaphore::poseidon_tree::{Branch, Proof};
+use semaphore::Field;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use super::error::{TreeAvailabilityError, TreeError};
 use super::identity_tree::IdentityTree;
-use super::tree_data::InclusionProof;
-use super::{Hash, PoseidonTree, WorldTree};
+use super::{Hash, InclusionProof, PoseidonTree, WorldTree};
 
 pub type ChainId = u64;
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
-    pub world_tree: WorldTree<M>,
+    pub world_tree: Arc<WorldTree<M>>,
 }
 
 impl<M: Middleware> InclusionProofService<M> {
-    /// Initializes new instance of `InclusionProofService`,
-    ///
-    /// # Arguments
-    ///TODO:
-    ///
-    /// # Returns
-    ///
-    /// New instance of `InclusionProofService`.
-    pub fn new(world_tree: WorldTree<M>) -> Self {
+    pub fn new(world_tree: Arc<WorldTree<M>>) -> Self {
         Self { world_tree }
     }
 
@@ -49,44 +45,34 @@ impl<M: Middleware> InclusionProofService<M> {
     /// # Returns
     ///
     /// Vector of `JoinHandle`s for the spawned tasks.
-    pub fn serve(
+    pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> Vec<JoinHandle<Result<(), TreeAvailabilityError<M>>>> {
+    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let mut handles = vec![];
 
-        //TODO: spawn the world tree
+        handles.extend(self.world_tree.spawn().await?);
 
-        //TODO: serve proofs
+        // Initialize a new router and spawn the server
+        tracing::info!(?addr, "Initializing axum server");
 
-        // // Initialize a new router and spawn the server
-        // tracing::info!(?port, "Initializing axum server");
+        let router = axum::Router::new()
+            .route("/inclusionProof", axum::routing::post(inclusion_proof))
+            .layer(middleware::from_fn(logging::middleware))
+            .with_state(self.world_tree.clone());
 
-        // let router = axum::Router::new()
-        //     .route("/inclusionProof", axum::routing::post(inclusion_proof))
-        //     .layer(middleware::from_fn(logging::middleware))
-        //     .with_state(self.world_tree.clone());
+        let server_handle = tokio::spawn(async move {
+            tracing::info!("Spawning server");
+            axum::Server::bind(&addr)
+                .serve(router.into_make_service())
+                .await?;
 
-        // let address =
-        //     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+            Ok(())
+        });
 
-        // let server_handle = tokio::spawn(async move {
-        //     tracing::info!("Spawning server");
-        //     axum::Server::bind(&address)
-        //         .serve(router.into_make_service())
-        //         .await
-        //         .map_err(TreeAvailabilityError::HyperError)?;
-        //     tracing::info!("Server spawned");
+        handles.push(server_handle);
 
-        //     Ok(())
-        // });
-
-        // handles.push(server_handle);
-
-        // // Spawn a new task to keep the world tree synced to the chain head
-        // handles.push(self.world_tree.spawn());
-
-        handles
+        Ok(handles)
     }
 }
 

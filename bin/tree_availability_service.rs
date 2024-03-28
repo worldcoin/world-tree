@@ -51,10 +51,11 @@ pub async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let world_tree = initialize_identity_tree(&config.world_tree).await?;
+    let world_tree = Arc::new(initialize_world_tree(&config.world_tree).await?);
 
     let handles = InclusionProofService::new(world_tree)
-        .serve(config.world_tree.socket_address);
+        .serve(config.world_tree.socket_address)
+        .await?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
@@ -67,7 +68,7 @@ pub async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn initialize_identity_tree(
+async fn initialize_world_tree(
     config: &WorldTreeConfig,
 ) -> eyre::Result<WorldTree<Provider<Http>>> {
     let http_provider =

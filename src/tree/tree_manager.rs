@@ -97,6 +97,11 @@ impl TreeVersion for CanonicalTree {
                 let logs = block_scanner.next().await.expect("TODO:");
 
                 if logs.is_empty() {
+                    tokio::time::sleep(Duration::from_secs(
+                        BLOCK_SCANNER_SLEEP_TIME,
+                    ))
+                    .await;
+
                     continue;
                 }
 
@@ -109,11 +114,6 @@ impl TreeVersion for CanonicalTree {
                 for update in identity_updates {
                     tx.send(update).await?;
                 }
-
-                tokio::time::sleep(Duration::from_secs(
-                    BLOCK_SCANNER_SLEEP_TIME,
-                ))
-                .await;
             }
         })
     }
@@ -135,6 +135,11 @@ impl TreeVersion for BridgedTree {
                 let logs = block_scanner.next().await.expect("TODO:");
 
                 if logs.is_empty() {
+                    tokio::time::sleep(Duration::from_secs(
+                        BLOCK_SCANNER_SLEEP_TIME,
+                    ))
+                    .await;
+
                     continue;
                 }
 
@@ -144,18 +149,16 @@ impl TreeVersion for BridgedTree {
                         .expect("TODO: handle this case")
                         .as_u64();
 
+                    //FIXME: It is possible for a newer root to have a smaller block number
+                    //FIXME: we also can not use the timestamp in the root added log since it is when the root is received
+                    //We need to be able to get the block number or timestamp of when the root was added to the canonical tree
                     let root = Root {
-                        root: Hash::from_le_bytes(log.topics[3].0),
+                        hash: Hash::from_le_bytes(log.topics[3].0),
                         block_number,
                     };
 
                     tx.send((chain_id, root)).await?;
                 }
-
-                tokio::time::sleep(Duration::from_secs(
-                    BLOCK_SCANNER_SLEEP_TIME,
-                ))
-                .await;
             }
         })
     }
@@ -173,7 +176,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             log.block_number.expect("TODO: handle this case").as_u64();
 
         let root = Root {
-            root: Hash::from_le_bytes(log.topics[3].0),
+            hash: Hash::from_le_bytes(log.topics[3].0),
             block_number,
         };
 
@@ -219,7 +222,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             );
 
 
-            //TODO: note that we use 2**30 for padding index
+            // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
                 for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
                     identity_updates.insert(  i , Hash::ZERO);
                 }
@@ -235,8 +238,8 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             );
 
 
-        //TODO: note that we use 2**30 for padding index
-        for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
+            // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
+            for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
             identity_updates.insert(  i , Hash::ZERO);
         }
     }
