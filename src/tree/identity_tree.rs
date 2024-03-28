@@ -1,3 +1,4 @@
+use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
@@ -120,16 +121,12 @@ impl IdentityTree {
 
             // }
         }
+
+        //TODO: calculate root and insert into tree updates
     }
 
     // Applies updates up to the specified root, inclusive
-    pub fn apply_updates_to_root(&mut self, root: Hash) -> eyre::Result<()> {
-        // We can set the block number to 0 since the hash implementation for Root only uses the hash
-        let root = Root {
-            hash: root,
-            block_number: 0,
-        };
-
+    pub fn apply_updates_to_root(&mut self, root: &Root) -> eyre::Result<()> {
         // Get the update at the specified root and apply to the tree
         let update = self.tree_updates.get(&root).expect("TODO: handle error");
 
@@ -148,6 +145,19 @@ impl IdentityTree {
         // Split off tree updates at the new root
 
         Ok(())
+    }
+
+    pub fn get_root_update_by_hash(&self, hash: &Hash) -> Option<&Root> {
+        let target_root = Root {
+            hash: *hash,
+            block_number: 0,
+        };
+
+        if let Some((root, _)) = self.tree_updates.get_key_value(&target_root) {
+            Some(root)
+        } else {
+            None
+        }
     }
 }
 

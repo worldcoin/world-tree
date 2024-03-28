@@ -123,7 +123,7 @@ impl TreeVersion for CanonicalTree {
 #[derive(Default)]
 pub struct BridgedTree;
 impl TreeVersion for BridgedTree {
-    type ChannelData = (u64, Root);
+    type ChannelData = (u64, Hash);
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
@@ -145,20 +145,9 @@ impl TreeVersion for BridgedTree {
                 }
 
                 for log in logs {
-                    let block_number = log
-                        .block_number
-                        .expect("TODO: handle this case")
-                        .as_u64();
-
-                    //FIXME: It is possible for a newer root to have a smaller block number
-                    //FIXME: we also can not use the timestamp in the root added log since it is when the root is received
-                    //We need to be able to get the block number or timestamp of when the root was added to the canonical tree
-                    let root = Root {
-                        hash: Hash::from_le_bytes(log.topics[1].0),
-                        block_number,
-                    };
-
-                    tx.send((chain_id, root)).await?;
+                    // Extract the root from the RootAdded event
+                    tx.send((chain_id, Hash::from_le_bytes(log.topics[1].0)))
+                        .await?;
                 }
             }
         })

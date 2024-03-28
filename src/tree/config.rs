@@ -9,8 +9,14 @@ pub const CONFIG_PREFIX: &str = "WLD";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServiceConfig {
-    pub world_tree: WorldTreeConfig,
-    pub provider: ProviderConfig,
+    pub tree_depth: usize,
+    /// Configuration for the canonical tree on mainnet
+    pub canonical_tree: TreeConfig,
+    /// Configuration for bridged trees
+    pub bridged_trees: Option<Vec<TreeConfig>>,
+    /// Socket at which to serve the service
+    #[serde(default = "default::socket_address")]
+    pub socket_address: SocketAddr,
 }
 
 impl ServiceConfig {
@@ -37,23 +43,9 @@ impl ServiceConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WorldTreeConfig {
-    pub tree_depth: usize,
-    /// Configuration for the canonical tree on mainnet
-    pub canonical_tree: TreeConfig,
-    /// Configuration for bridged trees
-    pub bridged_trees: Vec<TreeConfig>,
-    /// Maximum window size when scanning blocks for TreeChanged events
-    #[serde(default = "default::window_size")]
-    pub window_size: u64,
-    /// Socket at which to serve the service
-    #[serde(default = "default::socket_address")]
-    pub socket_address: SocketAddr,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TreeConfig {
     pub address: Address,
+    #[serde(default = "default::window_size")]
     pub window_size: u64,
     pub last_synced_block: u64,
     pub provider: ProviderConfig,

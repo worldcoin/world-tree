@@ -20,7 +20,7 @@ ethers = { version = "2.0.10", features = [
     "rustls",
     "openssl",
 ] }
-ethers-throttle = { path = "crates/ethers-throttle" }
+ethers-throttle = { git = "https://github.com/0xKitsune/ethers-throttle.git" }
 eyre = "0.6"
 futures = "0.3"
 governor = "0.6.0"

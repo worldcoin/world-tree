@@ -7,12 +7,13 @@ use common::metrics::init_statsd_exporter;
 use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Middleware, Provider};
-use ethers_throttle::{Throttle, ThrottledProvider};
+use ethers_throttle::Throttle;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use governor::Jitter;
+use hyper::service::Service;
 use tracing::Level;
-use world_tree::tree::config::{ServiceConfig, WorldTreeConfig};
+use world_tree::tree::config::ServiceConfig;
 use world_tree::tree::identity_tree::{self, IdentityTree};
 use world_tree::tree::service::InclusionProofService;
 use world_tree::tree::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
@@ -51,10 +52,10 @@ pub async fn main() -> eyre::Result<()> {
         init_subscriber(Level::INFO);
     }
 
-    let world_tree = Arc::new(initialize_world_tree(&config.world_tree).await?);
+    let world_tree = Arc::new(initialize_world_tree(&config).await?);
 
     let handles = InclusionProofService::new(world_tree)
-        .serve(config.world_tree.socket_address)
+        .serve(config.socket_address)
         .await?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
@@ -69,7 +70,7 @@ pub async fn main() -> eyre::Result<()> {
 }
 
 async fn initialize_world_tree(
-    config: &WorldTreeConfig,
+    config: &ServiceConfig,
 ) -> eyre::Result<WorldTree<Provider<Http>>> {
     let http_provider =
         Http::new(config.canonical_tree.provider.rpc_endpoint.clone());
@@ -85,20 +86,23 @@ async fn initialize_world_tree(
     .await?;
 
     let mut bridged_tree_managers = vec![];
-    for tree_config in config.bridged_trees.iter() {
-        let http_provider =
-            Http::new(tree_config.provider.rpc_endpoint.clone());
-        let middleware = Arc::new(Provider::new(http_provider));
 
-        let tree_manager = TreeManager::<_, BridgedTree>::new(
-            tree_config.address,
-            tree_config.window_size,
-            tree_config.last_synced_block,
-            middleware,
-        )
-        .await?;
+    if let Some(bridged_trees) = &config.bridged_trees {
+        for tree_config in bridged_trees.iter() {
+            let http_provider =
+                Http::new(tree_config.provider.rpc_endpoint.clone());
+            let middleware = Arc::new(Provider::new(http_provider));
 
-        bridged_tree_managers.push(tree_manager);
+            let tree_manager = TreeManager::<_, BridgedTree>::new(
+                tree_config.address,
+                tree_config.window_size,
+                tree_config.last_synced_block,
+                middleware,
+            )
+            .await?;
+
+            bridged_tree_managers.push(tree_manager);
+        }
     }
 
     Ok(WorldTree::new(

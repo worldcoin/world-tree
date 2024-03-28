@@ -21,7 +21,7 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tracing::instrument;
 
@@ -70,17 +70,20 @@ where
 
         let (leaf_updates_tx, leaf_updates_rx) =
             tokio::sync::mpsc::channel(100);
-        let (root_tx, root_rx) = tokio::sync::mpsc::channel(100);
+        let (bridged_root_tx, bridged_root_rx) =
+            tokio::sync::mpsc::channel(100);
 
         // Spawn the tree managers for the canonical and bridged trees
         let mut handles = vec![];
         handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
 
+        //TODO: handle if there are no bridged roots to spawn, otherwise the channel will close
         for bridged_tree in self.bridged_tree_manager.iter() {
-            handles.push(bridged_tree.spawn(root_tx.clone()));
+            handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
         }
 
-        handles.push(self.handle_tree_updates(leaf_updates_rx, root_rx));
+        handles
+            .push(self.handle_tree_updates(leaf_updates_rx, bridged_root_rx));
 
         Ok(handles)
     }
@@ -88,7 +91,7 @@ where
     fn handle_tree_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
-        mut root_rx: Receiver<(u64, Root)>,
+        mut bridged_root_rx: Receiver<(u64, Hash)>,
     ) -> JoinHandle<eyre::Result<()>> {
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
@@ -97,48 +100,55 @@ where
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    leaf_updates = leaf_updates_rx.recv() => {
-                        let mut identity_tree = identity_tree.write().await;
+                        leaf_updates = leaf_updates_rx.recv() => {
 
-                        let (root, updates) = leaf_updates.expect("TODO: handle this case");
+                            if let Some((root, leaf_updates)) = leaf_updates{
+                            let mut identity_tree = identity_tree.write().await;
 
-                       //FIXME: update to be more succinct
-                        let first_update = updates.iter().take(1).next().expect("TODO: handle this case");
 
-                            if *first_update.1 == Hash::ZERO {
-                                let leaves = updates.iter().map(|(_, leaf)| *leaf).collect::<Vec<_>>();
-                                identity_tree.remove_many_leaves(&leaves);
-                            }else{
-                                let leaves = updates.iter().map(|(idx, leaf)| (*idx as usize, *leaf)).collect::<Vec<_>>();
-                                identity_tree.insert_many_leaves(&leaves);
+                           //TODO:FIXME: update to be more succinct
+                            let first_update = leaf_updates.iter().take(1).next().expect("TODO: handle this case");
+
+                                if *first_update.1 == Hash::ZERO {
+                                    let leaves = leaf_updates.iter().map(|(_, leaf)| *leaf).collect::<Vec<_>>();
+                                    identity_tree.remove_many_leaves(&leaves);
+                                }else{
+                                    let leaves = leaf_updates.iter().map(|(idx, leaf)| (*idx as usize, *leaf)).collect::<Vec<_>>();
+                                    identity_tree.insert_many_leaves(&leaves);
+                                }
+
+                                identity_tree.append_updates(leaf_updates);
+
+                                // Update the root for the canonical chain
+                                chain_state.write().await.insert(canonical_chain_id, root);
+                            }
+                        }
+
+
+                        bridged_root = bridged_root_rx.recv() => {
+                          if let Some((chain_id, bridged_root)) = bridged_root{
+
+                            // Get the oldest root across all chains
+                            let mut chain_state = chain_state.write().await;
+                            let oldest_root: (&u64, &Root) = chain_state
+                                .iter()
+                                .min_by_key(|&(_, v)| v)
+                                .expect("No roots in chain state");
+
+                            // If the update is for the chain with the oldest root, apply the updates to the tree
+                            if chain_id == *oldest_root.0 {
+                                let mut identity_tree = identity_tree.write().await;
+                                identity_tree.apply_updates_to_root(oldest_root.1)?;
                             }
 
-                            identity_tree.append_updates(updates);
 
-                            // Update the root for the canonical chain
-                            chain_state.write().await.insert(canonical_chain_id, root);
-                        }
+                            let  identity_tree = identity_tree.read().await;
+                            // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                           let new_root = identity_tree.get_root_update_by_hash(&bridged_root).expect("Could not get root update");
 
-
-                    bridged_root = root_rx.recv() => {
-                        let (chain_id, new_root) = bridged_root.expect("TODO: handle this case");
-
-                        // Get the oldest root across all chains
-                        //FIXME: we need to compare roots by block number or timestamp on the canonical chain, not across chains
-                        let mut chain_state = chain_state.write().await;
-                        let oldest_root: (&u64, &Root) = chain_state
-                            .iter()
-                            .min_by_key(|&(_, v)| v)
-                            .expect("TODO: handle case ");
-
-                        // If the update is for the chain with the oldest root, apply the updates to the tree
-                        if chain_id == *oldest_root.0 {
-                            let mut identity_tree = identity_tree.write().await;
-                            identity_tree.apply_updates_to_root(oldest_root.1.hash)?;
-                        }
-
-                          // Insert the new root and recalculate the oldest root
-                          chain_state.insert(chain_id, new_root);
+                            // Update chain state with the new root
+                            chain_state.insert(chain_id, *new_root);
+                          }
                     }
                 }
             }
@@ -239,6 +249,8 @@ where
             }
         }
 
+        tracing::info!("Pivot: {}", pivot);
+
         let canonical_middleware =
             self.canonical_tree_manager.block_scanner.middleware.clone();
 
@@ -253,6 +265,8 @@ where
                 .into_iter()
                 .map(|(idx, hash)| (idx as usize, *hash))
                 .collect::<Vec<_>>();
+
+            //TODO:FIXME: sort all of the updates and create a new tree from leaves
 
             identity_tree.insert_many(&flattened_updates);
         } else {
@@ -269,6 +283,7 @@ where
                     .map(|(idx, hash)| (idx as usize, *hash))
                     .collect::<Vec<_>>();
 
+            //TODO:FIXME: sort all of the updates and create a new tree from leaves
             identity_tree.insert_many(&flattened_canonical_updates);
 
             let pending_updates =
@@ -282,7 +297,6 @@ where
                     .collect::<Vec<_>>();
 
             identity_tree.insert_many_leaves(&flattened_pending_updates);
-
             identity_tree.tree_updates.extend(pending_updates);
         }
 

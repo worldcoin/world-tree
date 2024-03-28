@@ -2045,10 +2045,10 @@ dependencies = [
 [[package]]
 name = "ethers-throttle"
 version = "0.1.0"
+source = "git+https://github.com/0xKitsune/ethers-throttle.git#d13909d6cb068b64748e58a0d58f8968564aa374"
 dependencies = [
  "async-trait",
  "ethers",
- "eyre",
  "governor",
  "serde",
 ]
