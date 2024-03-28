@@ -7,7 +7,7 @@ use common::metrics::init_statsd_exporter;
 use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Middleware, Provider};
-use ethers_throttle::Throttle;
+use ethers_throttle::{Throttle, ThrottledJsonRpcClient};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use governor::Jitter;
@@ -71,10 +71,17 @@ pub async fn main() -> eyre::Result<()> {
 
 async fn initialize_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<Arc<WorldTree<Provider<Http>>>> {
+) -> eyre::Result<Arc<WorldTree<Provider<ThrottledJsonRpcClient<Http>>>>> {
+    let canonical_provider_config = &config.canonical_tree.provider;
+
     let http_provider =
-        Http::new(config.canonical_tree.provider.rpc_endpoint.clone());
-    let canonical_middleware = Arc::new(Provider::new(http_provider));
+        Http::new(canonical_provider_config.rpc_endpoint.clone());
+    let throttled_provider = ThrottledJsonRpcClient::new(
+        http_provider,
+        canonical_provider_config.throttle,
+        None,
+    );
+    let canonical_middleware = Arc::new(Provider::new(throttled_provider));
 
     let canonical_tree_config = &config.canonical_tree;
     let canonical_tree_manager = TreeManager::<_, CanonicalTree>::new(
@@ -89,15 +96,23 @@ async fn initialize_world_tree(
 
     if let Some(bridged_trees) = &config.bridged_trees {
         for tree_config in bridged_trees.iter() {
+            let bridged_provider_config = &tree_config.provider;
             let http_provider =
-                Http::new(tree_config.provider.rpc_endpoint.clone());
-            let middleware = Arc::new(Provider::new(http_provider));
+                Http::new(bridged_provider_config.rpc_endpoint.clone());
+
+            let throttled_provider = ThrottledJsonRpcClient::new(
+                http_provider,
+                bridged_provider_config.throttle,
+                None,
+            );
+            let bridged_middleware =
+                Arc::new(Provider::new(throttled_provider));
 
             let tree_manager = TreeManager::<_, BridgedTree>::new(
                 tree_config.address,
                 tree_config.window_size,
                 tree_config.last_synced_block,
-                middleware,
+                bridged_middleware,
             )
             .await?;
 

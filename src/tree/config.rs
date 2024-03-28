@@ -56,8 +56,8 @@ pub struct ProviderConfig {
     /// Ethereum RPC endpoint
     #[serde(with = "crate::serde_utils::url")]
     pub rpc_endpoint: Url,
-    /// Request per minute limit
-    pub throttle: Option<u32>,
+    #[serde(default = "default::provider_throttle")]
+    pub throttle: u32,
 }
 
 mod default {
@@ -69,5 +69,9 @@ mod default {
 
     pub fn window_size() -> u64 {
         1000
+    }
+
+    pub fn provider_throttle() -> u32 {
+        0
     }
 }

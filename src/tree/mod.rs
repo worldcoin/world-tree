@@ -23,6 +23,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use tracing::instrument;
 
 use self::identity_tree::{
@@ -66,7 +67,11 @@ where
         &self,
     ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         //TODO: sync tree from cache
+
+        let start_time = Instant::now();
         self.sync_to_head().await?;
+
+        tracing::info!("Synced to head in {:?} seconds", start_time.elapsed());
 
         let (leaf_updates_tx, leaf_updates_rx) =
             tokio::sync::mpsc::channel(100);
@@ -272,6 +277,7 @@ where
                 .map(|(_, hash)| *hash)
                 .collect::<Vec<_>>();
 
+            tracing::info!(num_leaves = ?leaves.len(), "Building the identity tree");
             let tree = DynamicMerkleTree::new_with_leaves(
                 (),
                 identity_tree.tree.depth(),
