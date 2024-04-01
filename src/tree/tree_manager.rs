@@ -202,6 +202,16 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     }
 
     for (block_number, transaction) in sorted_transactions {
+        let block_number = block_number.as_u64();
+        let hash = roots
+            .get(&block_number)
+            .expect("Block number not in roots map");
+
+        let root = Root {
+            hash: *hash,
+            block_number,
+        };
+
         let calldata = &transaction.input;
 
         let mut identity_updates = HashMap::new();
@@ -223,6 +233,8 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             }
 
 
+            tree_updates.insert(root, LeafUpdates::Insert(identity_updates));
+
         } else if function_selector == DeleteIdentitiesCall::selector() {
             tracing::info!("Decoding deleteIdentities calldata");
 
@@ -235,9 +247,12 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
 
             // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
-                for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
-                    identity_updates.insert(  i , Hash::ZERO);
-                }
+            for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
+                identity_updates.insert(  i , Hash::ZERO);
+            }
+
+            tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
+
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
 
             tracing::info!("Decoding deleteIdentities calldata");
@@ -253,20 +268,11 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
             for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
             identity_updates.insert(  i , Hash::ZERO);
+            }   
+
+            tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
+
         }
-    }
-
-        let block_number = block_number.as_u64();
-        let hash = roots
-            .get(&block_number)
-            .expect("Block number not in roots map");
-
-        let root = Root {
-            hash: *hash,
-            block_number,
-        };
-
-        tree_updates.insert(root, identity_updates);
     }
 
     Ok(tree_updates)

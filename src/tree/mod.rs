@@ -26,13 +26,12 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
 
-use self::identity_tree::{
-    flatten_updates, IdentityTree, InclusionProof, LeafUpdates, Root,
-};
+use self::identity_tree::{IdentityTree, InclusionProof, LeafUpdates, Root};
 use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
 use crate::abi::IBridgedWorldID;
+use crate::tree::identity_tree::flatten_leaf_updates;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
@@ -108,17 +107,6 @@ where
                             leaf_updates = leaf_updates_rx.recv() => {
                                 if let Some((root, leaf_updates)) = leaf_updates{
                                     let mut identity_tree = identity_tree.write().await;
-
-                                    //TODO:FIXME: update to be more succinct
-                                    let first_update = leaf_updates.iter().take(1).next().expect("TODO: handle this case");
-
-                                    if *first_update.1 == Hash::ZERO {
-                                        let leaves = leaf_updates.iter().map(|(_, leaf)| *leaf).collect::<Vec<_>>();
-                                        identity_tree.remove_many_leaves(&leaves);
-                                    }else{
-                                        let leaves = leaf_updates.iter().map(|(idx, leaf)| (*idx as usize, *leaf)).collect::<Vec<_>>();
-                                        identity_tree.insert_many_leaves(&leaves);
-                                    }
 
                                     identity_tree.append_updates(root, leaf_updates);
 
@@ -252,8 +240,6 @@ where
             }
         }
 
-        tracing::info!("Pivot: {}", pivot);
-
         let canonical_middleware =
             self.canonical_tree_manager.block_scanner.middleware.clone();
 
@@ -261,18 +247,10 @@ where
 
         // Split the logs into canonical and pending. All canonical logs will be applied directly to the tree, while pending logs will be stored in the tree_updates map
         if pivot == logs.len() {
-            let identity_updates =
+            let leaf_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
 
-            let mut flattened_updates =
-                flatten_updates(&identity_updates, None)?
-                    .into_iter()
-                    .map(|(idx, hash)| (idx as usize, *hash))
-                    .collect::<Vec<_>>();
-
-            flattened_updates.sort_by_key(|(idx, _)| *idx);
-
-            let leaves = flattened_updates
+            let leaves = flatten_leaf_updates(leaf_updates)?
                 .iter()
                 .map(|(_, hash)| *hash)
                 .collect::<Vec<_>>();
@@ -294,15 +272,8 @@ where
                 canonical_middleware.clone(),
             )
             .await?;
-            let mut flattened_canonical_updates =
-                flatten_updates(&canonical_updates, None)?
-                    .into_iter()
-                    .map(|(idx, hash)| (idx as usize, *hash))
-                    .collect::<Vec<_>>();
 
-            flattened_canonical_updates.sort_by_key(|(idx, _)| *idx);
-
-            let leaves = flattened_canonical_updates
+            let canonical_leaves = flatten_leaf_updates(canonical_updates)?
                 .iter()
                 .map(|(_, hash)| *hash)
                 .collect::<Vec<_>>();
@@ -311,7 +282,7 @@ where
                 (),
                 identity_tree.tree.depth(),
                 &Hash::ZERO,
-                &leaves,
+                &canonical_leaves,
             );
 
             identity_tree.tree = tree;
@@ -320,14 +291,9 @@ where
                 extract_identity_updates(&pending_logs, canonical_middleware)
                     .await?;
 
-            let flattened_pending_updates =
-                flatten_updates(&pending_updates, None)?
-                    .into_iter()
-                    .map(|(idx, hash)| (idx as usize, *hash))
-                    .collect::<Vec<_>>();
-
-            identity_tree.insert_many_leaves(&flattened_pending_updates);
-            identity_tree.tree_updates.extend(pending_updates);
+            for (root, leaves) in pending_updates {
+                identity_tree.append_updates(root, leaves);
+            }
         }
 
         Ok(())

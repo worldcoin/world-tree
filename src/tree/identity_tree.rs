@@ -8,8 +8,21 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::Hash;
 
-pub type LeafUpdates = HashMap<u32, Hash>;
 pub type NodeUpdates = HashMap<u32, Hash>;
+
+pub enum LeafUpdates {
+    Insert(NodeUpdates),
+    Delete(NodeUpdates),
+}
+
+impl Into<NodeUpdates> for LeafUpdates {
+    fn into(self) -> NodeUpdates {
+        match self {
+            LeafUpdates::Insert(updates) => updates,
+            LeafUpdates::Delete(updates) => updates,
+        }
+    }
+}
 
 #[derive(PartialEq, PartialOrd, Eq, Clone, Copy)]
 pub struct Root {
@@ -32,7 +45,7 @@ impl std::hash::Hash for Root {
 pub struct IdentityTree {
     pub tree: DynamicMerkleTree<PoseidonHash>,
     pub tree_updates: BTreeMap<Root, NodeUpdates>,
-    pub leaves: HashMap<Hash, usize>,
+    pub leaves: HashMap<Hash, u32>,
 }
 
 impl IdentityTree {
@@ -56,13 +69,13 @@ impl IdentityTree {
         todo!()
     }
 
-    pub fn insert(&mut self, index: usize, value: Hash) {
+    pub fn insert(&mut self, index: u32, value: Hash) {
         self.leaves.insert(value, index);
         // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
         self.tree.push(value).expect("Failed to insert into tree");
     }
 
-    pub fn insert_many(&mut self, values: &[(usize, Hash)]) {
+    pub fn insert_many(&mut self, values: &[(u32, Hash)]) {
         for (index, value) in values {
             self.insert(*index, *value);
         }
@@ -80,7 +93,7 @@ impl IdentityTree {
         }
     }
 
-    pub fn insert_many_leaves(&mut self, leaves: &[(usize, Hash)]) {
+    pub fn insert_many_leaves(&mut self, leaves: &[(u32, Hash)]) {
         for (index, value) in leaves {
             self.leaves.insert(*value, *index);
         }
@@ -99,7 +112,23 @@ impl IdentityTree {
     }
 
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
-    pub fn append_updates(&mut self, root: Root, mut updates: LeafUpdates) {
+    pub fn append_updates(&mut self, root: Root, leaves: LeafUpdates) {
+        // Update leaves
+        match leaves {
+            LeafUpdates::Insert(ref updates) => {
+                for (idx, val) in updates.iter() {
+                    self.leaves.insert(*val, *idx);
+                }
+            }
+            LeafUpdates::Delete(ref updates) => {
+                for (_, val) in updates.iter() {
+                    self.leaves.remove(val);
+                }
+            }
+        }
+
+        let mut updates: NodeUpdates = leaves.into();
+
         // Flatten the last updates and the new leaf updates
         if let Some(last_update) = self.tree_updates.iter().last() {
             for (node_idx, value) in last_update.1 {
@@ -161,28 +190,24 @@ impl IdentityTree {
     }
 }
 
-pub fn flatten_updates(
-    identity_updates: &BTreeMap<Root, HashMap<u32, Hash>>,
-    root: Option<Root>,
-) -> eyre::Result<HashMap<u32, &Hash>> {
+pub fn flatten_leaf_updates(
+    leaf_updates: BTreeMap<Root, LeafUpdates>,
+) -> eyre::Result<Vec<(u32, Hash)>> {
     let mut flattened_updates = HashMap::new();
 
-    let bound = if let Some(root) = root {
-        std::ops::Bound::Included(root)
-    } else {
-        std::ops::Bound::Unbounded
-    };
-
-    let sub_tree = identity_updates.range((std::ops::Bound::Unbounded, bound));
-
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
-    for (_, updates) in sub_tree.rev() {
-        for (index, hash) in updates.iter() {
-            flattened_updates.entry(*index).or_insert(hash);
+    for (_, leaves) in leaf_updates.into_iter().rev() {
+        let updates: NodeUpdates = leaves.into();
+
+        for (index, hash) in updates.into_iter() {
+            flattened_updates.entry(index).or_insert(hash);
         }
     }
 
-    Ok(flattened_updates)
+    let mut updates = flattened_updates.into_iter().collect::<Vec<_>>();
+    updates.sort_by_key(|(idx, _)| *idx);
+
+    Ok(updates)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
