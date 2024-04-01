@@ -86,6 +86,7 @@ impl<M: Middleware> TreeAvailabilityService<M> {
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/synced", axum::routing::post(synced))
+            .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
@@ -179,6 +180,17 @@ pub async fn synced<M: Middleware>(
             StatusCode::OK,
             SyncResponse::new(false, latest_synced_block).into(),
         )
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn health<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> StatusCode {
+    if world_tree.synced.load(Ordering::Relaxed) {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
     }
 }
 
