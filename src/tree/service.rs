@@ -94,12 +94,17 @@ pub struct ChainIdQueryParams {
 pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
-    Query(query_params): Query<ChainIdQueryParams>,
+    // Query(query_params): Query<ChainIdQueryParams>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    let chain_id = query_params.chain_id.or(req.chain_id);
+    // let chain_id = query_params.chain_id.or(req.chain_id);
+
+    // let inclusion_proof = world_tree
+    //     .inclusion_proof(req.identity_commitment, chain_id)
+    //     .await
+    //     .expect("TODO: Handle error");
 
     let inclusion_proof = world_tree
-        .inclusion_proof(req.identity_commitment, chain_id)
+        .inclusion_proof(req.identity_commitment, None)
         .await
         .expect("TODO: Handle error");
 

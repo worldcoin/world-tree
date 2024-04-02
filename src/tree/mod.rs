@@ -250,7 +250,15 @@ where
 
             let leaves = flatten_leaf_updates(leaf_updates)?
                 .iter()
-                .map(|(_, hash)| *hash)
+                .map(|(idx, hash)| {
+                    if hash != &Hash::ZERO {
+                        identity_tree.leaves.insert(*hash, *idx);
+                    } else {
+                        identity_tree.leaves.remove(hash);
+                    }
+
+                    *hash
+                })
                 .collect::<Vec<_>>();
 
             tracing::info!(num_leaves = ?leaves.len(), "Building the identity tree");
@@ -273,7 +281,15 @@ where
 
             let canonical_leaves = flatten_leaf_updates(canonical_updates)?
                 .iter()
-                .map(|(_, hash)| *hash)
+                .map(|(idx, hash)| {
+                    if hash != &Hash::ZERO {
+                        identity_tree.leaves.insert(*hash, *idx);
+                    } else {
+                        identity_tree.leaves.remove(hash);
+                    }
+
+                    *hash
+                })
                 .collect::<Vec<_>>();
 
             let tree = DynamicMerkleTree::new_with_leaves(
