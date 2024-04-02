@@ -2,14 +2,12 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::Hash;
-
-pub type StorageUpdates = HashMap<u32, Hash>;
-pub type Leaves = HashMap<u32, Hash>;
 
 pub enum LeafUpdates {
     Insert(Leaves),
@@ -19,10 +17,32 @@ pub enum LeafUpdates {
 impl Into<Leaves> for LeafUpdates {
     fn into(self) -> Leaves {
         match self {
-            LeafUpdates::Insert(updates) => updates,
-            LeafUpdates::Delete(updates) => updates,
+            LeafUpdates::Insert(leaves) => leaves,
+            LeafUpdates::Delete(leaves) => leaves,
         }
     }
+}
+
+// Node index to hash, 0 indexed from the root
+pub type StorageUpdates = HashMap<u32, Hash>;
+
+// Leaf index to hash, 0 indexed from the initial leaf
+pub type Leaves = HashMap<u32, Hash>;
+
+pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
+    let leaf_0 = 1 << tree_depth - 1;
+    leaf_0 + leaf_idx
+}
+
+pub fn storage_to_leaf_idx(storage_idx: u32, tree_depth: usize) -> u32 {
+    let leaf_0 = 1 << tree_depth - 1;
+    storage_idx - leaf_0
+}
+
+pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
+    let depth = index.ilog2();
+    let offset = index - 2usize.pow(depth);
+    (depth as usize, offset)
 }
 
 #[derive(PartialEq, PartialOrd, Eq, Clone, Copy)]
@@ -113,9 +133,9 @@ impl IdentityTree {
     }
 
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
-    pub fn append_updates(&mut self, root: Root, leaves: LeafUpdates) {
+    pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
         // Update leaves
-        match leaves {
+        match leaf_updates {
             LeafUpdates::Insert(ref updates) => {
                 for (idx, val) in updates.iter() {
                     self.leaves.insert(*val, *idx);
@@ -128,68 +148,101 @@ impl IdentityTree {
             }
         }
 
-        let mut updates: NodeUpdates = leaves.into();
+        let mut updates = HashMap::new();
+        let mut node_queue = VecDeque::new();
 
-        // Flatten the last updates and the new leaf updates
-        if let Some(last_update) = self.tree_updates.iter().last() {
-            for (node_idx, value) in last_update.1 {
-                updates.entry(*node_idx).or_insert(*value);
+        // Convert leaf indices into storage indices and insert into updates
+        let leaves: Leaves = leaf_updates.into();
+        for (index, hash) in leaves.into_iter() {
+            let storage_idx = leaf_to_storage_idx(index, self.tree.depth());
+            updates.entry(storage_idx).or_insert(hash);
+
+            // Queue the parent index
+            let parent_idx = (storage_idx - 1) / 2;
+            node_queue.push_front(parent_idx);
+        }
+
+        let prev_update = if let Some(update) = self.tree_updates.iter().last()
+        {
+            //TODO: Use a more efficient approach than to clone the last update
+            update.1.clone()
+        } else {
+            HashMap::new()
+        };
+
+        while let Some(node_idx) = node_queue.pop_back() {
+            // Check if the parent is already in the updates hashmap, indicating it has already been calculated
+            let parent_idx = (node_idx - 1) / 2;
+            if updates.contains_key(&parent_idx) {
+                continue;
+            }
+
+            let left_sibling_idx = node_idx * 2 + 1;
+            let right_sibling_idx = node_idx * 2 + 2;
+
+            // Get the left sibling, with precedence given to the updates
+            let left_sibling = updates
+                .get(&left_sibling_idx)
+                .or_else(|| prev_update.get(&left_sibling_idx))
+                .or_else(|| {
+                    let (depth, offset) =
+                        storage_idx_to_coords(left_sibling_idx as usize);
+                    Some(&self.tree.get_node(depth, offset))
+                })
+                .expect("Could not find node in tree");
+
+            // Get the right sibling, with precedence given to the updates
+            let right_sibling = updates
+                .get(&right_sibling_idx)
+                .or_else(|| prev_update.get(&right_sibling_idx))
+                .or_else(|| {
+                    let (depth, offset) =
+                        storage_idx_to_coords(right_sibling_idx as usize);
+                    Some(&self.tree.get_node(depth, offset))
+                })
+                .expect("Could not find node in tree");
+
+            let hash = PoseidonHash::hash_node(left_sibling, right_sibling);
+
+            updates.insert(node_idx, hash);
+
+            // Queue the parent index if not the root
+            if node_idx != 0 {
+                node_queue.push_front(parent_idx);
             }
         }
 
-        // Calculate the affected nodes from the new leaf updates
-        //NOTE:TODO: With this approach, when there are two updates that are siblings, we are doing duplicate work
-
-        let mut affected_nodes = VecDeque::new();
-
-        // 1. Add all leaf updates to the affected_ndoes queue before flattening the updates
-        // 2. Flatten the updates NOTE: this actually wont work since you need to know if the parent is in the updates hashmap
-        // 3. For each node in the queue
-        // - check if the parent is already in the updates hashmap, if so continue to the next node in the queue
-        // - if not, check if the node is in the updates hashmap
-        // - if not, get it from the tree
-        // - calculate the parent hash and insert it into the updates hashmap
-        // - queue the parent index in the queue
-
-        // 4. stop when you have calculated the new root
-
-        //NOTE: make a note about having a different algo for deletions since it will be unlikely that two deletions will be siblings and you can just do the dup work in the very small chance they are
-
-        // //NOTE: you can go through reverse
-        // for (leaf_idx, value) in updates {
-
-        for (leaf_idx, value) in updates {
-            // Collect the affected intermediate nodes
-
-            // While index > 0{
-            // Get the current idx sibling coordinates
-
-            // Fetch the sibling from the updates. If not present, get the sibling from the tree
-
-            // Calculate the parent hash and insert the value into the updates
+        // Flatten any remaining updates from the previous update
+        for update in prev_update {
+            if !updates.contains_key(&update.0) {
+                updates.insert(update.0, update.1);
+            }
         }
-
-        //TODO: calculate root and ensure it matches the expected root
     }
 
     // Applies updates up to the specified root, inclusive
     pub fn apply_updates_to_root(&mut self, root: &Root) -> eyre::Result<()> {
         // Get the update at the specified root and apply to the tree
-        let update = self.tree_updates.get(&root).expect("TODO: handle error");
+        if let Some(update) = self.tree_updates.remove(root) {
+            // Apply all leaf updates to the tree
+            for (node_idx, val) in update {
+                let leaf_idx = storage_to_leaf_idx(node_idx, self.tree.depth());
 
-        for (node_idx, value) in update {
-            // TODO: set node value
+                // Insert/update leaves in the canonical tree
+                // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+                if val == Hash::ZERO {
+                    let leaf = self.tree.get_leaf(leaf_idx as usize);
+                    //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
+                    self.tree.set_leaf(leaf_idx as usize, val);
+                } else {
+                    self.tree.push(val);
+                }
+            }
         }
 
-        // Separate leaf updates from intermediate node updates
-
-        // Split leaf insertions and deletions
-
-        // Insert leaves
-
-        // Delete leaves
-
         // Split off tree updates at the new root
+        // Since the root was already removed from the updates, we can use split_off to separate the updates non inclusive of the root
+        self.tree_updates = self.tree_updates.split_off(root);
 
         Ok(())
     }
@@ -215,7 +268,7 @@ pub fn flatten_leaf_updates(
 
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
     for (_, leaves) in leaf_updates.into_iter().rev() {
-        let updates: NodeUpdates = leaves.into();
+        let updates: Leaves = leaves.into();
 
         for (index, hash) in updates.into_iter() {
             flattened_updates.entry(index).or_insert(hash);
