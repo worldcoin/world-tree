@@ -1,8 +1,9 @@
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
+use eyre::OptionExt;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
-use semaphore::merkle_tree::Hasher;
+use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -85,9 +86,64 @@ impl IdentityTree {
         leaf: Hash,
         root: Option<&Root>,
     ) -> eyre::Result<Option<InclusionProof>> {
-        // Get leaf index from leaves
+        let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
+        let storage_idx = leaf_to_storage_idx(*leaf_idx, self.tree.depth());
 
-        todo!()
+        if let Some(root) = root {
+            if root.hash == self.tree.root() {
+                let proof = self.tree.proof(storage_idx as usize);
+                return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
+            } else {
+                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
+                return Ok(Some(InclusionProof::new(root.hash, proof)));
+            }
+        } else {
+            let proof = self.tree.proof(storage_idx as usize);
+            return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
+        }
+    }
+
+    pub fn construct_proof_from_root(
+        &self,
+        leaf_idx: u32,
+        root: &Root,
+    ) -> eyre::Result<Proof> {
+        let updates = self
+            .tree_updates
+            .get(root)
+            .ok_or_eyre("Could not find root in tree updates")?;
+
+        let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
+
+        let mut proof: Vec<Branch<Hash>> = vec![];
+
+        while node_idx > 0 {
+            let sibling_idx = if node_idx % 2 == 0 {
+                node_idx - 1
+            } else {
+                node_idx + 1
+            };
+
+            let sibling = updates
+                .get(&sibling_idx)
+                .copied()
+                .or_else(|| {
+                    let (depth, offset) =
+                        storage_idx_to_coords(sibling_idx as usize);
+                    Some(self.tree.get_node(depth, offset))
+                })
+                .expect("Could not find node in tree");
+
+            proof.push(if node_idx % 2 == 0 {
+                Branch::Right(sibling)
+            } else {
+                Branch::Left(sibling)
+            });
+
+            node_idx = (node_idx - 1) / 2;
+        }
+
+        Ok(semaphore::merkle_tree::Proof(proof))
     }
 
     pub fn insert(&mut self, index: u32, value: Hash) {
@@ -181,28 +237,30 @@ impl IdentityTree {
             let right_sibling_idx = node_idx * 2 + 2;
 
             // Get the left sibling, with precedence given to the updates
-            let left_sibling = updates
+            let left = updates
                 .get(&left_sibling_idx)
-                .or_else(|| prev_update.get(&left_sibling_idx))
+                .copied()
+                .or_else(|| prev_update.get(&left_sibling_idx).copied())
                 .or_else(|| {
                     let (depth, offset) =
                         storage_idx_to_coords(left_sibling_idx as usize);
-                    Some(&self.tree.get_node(depth, offset))
+                    Some(self.tree.get_node(depth, offset))
                 })
                 .expect("Could not find node in tree");
 
             // Get the right sibling, with precedence given to the updates
-            let right_sibling = updates
+            let right = updates
                 .get(&right_sibling_idx)
-                .or_else(|| prev_update.get(&right_sibling_idx))
+                .copied()
+                .or_else(|| prev_update.get(&right_sibling_idx).copied())
                 .or_else(|| {
                     let (depth, offset) =
                         storage_idx_to_coords(right_sibling_idx as usize);
-                    Some(&self.tree.get_node(depth, offset))
+                    Some(self.tree.get_node(depth, offset))
                 })
                 .expect("Could not find node in tree");
 
-            let hash = PoseidonHash::hash_node(left_sibling, right_sibling);
+            let hash = PoseidonHash::hash_node(&left, &right);
 
             updates.insert(node_idx, hash);
 
