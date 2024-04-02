@@ -31,18 +31,18 @@ pub type StorageUpdates = HashMap<u32, Hash>;
 pub type Leaves = HashMap<u32, Hash>;
 
 pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
-    let leaf_0 = 1 << tree_depth - 1;
+    let leaf_0 = (1 << tree_depth) - 1;
     leaf_0 + leaf_idx
 }
 
 pub fn storage_to_leaf_idx(storage_idx: u32, tree_depth: usize) -> u32 {
-    let leaf_0 = 1 << tree_depth - 1;
+    let leaf_0 = (1 << tree_depth) - 1;
     storage_idx - leaf_0
 }
 
 pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
-    let depth = index.ilog2();
-    let offset = index - 2usize.pow(depth);
+    let depth = (index + 1).ilog2();
+    let offset = index - (2usize.pow(depth) - 1);
     (depth as usize, offset)
 }
 
@@ -371,4 +371,93 @@ where
     // }
 
     todo!()
+}
+
+#[cfg(test)]
+mod test {
+    use super::leaf_to_storage_idx;
+    use crate::tree::identity_tree::{
+        storage_idx_to_coords, storage_to_leaf_idx,
+    };
+
+    #[test]
+    fn test_leaf_to_storage_idx() {
+        let tree_depth = 10;
+
+        for i in 0..1 << tree_depth {
+            let storage_idx = leaf_to_storage_idx(i, tree_depth);
+            let expected_storage_idx = (1 << tree_depth) + i - 1;
+            assert_eq!(storage_idx, expected_storage_idx);
+        }
+    }
+
+    #[test]
+    fn test_storage_to_leaf_idx() {
+        let tree_depth = 10;
+
+        for i in 0..1 << tree_depth {
+            let storage_idx = leaf_to_storage_idx(i, tree_depth);
+            let leaf_idx = storage_to_leaf_idx(storage_idx, tree_depth);
+            assert_eq!(leaf_idx, i);
+        }
+    }
+
+    #[test]
+    fn test_storage_idx_to_coords() {
+        let tree_depth = 10;
+
+        for i in 0..1 << tree_depth {
+            let storage_idx = leaf_to_storage_idx(i, tree_depth);
+
+            let (depth, offset) = storage_idx_to_coords(storage_idx as usize);
+
+            let expected_depth = (storage_idx + 1).ilog2();
+            let expected_offset = storage_idx - (2_u32.pow(expected_depth) - 1);
+
+            assert_eq!(depth, expected_depth as usize);
+            assert_eq!(offset, expected_offset as usize);
+        }
+    }
+
+    #[test]
+    fn test_insert() {}
+
+    #[test]
+    fn test_insert_many() {}
+
+    #[test]
+    fn test_insert_leaves() {}
+
+    #[test]
+    fn test_insert_many_leaves() {}
+
+    #[test]
+    fn test_remove() {}
+
+    #[test]
+    fn test_remove_many() {}
+
+    #[test]
+    fn test_remove_leaves() {}
+
+    #[test]
+    fn test_remove_many_leaves() {}
+
+    #[test]
+    fn test_append_updates() {}
+
+    #[test]
+    fn test_apply_updates_to_root() {}
+
+    #[test]
+    fn test_flatten_leaf_updates() {}
+
+    #[test]
+    fn test_inclusion_proof() {}
+
+    #[test]
+    fn test_construct_proof_from_root() {}
+
+    #[test]
+    fn test_get_root_by_hash() {}
 }
