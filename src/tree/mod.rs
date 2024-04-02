@@ -12,6 +12,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{Log, Selector, H160, U256};
+use eyre::eyre;
 use metrics::GaugeFn;
 use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
@@ -304,16 +305,20 @@ where
         identity_commitment: Hash,
         chain_id: Option<u64>,
     ) -> eyre::Result<Option<InclusionProof>> {
-        if let Some(chain_id) = chain_id {
-            let chain_state = self.chain_state.read().await;
+        let chain_state = self.chain_state.read().await;
 
-            if let Some(root) = chain_state.get(&chain_id) {
-            } else {
-                return Ok(None);
-            }
+        let root = if let Some(chain_id) = chain_id {
+            chain_state.get(&chain_id)
         } else {
-        }
+            None
+        };
 
-        todo!()
+        let inclusion_proof = self
+            .identity_tree
+            .read()
+            .await
+            .inclusion_proof(identity_commitment, root)?;
+
+        Ok(inclusion_proof)
     }
 }

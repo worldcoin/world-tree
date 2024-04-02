@@ -181,12 +181,6 @@ impl IdentityTree {
         }
     }
 
-    fn leaf_to_arr_index(&self, leaf_idx: u32) -> u32 {
-        let total_nodes = 1 << self.tree.depth() + 1;
-        let num_leaves = 1 << self.tree.depth();
-        total_nodes - num_leaves + leaf_idx
-    }
-
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
     pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
         // Update leaves
@@ -275,6 +269,8 @@ impl IdentityTree {
                 updates.insert(update.0, update.1);
             }
         }
+
+        self.tree_updates.insert(root, updates);
     }
 
     // Applies updates up to the specified root, inclusive
@@ -288,11 +284,10 @@ impl IdentityTree {
                 // Insert/update leaves in the canonical tree
                 // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
                 if val == Hash::ZERO {
-                    let leaf = self.tree.get_leaf(leaf_idx as usize);
                     //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
-                    self.tree.set_leaf(leaf_idx as usize, val);
+                    self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
                 } else {
-                    self.tree.push(val);
+                    self.tree.push(val)?;
                 }
             }
         }
