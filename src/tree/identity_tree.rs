@@ -46,7 +46,7 @@ pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     (depth as usize, offset)
 }
 
-#[derive(PartialEq, PartialOrd, Eq, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Eq, Clone, Copy, Debug)]
 pub struct Root {
     pub hash: Hash,
     pub block_number: u64,
@@ -146,39 +146,16 @@ impl IdentityTree {
     }
 
     pub fn insert(&mut self, index: u32, value: Hash) {
+        //TODO: do we want to return an error if a non unique leaf is being inserted?
         self.leaves.insert(value, index);
         // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
         self.tree.push(value).expect("Failed to insert into tree");
-    }
-
-    pub fn insert_many(&mut self, values: &[(u32, Hash)]) {
-        for (index, value) in values {
-            self.insert(*index, *value);
-        }
     }
 
     pub fn remove(&mut self, index: usize) {
         let leaf = self.tree.get_leaf(index);
         self.leaves.remove(&leaf);
         self.tree.set_leaf(index, Hash::ZERO);
-    }
-
-    pub fn remove_many(&mut self, indices: &[usize]) {
-        for index in indices {
-            self.remove(*index);
-        }
-    }
-
-    pub fn insert_many_leaves(&mut self, leaves: &[(u32, Hash)]) {
-        for (index, value) in leaves {
-            self.leaves.insert(*value, *index);
-        }
-    }
-
-    pub fn remove_many_leaves(&mut self, leaves: &[Hash]) {
-        for value in leaves {
-            self.leaves.remove(&value);
-        }
     }
 
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
@@ -375,10 +352,15 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::leaf_to_storage_idx;
+    use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+    use semaphore::merkle_tree::Hasher;
+    use semaphore::poseidon_tree::PoseidonHash;
+
+    use super::{leaf_to_storage_idx, IdentityTree};
     use crate::tree::identity_tree::{
         storage_idx_to_coords, storage_to_leaf_idx,
     };
+    use crate::tree::Hash;
 
     #[test]
     fn test_leaf_to_storage_idx() {
@@ -420,28 +402,64 @@ mod test {
     }
 
     #[test]
-    fn test_insert() {}
+    fn test_insert() {
+        let depth = 10;
+        let mut identity_tree = IdentityTree::new(depth);
+
+        let leaves = (0..1 << depth)
+            .into_iter()
+            .map(Hash::from)
+            .collect::<Vec<_>>();
+
+        for (idx, leaf) in leaves.iter().enumerate() {
+            identity_tree.insert(idx as u32, *leaf);
+        }
+
+        let expected_tree: DynamicMerkleTree<PoseidonHash> =
+            DynamicMerkleTree::new_with_leaves((), depth, &Hash::ZERO, &leaves);
+
+        assert_eq!(identity_tree.tree.root(), expected_tree.root());
+
+        for leaf_idx in 0..1 << depth {
+            let leaf = Hash::from(leaf_idx);
+            assert_eq!(identity_tree.leaves.get(&leaf), Some(&leaf_idx));
+        }
+    }
 
     #[test]
-    fn test_insert_many() {}
+    fn test_remove() {
+        let depth = 10;
 
-    #[test]
-    fn test_insert_leaves() {}
+        let mut identity_tree = IdentityTree::new(depth);
 
-    #[test]
-    fn test_insert_many_leaves() {}
+        let leaves = (0..1 << depth)
+            .into_iter()
+            .map(Hash::from)
+            .collect::<Vec<_>>();
 
-    #[test]
-    fn test_remove() {}
+        for (idx, leaf) in leaves.iter().enumerate() {
+            identity_tree.insert(idx as u32, *leaf);
+        }
 
-    #[test]
-    fn test_remove_many() {}
+        for i in 0..1 << depth {
+            identity_tree.remove(i as usize);
+        }
 
-    #[test]
-    fn test_remove_leaves() {}
+        let expected_tree: DynamicMerkleTree<PoseidonHash> =
+            DynamicMerkleTree::new_with_leaves(
+                (),
+                depth,
+                &Hash::ZERO,
+                &vec![Hash::default(); leaves.len()],
+            );
 
-    #[test]
-    fn test_remove_many_leaves() {}
+        assert_eq!(identity_tree.tree.root(), expected_tree.root());
+
+        for leaf in 0..1 << depth {
+            let leaf_hash = Hash::from(leaf);
+            assert_eq!(identity_tree.leaves.get(&leaf_hash), None);
+        }
+    }
 
     #[test]
     fn test_append_updates() {}
