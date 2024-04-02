@@ -135,7 +135,7 @@ where
 
                                 let  identity_tree = identity_tree.read().await;
                                 // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                               let new_root = identity_tree.get_root_update_by_hash(&bridged_root).expect("Could not get root update");
+                               let new_root = identity_tree.get_root_by_hash(&bridged_root).expect("Could not get root update");
 
                                 // Update chain state with the new root
                                 chain_state.insert(chain_id, *new_root);

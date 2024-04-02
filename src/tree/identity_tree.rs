@@ -1,5 +1,5 @@
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
@@ -8,15 +8,16 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::Hash;
 
-pub type NodeUpdates = HashMap<u32, Hash>;
+pub type StorageUpdates = HashMap<u32, Hash>;
+pub type Leaves = HashMap<u32, Hash>;
 
 pub enum LeafUpdates {
-    Insert(NodeUpdates),
-    Delete(NodeUpdates),
+    Insert(Leaves),
+    Delete(Leaves),
 }
 
-impl Into<NodeUpdates> for LeafUpdates {
-    fn into(self) -> NodeUpdates {
+impl Into<Leaves> for LeafUpdates {
+    fn into(self) -> Leaves {
         match self {
             LeafUpdates::Insert(updates) => updates,
             LeafUpdates::Delete(updates) => updates,
@@ -44,7 +45,7 @@ impl std::hash::Hash for Root {
 
 pub struct IdentityTree {
     pub tree: DynamicMerkleTree<PoseidonHash>,
-    pub tree_updates: BTreeMap<Root, NodeUpdates>,
+    pub tree_updates: BTreeMap<Root, StorageUpdates>,
     pub leaves: HashMap<Hash, u32>,
 }
 
@@ -138,6 +139,25 @@ impl IdentityTree {
 
         // Calculate the affected nodes from the new leaf updates
         //NOTE:TODO: With this approach, when there are two updates that are siblings, we are doing duplicate work
+
+        let mut affected_nodes = VecDeque::new();
+
+        // 1. Add all leaf updates to the affected_ndoes queue before flattening the updates
+        // 2. Flatten the updates NOTE: this actually wont work since you need to know if the parent is in the updates hashmap
+        // 3. For each node in the queue
+        // - check if the parent is already in the updates hashmap, if so continue to the next node in the queue
+        // - if not, check if the node is in the updates hashmap
+        // - if not, get it from the tree
+        // - calculate the parent hash and insert it into the updates hashmap
+        // - queue the parent index in the queue
+
+        // 4. stop when you have calculated the new root
+
+        //NOTE: make a note about having a different algo for deletions since it will be unlikely that two deletions will be siblings and you can just do the dup work in the very small chance they are
+
+        // //NOTE: you can go through reverse
+        // for (leaf_idx, value) in updates {
+
         for (leaf_idx, value) in updates {
             // Collect the affected intermediate nodes
 
@@ -147,8 +167,6 @@ impl IdentityTree {
             // Fetch the sibling from the updates. If not present, get the sibling from the tree
 
             // Calculate the parent hash and insert the value into the updates
-
-            // }
         }
 
         //TODO: calculate root and ensure it matches the expected root
@@ -176,7 +194,7 @@ impl IdentityTree {
         Ok(())
     }
 
-    pub fn get_root_update_by_hash(&self, hash: &Hash) -> Option<&Root> {
+    pub fn get_root_by_hash(&self, hash: &Hash) -> Option<&Root> {
         let target_root = Root {
             hash: *hash,
             block_number: 0,
