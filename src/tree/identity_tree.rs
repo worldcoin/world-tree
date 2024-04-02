@@ -279,15 +279,19 @@ impl IdentityTree {
         if let Some(update) = self.tree_updates.remove(root) {
             // Apply all leaf updates to the tree
             for (node_idx, val) in update {
-                let leaf_idx = storage_to_leaf_idx(node_idx, self.tree.depth());
+                // If the node update is a leaf
+                if node_idx >= 1 << self.tree.depth() {
+                    let leaf_idx =
+                        storage_to_leaf_idx(node_idx, self.tree.depth());
 
-                // Insert/update leaves in the canonical tree
-                // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-                if val == Hash::ZERO {
-                    //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
-                    self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
-                } else {
-                    self.tree.push(val)?;
+                    // Insert/update leaves in the canonical tree
+                    // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+                    if val == Hash::ZERO {
+                        //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
+                        self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
+                    } else {
+                        self.tree.push(val)?;
+                    }
                 }
             }
         }
