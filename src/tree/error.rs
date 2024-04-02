@@ -1,3 +1,4 @@
+use clap::error;
 use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::{Middleware, ProviderError};
 use ethers::types::Log;

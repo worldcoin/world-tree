@@ -86,15 +86,16 @@ impl InclusionProofRequest {
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn inclusion_proof<M: Middleware>(
+pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    // let inclusion_proof = world_tree
-    //     .inclusion_proof(identity_commitment, chain_id)
-    //     .await
+    let inclusion_proof = world_tree
+        .inclusion_proof(req.identity_commitment, req.chain_id)
+        .await
+        .expect("TODO: Handle error");
 
-    todo!()
+    Ok((StatusCode::OK, Json(inclusion_proof)))
 }
 
 impl TreeError {
