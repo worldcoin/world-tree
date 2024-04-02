@@ -87,18 +87,17 @@ impl IdentityTree {
         root: Option<&Root>,
     ) -> eyre::Result<Option<InclusionProof>> {
         let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
-        let storage_idx = leaf_to_storage_idx(*leaf_idx, self.tree.depth());
 
         if let Some(root) = root {
             if root.hash == self.tree.root() {
-                let proof = self.tree.proof(storage_idx as usize);
+                let proof = self.tree.proof(*leaf_idx as usize);
                 return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
             } else {
                 let proof = self.construct_proof_from_root(*leaf_idx, root)?;
                 return Ok(Some(InclusionProof::new(root.hash, proof)));
             }
         } else {
-            let proof = self.tree.proof(storage_idx as usize);
+            let proof = self.tree.proof(*leaf_idx as usize);
             return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
         }
     }
