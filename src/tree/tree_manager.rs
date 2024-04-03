@@ -1,27 +1,23 @@
 use std::collections::{BTreeMap, HashMap};
-
-
 use std::sync::Arc;
 use std::time::Duration;
 
-
-
 use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
-use ethers::providers::{Middleware};
-use ethers::types::{
-    Filter, Log, Selector, ValueOrArray, H160, H256, U256,
-};
+use ethers::providers::Middleware;
+use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::mpsc::{Sender};
+use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
-use super::block_scanner::{BlockScanner};
+use super::block_scanner::BlockScanner;
 use super::identity_tree::{LeafUpdates, Root};
 use super::Hash;
 use crate::abi::{
-    DeleteIdentitiesCall, DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall, RegisterIdentitiesCall, RootAddedFilter, TreeChangedFilter
+    DeleteIdentitiesCall,
+    DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
+    RegisterIdentitiesCall, RootAddedFilter, TreeChangedFilter,
 };
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
@@ -138,7 +134,8 @@ impl TreeVersion for BridgedTree {
                 block_scanner.middleware.get_chainid().await?.as_u64();
 
             loop {
-                let logs = block_scanner.next().await.expect("TODO: handle this case");
+                let logs =
+                    block_scanner.next().await.expect("TODO: handle this case");
                 if logs.is_empty() {
                     tokio::time::sleep(Duration::from_secs(
                         BLOCK_SCANNER_SLEEP_TIME,
@@ -149,13 +146,12 @@ impl TreeVersion for BridgedTree {
                 }
 
                 for log in logs {
-                    dbg!("root added log",&log);
-                    
+                    dbg!("root added log", &log);
+
                     // Extract the root from the RootAdded event
                     let new_root = Hash::from_le_bytes(log.topics[1].0);
                     tracing::info!(?chain_id, ?new_root, "Root updated");
-                    tx.send((chain_id, new_root))
-                        .await?;
+                    tx.send((chain_id, new_root)).await?;
                 }
             }
         })
@@ -165,9 +161,6 @@ impl TreeVersion for BridgedTree {
         RootAddedFilter::signature()
     }
 }
-
-
-
 
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
@@ -192,15 +185,10 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
-        sorted_transactions.insert(
-            transaction.nonce,
-            transaction,
-        );
+        sorted_transactions.insert(transaction.nonce, transaction);
     }
 
-
     for (nonce, transaction) in sorted_transactions {
-    
         let calldata = &transaction.input;
 
         let mut identity_updates = HashMap::new();
@@ -256,9 +244,9 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
 
             // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
-            for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
+            for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)) {
                 identity_updates.insert(  i , Hash::ZERO);
-            }   
+            }
 
             let root = Root { hash: Hash::from_limbs(delete_identities_call.post_root.0), nonce: nonce.as_u64() as usize };
             tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
