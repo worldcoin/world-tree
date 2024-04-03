@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
@@ -49,6 +50,7 @@ impl<M: Middleware> InclusionProofService<M> {
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
+            .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
@@ -105,6 +107,17 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
         .expect("TODO: Handle this case");
 
     Ok((StatusCode::OK, Json(inclusion_proof)))
+}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn health<M: Middleware>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> StatusCode {
+    if world_tree.synced.load(Ordering::Relaxed) {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
 }
 
 impl TreeError {

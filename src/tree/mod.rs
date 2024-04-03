@@ -6,7 +6,7 @@ pub mod service;
 pub mod tree_manager;
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
@@ -37,6 +37,7 @@ pub struct WorldTree<M: Middleware> {
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
     pub chain_state: Arc<RwLock<HashMap<u64, Root>>>,
+    pub synced: AtomicBool,
 }
 
 impl<M> WorldTree<M>
@@ -55,6 +56,7 @@ where
             canonical_tree_manager,
             bridged_tree_manager,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
+            synced: AtomicBool::new(false),
         }
     }
 
