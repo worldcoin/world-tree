@@ -329,12 +329,10 @@ pub fn flatten_leaf_updates(
     Ok(updates)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
-    //TODO: Open a PR to semaphore-rs to deserialize proof instead of implementing deserialization here
-    #[serde(deserialize_with = "deserialize_proof")]
     pub proof: Proof,
 }
 
@@ -342,37 +340,31 @@ impl InclusionProof {
     pub fn new(root: Field, proof: Proof) -> InclusionProof {
         Self { root, proof }
     }
-}
 
-fn deserialize_proof<'de, D>(deserializer: D) -> Result<Proof, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // let value: Value = Deserialize::deserialize(deserializer)?;
-    // if let Value::Array(array) = value {
-    //     let mut branches = vec![];
-    //     for value in array {
-    //         let branch = serde_json::from_value::<Branch>(value)
-    //             .map_err(serde::de::Error::custom)?;
-    //         branches.push(branch);
-    //     }
+    pub fn verify(&self, leaf: Field) -> bool {
+        let mut hash = leaf;
 
-    //     Ok(semaphore::merkle_tree::Proof(branches))
-    // } else {
-    //     Err(D::Error::custom("Expected an array"))
-    // }
+        for branch in self.proof.0.iter() {
+            match branch {
+                Branch::Left(sibling) => {
+                    hash = PoseidonHash::hash_node(&hash, sibling);
+                }
+                Branch::Right(sibling) => {
+                    hash = PoseidonHash::hash_node(sibling, &hash);
+                }
+            }
+        }
 
-    todo!()
+        hash == self.root
+    }
 }
 
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use std::time::{self, Instant, SystemTime, UNIX_EPOCH};
 
     use eyre::eyre;
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
-    use semaphore::merkle_tree::Hasher;
     use semaphore::poseidon_tree::PoseidonHash;
 
     use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates, Root};
@@ -528,14 +520,7 @@ mod test {
         assert_eq!(identity_tree.tree.root(), expected_root);
         assert_eq!(identity_tree.tree_updates.len(), 1);
 
-        //TODO: create expected updates
-
-        // let updates = identity_tree
-        //     .tree_updates
-        //     .get(&new_root)
-        //     .expect("Could not get updates");
-
-        // assert_eq!(updates, &new_leaves);
+        //TODO: assert expected updates
     }
 
     #[test]

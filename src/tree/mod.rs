@@ -13,16 +13,13 @@ use anyhow::Context;
 use ethers::providers::{Middleware, MiddlewareError};
 use ethers::types::{Log, Selector, H160, U256};
 use eyre::eyre;
-use metrics::GaugeFn;
 use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
-use semaphore::poseidon_tree::{PoseidonHash, Proof};
-use semaphore::Field;
-use serde::{Deserialize, Deserializer, Serialize};
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{Mutex, RwLock};
+use semaphore::poseidon_tree::PoseidonHash;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
@@ -66,8 +63,6 @@ where
     pub async fn spawn(
         &self,
     ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
-        //TODO: sync tree from cache
-
         let start_time = Instant::now();
         self.sync_to_head().await?;
 
@@ -144,7 +139,7 @@ where
         })
     }
 
-    pub async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Root>> {
+    async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Root>> {
         let mut tree_data = vec![];
 
         for bridged_tree in self.bridged_tree_manager.iter() {
@@ -179,7 +174,8 @@ where
             .map(|(chain_id, hash)| {
                 let root = Root {
                     hash,
-                    nonce: 0, //TODO: ensure its ok to set 0 here initially
+                    // We can set the nonce to 0 here
+                    nonce: 0,
                 };
 
                 (chain_id, root)

@@ -5,9 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
-use common::test_utilities::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
-};
+
 use ethers::abi::AbiDecode;
 use ethers::contract::{ContractError, EthCall, EthEvent};
 use ethers::providers::{Middleware, MiddlewareError};
@@ -23,8 +21,7 @@ use super::block_scanner::{self, BlockScanner};
 use super::identity_tree::{LeafUpdates, Root};
 use super::Hash;
 use crate::abi::{
-    DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
-    TreeChangedFilter,
+    DeleteIdentitiesCall, DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall, RegisterIdentitiesCall, RootAddedFilter, TreeChangedFilter
 };
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
@@ -60,7 +57,6 @@ where
     ) -> eyre::Result<Self> {
         let chain_id = middleware.get_chainid().await?.as_u64();
 
-        //FIXME: Update to use RootAdded filter for bridged tree
         let filter = Filter::new()
             .address(address)
             .topic0(ValueOrArray::Value(T::tree_changed_signature()));
@@ -141,8 +137,7 @@ impl TreeVersion for BridgedTree {
                 block_scanner.middleware.get_chainid().await?.as_u64();
 
             loop {
-                let logs = block_scanner.next().await.expect("TODO:");
-
+                let logs = block_scanner.next().await.expect("TODO: handle this case");
                 if logs.is_empty() {
                     tokio::time::sleep(Duration::from_secs(
                         BLOCK_SCANNER_SLEEP_TIME,
@@ -153,8 +148,12 @@ impl TreeVersion for BridgedTree {
                 }
 
                 for log in logs {
+                    dbg!("root added log",&log);
+                    
                     // Extract the root from the RootAdded event
-                    tx.send((chain_id, Hash::from_le_bytes(log.topics[1].0)))
+                    let new_root = Hash::from_le_bytes(log.topics[1].0);
+                    tracing::info!(?chain_id, ?new_root, "Root updated");
+                    tx.send((chain_id, new_root))
                         .await?;
                 }
             }
@@ -192,12 +191,6 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
-
-        //TODO: cant insert via block because there could be more than one insertion per block
-        //TODO: also cant insert via nonce because there could be more than one sequencer in some case
-        //NOTE: if there are multiple identity operators, this needs to be handled differently. At the moment, the only way is to track roots and have some nonce with roots
-        
-        //FIXME: we also cant order by nonce because some of the nonces are out of order. We need some type of root nonce, or similar mechanism
         sorted_transactions.insert(
             transaction.nonce,
             transaction,
