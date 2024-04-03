@@ -41,6 +41,7 @@ where
     }
 
     /// Retrieves events matching the specified address and topics from the last synced block to the latest block, stepping by `window_size`.
+    /// Note that the logs are unsorted and should be handled accordingly.
     pub async fn next(&self) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
         let mut last_synced_block =
@@ -66,22 +67,19 @@ where
         }
 
         //Sort all of the results
-        let mut sorted_logs = BTreeMap::new();
+        let mut aggregated_logs = vec![];
 
         while let Some(result) = tasks.next().await {
             let logs = result?;
-            for log in logs {
-                sorted_logs.insert(log.block_number, log);
-            }
-        }
 
-        let logs = sorted_logs.into_iter().map(|(_, log)| log).collect();
+            aggregated_logs.extend(logs);
+        }
 
         self.last_synced_block
             .store(last_synced_block, Ordering::SeqCst);
 
         tracing::info!(?last_synced_block, "Last synced block updated");
 
-        Ok(logs)
+        Ok(aggregated_logs)
     }
 }

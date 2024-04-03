@@ -108,7 +108,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
         .await
         .expect("TODO: Handle error");
 
-    // dbg!(&inclusion_proof);
+    dbg!(&inclusion_proof);
 
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }

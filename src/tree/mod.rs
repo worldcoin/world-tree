@@ -5,6 +5,7 @@ pub mod identity_tree;
 pub mod service;
 pub mod tree_manager;
 
+use core::panic;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -179,7 +180,7 @@ where
             .map(|(chain_id, hash)| {
                 let root = Root {
                     hash,
-                    block_number: 0, //TODO: ensure its ok to set 0 here initially
+                    nonce: 0, //TODO: ensure its ok to set 0 here initially
                 };
 
                 (chain_id, root)
@@ -225,10 +226,10 @@ where
         // Iterate through all of the canonical logs until a root on one of the chains is reached. This is the oldest root across all chains
         let mut pivot = 0;
         for log in logs.iter() {
-            // We can set post root block number to 0 since the Hash implementation of Root only evaluates the `root` field
+            // We can set post root start index to 0 since the Hash implementation of Root only evaluates the `root` field
             let post_root = Root {
                 hash: Hash::from_le_bytes(log.topics[3].0),
-                block_number: 0,
+                nonce: 0,
             };
 
             pivot += 1;
@@ -248,7 +249,11 @@ where
             let leaf_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
 
-            let leaves = flatten_leaf_updates(leaf_updates)?
+            let mut flattened_leaves = flatten_leaf_updates(leaf_updates)?;
+            // TODO: FIXME: check that we do this everywhere that we need. There is at least one instance of nonce n having a start index larger than n + 1
+            flattened_leaves.sort_by_key(|(idx, _)| *idx);
+
+            let leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
                     if hash != &Hash::ZERO {
@@ -279,7 +284,10 @@ where
             )
             .await?;
 
-            let canonical_leaves = flatten_leaf_updates(canonical_updates)?
+            let mut flattened_leaves = flatten_leaf_updates(canonical_updates)?;
+            flattened_leaves.sort_by_key(|(idx, _)| *idx);
+
+            let canonical_leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
                     if hash != &Hash::ZERO {
@@ -298,6 +306,9 @@ where
                 &Hash::ZERO,
                 &canonical_leaves,
             );
+
+            dbg!("canonical tree built");
+            dbg!(tree.root());
 
             identity_tree.tree = tree;
 
