@@ -5,7 +5,6 @@ pub mod identity_tree;
 pub mod service;
 pub mod tree_manager;
 
-use core::panic;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -249,10 +248,7 @@ where
             let leaf_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
 
-            let mut flattened_leaves = flatten_leaf_updates(leaf_updates)?;
-            // TODO: FIXME: check that we do this everywhere that we need. There is at least one instance of nonce n having a start index larger than n + 1
-            flattened_leaves.sort_by_key(|(idx, _)| *idx);
-
+            let flattened_leaves = flatten_leaf_updates(leaf_updates)?;
             let leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
@@ -284,9 +280,7 @@ where
             )
             .await?;
 
-            let mut flattened_leaves = flatten_leaf_updates(canonical_updates)?;
-            flattened_leaves.sort_by_key(|(idx, _)| *idx);
-
+            let flattened_leaves = flatten_leaf_updates(canonical_updates)?;
             let canonical_leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
@@ -306,9 +300,6 @@ where
                 &Hash::ZERO,
                 &canonical_leaves,
             );
-
-            dbg!("canonical tree built");
-            dbg!(tree.root());
 
             identity_tree.tree = tree;
 

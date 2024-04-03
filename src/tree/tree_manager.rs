@@ -180,7 +180,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     for log in logs {
         let tx_hash = log.transaction_hash.expect("TODO: handle this case");
 
-        tracing::info!(?tx_hash, "Getting transaction");
+        tracing::debug!(?tx_hash, "Getting transaction");
 
         tasks.push(middleware.get_transaction(tx_hash));
     }
@@ -191,7 +191,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
         let transaction = transaction?.expect("TODO: handle this case");
 
         let tx_hash = transaction.hash;
-        tracing::info!(?tx_hash, "Transaction received");
+        tracing::debug!(?tx_hash, "Transaction received");
 
         //TODO: cant insert via block because there could be more than one insertion per block
         //TODO: also cant insert via nonce because there could be more than one sequencer in some case
@@ -263,7 +263,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
             // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
             for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)){
-            identity_updates.insert(  i , Hash::ZERO);
+                identity_updates.insert(  i , Hash::ZERO);
             }   
 
             let root = Root { hash: Hash::from_limbs(delete_identities_call.post_root.0), nonce: nonce.as_u64() as usize };
