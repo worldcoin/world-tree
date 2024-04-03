@@ -89,6 +89,7 @@ impl InclusionProofRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChainIdQueryParams {
     chain_id: Option<ChainId>,
 }

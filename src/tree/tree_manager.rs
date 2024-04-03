@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::abi::AbiDecode;
+use ethers::abi::{AbiDecode, RawLog};
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::Middleware;
 use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
@@ -146,12 +146,11 @@ impl TreeVersion for BridgedTree {
                 }
 
                 for log in logs {
-                    dbg!("root added log", &log);
-
-                    // Extract the root from the RootAdded event
-                    let new_root = Hash::from_le_bytes(log.topics[1].0);
+                    // Extract the root from the RootAdded log
+                    let data = RootAddedFilter::decode_log(&RawLog::from(log))?;
+                    let new_root: U256 = data.root;
                     tracing::info!(?chain_id, ?new_root, "Root updated");
-                    tx.send((chain_id, new_root)).await?;
+                    tx.send((chain_id, Hash::from_limbs(new_root.0))).await?;
                 }
             }
         })

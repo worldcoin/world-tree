@@ -171,7 +171,7 @@ const baseEndpoint = __ENV.TREE_AVAILABILITY_SERVICE_ENDPOINT;
 if (!baseEndpoint) {
   throw new Error('Base endpoint not specified. Use -e TREE_AVAILABILITY_SERVICE_ENDPOINT=your_endpoint');
 }
-const endpoint = `${baseEndpoint}/inclusionProof`;
+const endpoint = `${baseEndpoint}/inclusionProof?chainId=1`;
 
 export default function () {
   const identityCommitment = identityCommitments[Math.floor(Math.random() * identityCommitments.length)];
