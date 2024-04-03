@@ -9,10 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-
-use ethers::providers::{Middleware};
-use ethers::types::{U256};
-
+use ethers::providers::Middleware;
+use ethers::types::U256;
 use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
@@ -64,8 +62,9 @@ where
         &self,
     ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let start_time = Instant::now();
-        self.sync_to_head().await?;
 
+        tracing::info!("Syncing to head");
+        self.sync_to_head().await?;
         tracing::info!("Synced to head in {:?} seconds", start_time.elapsed());
 
         let (leaf_updates_tx, leaf_updates_rx) =
@@ -172,6 +171,8 @@ where
             .await?
             .into_iter()
             .map(|(chain_id, hash)| {
+                tracing::info!(?chain_id, ?hash, "Latest root");
+
                 let root = Root {
                     hash,
                     // We can set the nonce to 0 here
@@ -240,6 +241,7 @@ where
         let mut identity_tree = self.identity_tree.write().await;
 
         // Split the logs into canonical and pending. All canonical logs will be applied directly to the tree, while pending logs will be stored in the tree_updates map
+        tracing::info!("Extracting identity updates from logs");
         if pivot == logs.len() {
             let leaf_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
@@ -258,7 +260,7 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            tracing::info!(num_leaves = ?leaves.len(), "Building the identity tree");
+            tracing::info!(num_leaves = ?leaves.len(), "Building the canonical tree");
             let tree = DynamicMerkleTree::new_with_leaves(
                 (),
                 identity_tree.tree.depth(),
@@ -290,6 +292,7 @@ where
                 })
                 .collect::<Vec<_>>();
 
+            tracing::info!(num_leaves = ?canonical_leaves.len(), "Building the canonical tree");
             let tree = DynamicMerkleTree::new_with_leaves(
                 (),
                 identity_tree.tree.depth(),
@@ -299,6 +302,7 @@ where
 
             identity_tree.tree = tree;
 
+            tracing::info!("Extracting pending identity updates from logs");
             let pending_updates =
                 extract_identity_updates(pending_logs, canonical_middleware)
                     .await?;

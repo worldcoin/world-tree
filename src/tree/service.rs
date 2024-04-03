@@ -41,6 +41,7 @@ impl<M: Middleware> InclusionProofService<M> {
     ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let mut handles = vec![];
 
+        tracing::info!("Spawning world tree");
         handles.extend(self.world_tree.spawn().await?);
 
         // Initialize a new router and spawn the server

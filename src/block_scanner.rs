@@ -45,7 +45,7 @@ where
             let from_block = last_synced_block + 1;
             let to_block = (from_block + self.window_size).min(latest_block);
 
-            tracing::info!(?from_block, ?to_block, "Scanning blocks");
+            tracing::debug!(?from_block, ?to_block, "Scanning blocks");
 
             let filter = self
                 .filter
