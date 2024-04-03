@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::extract::{State};
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{middleware, Json};
@@ -93,20 +93,15 @@ pub struct ChainIdQueryParams {
 #[tracing::instrument(level = "debug", skip(world_tree))]
 pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
+    Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
-    // Query(query_params): Query<ChainIdQueryParams>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    // let chain_id = query_params.chain_id.or(req.chain_id);
-
-    // let inclusion_proof = world_tree
-    //     .inclusion_proof(req.identity_commitment, chain_id)
-    //     .await
-    //     .expect("TODO: Handle error");
+    let chain_id = query_params.chain_id.or(req.chain_id);
 
     let inclusion_proof = world_tree
-        .inclusion_proof(req.identity_commitment, None)
+        .inclusion_proof(req.identity_commitment, chain_id)
         .await
-        .expect("TODO: Handle error");
+        .expect("TODO: Handle this case");
 
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }
