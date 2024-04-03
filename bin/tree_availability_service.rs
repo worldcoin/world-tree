@@ -1,20 +1,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use clap::Parser;
 use common::metrics::init_statsd_exporter;
 use common::shutdown_tracer_provider;
 use common::tracing::{init_datadog_subscriber, init_subscriber};
-use ethers::providers::{Http, Middleware, Provider};
-use ethers_throttle::{Throttle, ThrottledJsonRpcClient};
+use ethers::providers::{Http, Provider};
+use ethers_throttle::ThrottledJsonRpcClient;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use governor::Jitter;
-use hyper::service::Service;
 use tracing::Level;
 use world_tree::tree::config::ServiceConfig;
-use world_tree::tree::identity_tree::{self, IdentityTree};
 use world_tree::tree::service::InclusionProofService;
 use world_tree::tree::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
 use world_tree::tree::WorldTree;

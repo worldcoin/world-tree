@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::extract::{Query, State};
+use axum::extract::{State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{middleware, Json};

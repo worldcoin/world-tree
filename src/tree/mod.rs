@@ -5,14 +5,14 @@ pub mod identity_tree;
 pub mod service;
 pub mod tree_manager;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use anyhow::Context;
-use ethers::providers::{Middleware, MiddlewareError};
-use ethers::types::{Log, Selector, H160, U256};
-use eyre::eyre;
+
+use ethers::providers::{Middleware};
+use ethers::types::{U256};
+
 use ruint::Uint;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
@@ -208,7 +208,7 @@ where
 
         let roots = chain_state
             .iter()
-            .map(|(_, root)| root.clone())
+            .map(|(_, root)| *root)
             .collect::<HashSet<_>>();
 
         // Get all logs from the canonical tree from the last synced block to the chain tip
@@ -271,7 +271,7 @@ where
             // Split the logs into canonical and pending logs
             let (canonical_logs, pending_logs) = logs.split_at(pivot);
             let canonical_updates = extract_identity_updates(
-                &canonical_logs,
+                canonical_logs,
                 canonical_middleware.clone(),
             )
             .await?;
@@ -300,7 +300,7 @@ where
             identity_tree.tree = tree;
 
             let pending_updates =
-                extract_identity_updates(&pending_logs, canonical_middleware)
+                extract_identity_updates(pending_logs, canonical_middleware)
                     .await?;
 
             for (root, leaves) in pending_updates {

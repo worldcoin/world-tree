@@ -1,4 +1,3 @@
-use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use eyre::OptionExt;
@@ -6,7 +5,7 @@ use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Serialize;
 
 use super::Hash;
 
@@ -15,9 +14,9 @@ pub enum LeafUpdates {
     Delete(Leaves),
 }
 
-impl Into<Leaves> for LeafUpdates {
-    fn into(self) -> Leaves {
-        match self {
+impl From<LeafUpdates> for Leaves {
+    fn from(val: LeafUpdates) -> Self {
+        match val {
             LeafUpdates::Insert(leaves) => leaves,
             LeafUpdates::Delete(leaves) => leaves,
         }
@@ -46,18 +45,23 @@ pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     (depth as usize, offset)
 }
 
-#[derive(PartialEq, PartialOrd, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Root {
     pub hash: Hash,
-    //NOTE: note that this assumes that there is only one wallet that sequences transactions,
-    // in the future, we should emit a root nonce with the tree changes or a similar mechanism so that it is
-    // easy to sync with multiple sequencers
+    //NOTE: note that this assumes that there is only one wallet that sequences transactions
+    // we should update to a syncing mechanism that can account for multiple sequencers
     pub nonce: usize,
 }
 
 impl Ord for Root {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.nonce.cmp(&other.nonce)
+    }
+}
+
+impl PartialOrd for Root {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -94,14 +98,14 @@ impl IdentityTree {
         if let Some(root) = root {
             if root.hash == self.tree.root() {
                 let proof = self.tree.proof(*leaf_idx as usize);
-                return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
+                Ok(Some(InclusionProof::new(self.tree.root(), proof)))
             } else {
                 let proof = self.construct_proof_from_root(*leaf_idx, root)?;
-                return Ok(Some(InclusionProof::new(root.hash, proof)));
+                Ok(Some(InclusionProof::new(root.hash, proof)))
             }
         } else {
             let proof = self.tree.proof(*leaf_idx as usize);
-            return Ok(Some(InclusionProof::new(self.tree.root(), proof)));
+            Ok(Some(InclusionProof::new(self.tree.root(), proof)))
         }
     }
 
@@ -246,9 +250,7 @@ impl IdentityTree {
 
         // Flatten any remaining updates from the previous update
         for update in prev_update {
-            if !updates.contains_key(&update.0) {
-                updates.insert(update.0, update.1);
-            }
+            updates.entry(update.0).or_insert(update.1);
         }
 
         self.tree_updates.insert(root, updates);
@@ -377,10 +379,7 @@ mod test {
     const NUM_LEAVES: usize = 1 << TREE_DEPTH;
 
     fn generate_leaves() -> Vec<Hash> {
-        (0..NUM_LEAVES)
-            .into_iter()
-            .map(Hash::from)
-            .collect::<Vec<_>>()
+        (0..NUM_LEAVES).map(Hash::from).collect::<Vec<_>>()
     }
 
     #[test]

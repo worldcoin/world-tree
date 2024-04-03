@@ -1,23 +1,23 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::ops::DerefMut;
-use std::sync::atomic::AtomicU64;
+use std::collections::{BTreeMap, HashMap};
+
+
 use std::sync::Arc;
 use std::time::Duration;
-use std::vec;
+
 
 
 use ethers::abi::AbiDecode;
-use ethers::contract::{ContractError, EthCall, EthEvent};
-use ethers::providers::{Middleware, MiddlewareError};
+use ethers::contract::{EthCall, EthEvent};
+use ethers::providers::{Middleware};
 use ethers::types::{
-    Filter, Log, Selector, Transaction, ValueOrArray, H160, H256, U256,
+    Filter, Log, Selector, ValueOrArray, H160, H256, U256,
 };
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Sender};
 use tokio::task::JoinHandle;
 
-use super::block_scanner::{self, BlockScanner};
+use super::block_scanner::{BlockScanner};
 use super::identity_tree::{LeafUpdates, Root};
 use super::Hash;
 use crate::abi::{
@@ -41,6 +41,7 @@ pub struct TreeManager<M: Middleware, T: TreeVersion> {
     pub address: H160,
     pub block_scanner: Arc<BlockScanner<M>>,
     pub chain_id: u64,
+    #[allow(dead_code)]
     tree_version: T,
 }
 
