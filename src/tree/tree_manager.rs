@@ -19,6 +19,7 @@ use crate::abi::{
     DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall,
     RegisterIdentitiesCall, RootAddedFilter, TreeChangedFilter,
 };
+use crate::error::{ok, Log as _};
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
 
@@ -28,7 +29,7 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>>;
+    ) -> JoinHandle<()>;
 
     fn tree_changed_signature() -> H256;
 }
@@ -73,10 +74,7 @@ where
         })
     }
 
-    pub fn spawn(
-        &self,
-        tx: Sender<T::ChannelData>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    pub fn spawn(&self, tx: Sender<T::ChannelData>) -> JoinHandle<()> {
         T::spawn(tx, self.block_scanner.clone())
     }
 }
@@ -89,29 +87,34 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             loop {
-                let logs = block_scanner.next().await.expect("TODO:");
+                async {
+                    let logs = block_scanner.next().await?;
 
-                if logs.is_empty() {
-                    tokio::time::sleep(Duration::from_secs(
-                        BLOCK_SCANNER_SLEEP_TIME,
-                    ))
-                    .await;
+                    if logs.is_empty() {
+                        tokio::time::sleep(Duration::from_secs(
+                            BLOCK_SCANNER_SLEEP_TIME,
+                        ))
+                        .await;
 
-                    continue;
+                        return ok(());
+                    }
+
+                    let identity_updates = extract_identity_updates(
+                        &logs,
+                        block_scanner.middleware.clone(),
+                    )
+                    .await?;
+
+                    for update in identity_updates {
+                        tx.send(update).await?;
+                    }
+                    ok(())
                 }
-
-                let identity_updates = extract_identity_updates(
-                    &logs,
-                    block_scanner.middleware.clone(),
-                )
-                .await?;
-
-                for update in identity_updates {
-                    tx.send(update).await?;
-                }
+                .await
+                .log();
             }
         })
     }
@@ -128,30 +131,40 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let chain_id =
-                block_scanner.middleware.get_chainid().await?.as_u64();
+            let chain_id = block_scanner
+                .middleware
+                .get_chainid()
+                .await
+                .expect("Failed to get chain_id")
+                .as_u64();
 
             loop {
-                let logs =
-                    block_scanner.next().await.expect("TODO: handle this case");
-                if logs.is_empty() {
-                    tokio::time::sleep(Duration::from_secs(
-                        BLOCK_SCANNER_SLEEP_TIME,
-                    ))
-                    .await;
+                async {
+                    let logs = block_scanner.next().await?;
+                    if logs.is_empty() {
+                        tokio::time::sleep(Duration::from_secs(
+                            BLOCK_SCANNER_SLEEP_TIME,
+                        ))
+                        .await;
 
-                    continue;
-                }
+                        return ok(());
+                    }
 
-                for log in logs {
-                    // Extract the root from the RootAdded log
-                    let data = RootAddedFilter::decode_log(&RawLog::from(log))?;
-                    let new_root: U256 = data.root;
-                    tracing::info!(?chain_id, ?new_root, "Root updated");
-                    tx.send((chain_id, Hash::from_limbs(new_root.0))).await?;
+                    for log in logs {
+                        // Extract the root from the RootAdded log
+                        let data =
+                            RootAddedFilter::decode_log(&RawLog::from(log))?;
+                        let new_root: U256 = data.root;
+                        tracing::info!(?chain_id, ?new_root, "Root updated");
+                        tx.send((chain_id, Hash::from_limbs(new_root.0)))
+                            .await?;
+                    }
+                    ok(())
                 }
+                .await
+                .log();
             }
         })
     }

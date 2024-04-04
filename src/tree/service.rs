@@ -39,7 +39,7 @@ impl<M: Middleware> InclusionProofService<M> {
     pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
+    ) -> eyre::Result<Vec<JoinHandle<()>>> {
         let mut handles = vec![];
 
         tracing::info!("Spawning world tree");
@@ -58,9 +58,8 @@ impl<M: Middleware> InclusionProofService<M> {
             tracing::info!("Spawning server");
             axum::Server::bind(&addr)
                 .serve(router.into_make_service())
-                .await?;
-
-            Ok(())
+                .await
+                .expect("axum server failed");
         });
 
         handles.push(server_handle);

@@ -57,7 +57,7 @@ pub async fn main() -> eyre::Result<()> {
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
         tracing::error!("TreeAvailabilityError: {:?}", result);
-        result??;
+        result?;
     }
 
     shutdown_tracer_provider();
