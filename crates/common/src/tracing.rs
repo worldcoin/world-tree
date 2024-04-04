@@ -7,9 +7,7 @@ use opentelemetry::sdk::trace::Sampler;
 use opentelemetry::trace::TraceContextExt;
 use serde::ser::SerializeMap;
 use serde::Serializer;
-use tokio::sync::OnceCell;
 use tracing::{Event, Level, Subscriber};
-use tracing_appender::non_blocking::WorkerGuard;
 use tracing_opentelemetry::{OpenTelemetrySpanExt, OtelData};
 use tracing_serde::fields::AsMap;
 use tracing_serde::AsSerde;
@@ -19,8 +17,6 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
-
-static WORKER_GUARD: OnceCell<WorkerGuard> = OnceCell::const_new();
 
 pub fn init_subscriber(level: Level) {
     let fmt_layer = fmt::layer().with_target(false).with_level(true);
@@ -50,20 +46,7 @@ pub fn init_datadog_subscriber(service_name: &str, level: Level) {
 
     let fmt_layer = fmt::layer().with_target(false).with_level(true);
 
-    let file_appender = tracing_appender::rolling::RollingFileAppender::new(
-        //TODO: do we want this to be dynamic
-        tracing_appender::rolling::Rotation::DAILY,
-        get_log_directory().expect("TODO:handle this error"),
-        format!("{service_name}.log"),
-    );
-
-    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-    WORKER_GUARD.set(guard).expect("Could not set worker guard");
-
-    let dd_layer = fmt::Layer::new()
-        .json()
-        .event_format(DataDogFormat)
-        .with_writer(non_blocking);
+    let dd_layer = fmt::Layer::new().json().event_format(DataDogFormat);
 
     tracing_subscriber::registry()
         .with(filter)
