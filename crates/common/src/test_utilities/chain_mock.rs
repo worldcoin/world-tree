@@ -99,6 +99,6 @@ pub async fn spawn_mock_chain() -> eyre::Result<MockChain<TestMiddleware>> {
         mock_bridged_world_id,
         mock_world_id,
         middleware: client,
-        wallet: wallet,
+        wallet,
     })
 }
