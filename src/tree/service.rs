@@ -183,15 +183,9 @@ pub async fn synced<M: Middleware>(
     }
 }
 
-#[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn health<M: Middleware>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
-) -> StatusCode {
-    if world_tree.synced.load(Ordering::Relaxed) {
-        StatusCode::OK
-    } else {
-        StatusCode::SERVICE_UNAVAILABLE
-    }
+#[tracing::instrument(level = "debug")]
+pub async fn health() -> StatusCode {
+    StatusCode::OK
 }
 
 impl TreeError {
