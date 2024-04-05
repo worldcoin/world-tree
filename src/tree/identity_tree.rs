@@ -45,7 +45,7 @@ pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     (depth as usize, offset)
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Eq, Clone, Copy, Debug)]
 pub struct Root {
     pub hash: Hash,
     //NOTE: note that this assumes that there is only one wallet that sequences transactions
@@ -53,6 +53,7 @@ pub struct Root {
     pub nonce: usize,
 }
 
+//TODO: comments as to why we only compare nonce and for parial eq we compare hash
 impl Ord for Root {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.nonce.cmp(&other.nonce)
@@ -62,6 +63,12 @@ impl Ord for Root {
 impl PartialOrd for Root {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Root {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash
     }
 }
 
@@ -253,6 +260,7 @@ impl IdentityTree {
             updates.entry(update.0).or_insert(update.1);
         }
 
+        dbg!("canonical tree update", &root);
         self.tree_updates.insert(root, updates);
     }
 
@@ -363,7 +371,7 @@ impl InclusionProof {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     use eyre::eyre;
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
@@ -380,6 +388,77 @@ mod test {
 
     fn generate_leaves() -> Vec<Hash> {
         (0..NUM_LEAVES).map(Hash::from).collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn test_ord_root() {
+        let root_1 = Root {
+            hash: Hash::from(1),
+            nonce: 1,
+        };
+
+        let root_2 = Root {
+            hash: Hash::from(2),
+            nonce: 2,
+        };
+
+        let root_3 = Root {
+            hash: Hash::from(3),
+            nonce: 1,
+        };
+
+        assert!(root_1 < root_2);
+        assert!(root_2 > root_3);
+    }
+
+    #[test]
+    fn test_eq_root() {
+        let root_1 = Root {
+            hash: Hash::from(1),
+            nonce: 1,
+        };
+
+        let root_2 = Root {
+            hash: Hash::from(1),
+            nonce: 2,
+        };
+
+        let root_3 = Root {
+            hash: Hash::from(2),
+            nonce: 1,
+        };
+
+        assert_eq!(root_1, root_2);
+        assert_ne!(root_1, root_3);
+    }
+
+    #[test]
+    fn test_hash_root() {
+        let root_1 = Root {
+            hash: Hash::from(1),
+            nonce: 1,
+        };
+
+        let root_2 = Root {
+            hash: Hash::from(1),
+            nonce: 2,
+        };
+
+        let root_3 = Root {
+            hash: Hash::from(2),
+            nonce: 1,
+        };
+
+        let mut map = HashSet::new();
+
+        map.insert(root_1);
+
+        assert!(map.contains(&root_2));
+        assert!(!map.contains(&root_3));
+
+        map.insert(root_3);
+
+        assert_eq!(map.len(), 2);
     }
 
     #[test]

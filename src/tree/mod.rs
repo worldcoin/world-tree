@@ -128,6 +128,9 @@ where
                                 }
 
                                 let  identity_tree = identity_tree.read().await;
+                               
+                                dbg!("getting root by hash", &bridged_root);
+
                                 // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
                                 let new_root = identity_tree.get_root_by_hash(&bridged_root).expect("Could not get root update");
 
