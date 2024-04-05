@@ -33,7 +33,7 @@ use crate::tree::identity_tree::flatten_leaf_updates;
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
-pub struct WorldTree<M: Middleware> {
+pub struct WorldTree<M: Middleware + 'static> {
     pub identity_tree: Arc<RwLock<IdentityTree>>,
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,

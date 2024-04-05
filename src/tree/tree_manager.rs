@@ -35,7 +35,7 @@ pub trait TreeVersion: Default {
     fn tree_changed_signature() -> H256;
 }
 
-pub struct TreeManager<M: Middleware, T: TreeVersion> {
+pub struct TreeManager<M: Middleware + 'static, T: TreeVersion> {
     pub address: H160,
     pub block_scanner: Arc<BlockScanner<M>>,
     pub chain_id: u64,
@@ -64,7 +64,7 @@ where
             window_size,
             last_synced_block,
             filter,
-        ));
+        ).await?);
 
         Ok(Self {
             address,
