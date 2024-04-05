@@ -5,7 +5,7 @@ pub mod identity_tree;
 pub mod service;
 pub mod tree_manager;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -124,10 +124,10 @@ where
 
                                 let mut identity_tree = identity_tree.write().await;
                                 // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                                let root_nonce = identity_tree.roots.get(&bridged_root).expect("Could not get root update").clone();
+                                let root_nonce = identity_tree.roots.get(&bridged_root).expect("Could not get root update");
                                 let new_root = Root {
                                     hash: bridged_root,
-                                    nonce: root_nonce,
+                                    nonce: *root_nonce,
                                 };
 
                                 dbg!("getting root by hash", &bridged_root);
@@ -184,7 +184,6 @@ where
         let roots = futures::future::try_join_all(futures)
             .await?
             .into_iter()
-            .map(|(chain_id, hash)| (chain_id, hash))
             .collect::<HashMap<u64, Hash>>();
 
         Ok(roots)
@@ -345,7 +344,6 @@ where
                         nonce: root.nonce,
                     };
 
-                    identity_tree.roots.insert(root.hash, root.nonce);
                     chain_state.insert(*chain_id, root);
                 }
             }
