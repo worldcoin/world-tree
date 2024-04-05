@@ -64,7 +64,7 @@ where
 
             let middleware = self.middleware.clone();
 
-            tasks.push_front(async move { middleware.get_logs(&filter).await });
+            tasks.push_back(async move { middleware.get_logs(&filter).await });
 
             last_synced_block = to_block;
         }
