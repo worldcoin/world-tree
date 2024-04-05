@@ -92,6 +92,12 @@ impl TreeVersion for CanonicalTree {
         block_scanner: Arc<BlockScanner<M>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
+            let chain_id = block_scanner
+                .middleware
+                .get_chainid()
+                .await
+                .expect("Failed to get chain_id")
+                .as_u64();
             loop {
                 async {
                     let logs = block_scanner.next().await?;
@@ -112,6 +118,7 @@ impl TreeVersion for CanonicalTree {
                     .await?;
 
                     for update in identity_updates {
+                        tracing::info!(?chain_id, new_root = ?update.0.hash, "Root updated");
                         tx.send(update).await?;
                     }
                     ok(())
