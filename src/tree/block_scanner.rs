@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
-use futures::stream::FuturesUnordered;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
 use futures::StreamExt;
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
@@ -49,7 +49,7 @@ where
         let mut last_synced_block =
             self.last_synced_block.load(Ordering::SeqCst);
 
-        let mut tasks = FuturesUnordered::new();
+        let mut tasks = FuturesOrdered::new();
         while last_synced_block < latest_block {
             let from_block = last_synced_block + 1;
             let to_block = (from_block + self.window_size).min(latest_block);
@@ -63,7 +63,8 @@ where
                 .to_block(BlockNumber::Number(to_block.into()));
 
             let middleware = self.middleware.clone();
-            tasks.push(async move { middleware.get_logs(&filter).await });
+
+            tasks.push_front(async move { middleware.get_logs(&filter).await });
 
             last_synced_block = to_block;
         }
@@ -80,7 +81,7 @@ where
         self.last_synced_block
             .store(last_synced_block, Ordering::SeqCst);
 
-        tracing::debug!(chain_id = ?self.chain_id, ?last_synced_block);
+        tracing::debug!(chain_id = ?self.chain_id, ?last_synced_block, "Last synced block updated");
 
         Ok(aggregated_logs)
     }
