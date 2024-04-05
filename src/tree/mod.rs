@@ -22,7 +22,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
 
-use self::identity_tree::{IdentityTree, InclusionProof, LeafUpdates, Root};
+use self::identity_tree::{
+    IdentityTree, IdentityTreeError, InclusionProof, LeafUpdates, Root,
+};
 use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
@@ -130,7 +132,7 @@ where
 
                                 // If the update is for the chain with the oldest root, apply the updates to the tree
                                 if chain_id == *oldest_root.0 {
-                                    identity_tree.apply_updates_to_root(oldest_root.1)?;
+                                    identity_tree.apply_updates_to_root(oldest_root.1);
                                 }
 
                                 // Update chain state with the new root
@@ -246,7 +248,7 @@ where
             }
 
             // Flatten the leaf updates and build the canonical tree
-            let flattened_leaves = flatten_leaf_updates(leaf_updates)?;
+            let flattened_leaves = flatten_leaf_updates(leaf_updates);
             let leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
@@ -294,7 +296,7 @@ where
             );
 
             // Flatten the leaves and build the canonical tree
-            let flattened_leaves = flatten_leaf_updates(canonical_updates)?;
+            let flattened_leaves = flatten_leaf_updates(canonical_updates);
             let canonical_leaves = flattened_leaves
                 .iter()
                 .map(|(idx, hash)| {
@@ -343,7 +345,7 @@ where
         &self,
         identity_commitment: Hash,
         chain_id: Option<u64>,
-    ) -> eyre::Result<Option<InclusionProof>> {
+    ) -> Result<Option<InclusionProof>, IdentityTreeError> {
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {

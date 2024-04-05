@@ -1,11 +1,15 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
+use axum::response::IntoResponse;
+use ethers::providers::Middleware;
 use eyre::{eyre, OptionExt};
+use hyper::StatusCode;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::Serialize;
+use thiserror::Error;
 
 use super::Hash;
 
@@ -90,8 +94,11 @@ impl IdentityTree {
         &self,
         leaf: Hash,
         root: Option<&Root>,
-    ) -> eyre::Result<Option<InclusionProof>> {
-        let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
+    ) -> Result<Option<InclusionProof>, IdentityTreeError> {
+        let leaf_idx = match self.leaves.get(&leaf) {
+            Some(idx) => idx,
+            None => return Ok(None),
+        };
 
         if let Some(root) = root {
             if root.hash == self.tree.root() {
@@ -111,11 +118,11 @@ impl IdentityTree {
         &self,
         leaf_idx: u32,
         root: &Root,
-    ) -> eyre::Result<Proof> {
+    ) -> Result<Proof, IdentityTreeError> {
         let updates = self
             .tree_updates
             .get(root)
-            .ok_or_eyre("Could not find root in tree updates")?;
+            .ok_or(IdentityTreeError::RootNotFound)?;
 
         let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
 
@@ -136,7 +143,7 @@ impl IdentityTree {
                         storage_idx_to_coords(sibling_idx as usize);
                     Some(self.tree.get_node(depth, offset))
                 })
-                .expect("Could not find node in tree");
+                .unwrap();
 
             proof.push(if node_idx % 2 == 0 {
                 Branch::Right(sibling)
@@ -150,16 +157,20 @@ impl IdentityTree {
         Ok(semaphore::merkle_tree::Proof(proof))
     }
 
-    pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
-        // Check if the leaf laready exists
+    pub fn insert(
+        &mut self,
+        index: u32,
+        leaf: Hash,
+    ) -> Result<(), IdentityTreeError> {
+        // Check if the leaf already exists
         if self.leaves.contains_key(&leaf) {
-            return Err(eyre!("Leaf already exists"));
+            return Err(IdentityTreeError::LeafAlreadyExists);
         }
 
         self.leaves.insert(leaf, index);
 
-        // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-        self.tree.push(leaf).expect("Failed to insert into tree");
+        // We can unwrap here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
+        self.tree.push(leaf).unwrap();
 
         Ok(())
     }
@@ -229,7 +240,7 @@ impl IdentityTree {
                         storage_idx_to_coords(left_sibling_idx as usize);
                     Some(self.tree.get_node(depth, offset))
                 })
-                .expect("Could not find node in tree");
+                .unwrap();
 
             // Get the right sibling, with precedence given to the updates
             let right = updates
@@ -241,7 +252,7 @@ impl IdentityTree {
                         storage_idx_to_coords(right_sibling_idx as usize);
                     Some(self.tree.get_node(depth, offset))
                 })
-                .expect("Could not find node in tree");
+                .unwrap();
 
             let hash = PoseidonHash::hash_node(&left, &right);
 
@@ -263,7 +274,7 @@ impl IdentityTree {
     }
 
     // Applies updates up to the specified root, inclusive
-    pub fn apply_updates_to_root(&mut self, root: &Root) -> eyre::Result<()> {
+    pub fn apply_updates_to_root(&mut self, root: &Root) {
         // Get the update at the specified root and apply to the tree
         if let Some(update) = self.tree_updates.remove(root) {
             self.roots.remove(&root.hash);
@@ -293,7 +304,8 @@ impl IdentityTree {
                     //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
                     self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
                 } else {
-                    self.tree.push(val)?;
+                    // We can unwrap here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
+                    self.tree.push(val).unwrap();
                 }
             }
         }
@@ -308,14 +320,12 @@ impl IdentityTree {
         }
 
         self.tree_updates = current_tree_updates;
-
-        Ok(())
     }
 }
 
 pub fn flatten_leaf_updates(
     leaf_updates: BTreeMap<Root, LeafUpdates>,
-) -> eyre::Result<Vec<(u32, Hash)>> {
+) -> Vec<(u32, Hash)> {
     let mut flattened_updates = HashMap::new();
 
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
@@ -330,7 +340,7 @@ pub fn flatten_leaf_updates(
     let mut updates = flattened_updates.into_iter().collect::<Vec<_>>();
     updates.sort_by_key(|(idx, _)| *idx);
 
-    Ok(updates)
+    updates
 }
 
 #[derive(Debug, Serialize)]
@@ -363,9 +373,31 @@ impl InclusionProof {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum IdentityTreeError {
+    #[error("Root not found")]
+    RootNotFound,
+    #[error("Leaf already exists")]
+    LeafAlreadyExists,
+}
+
+impl IdentityTreeError {
+    fn to_status_code(&self) -> StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
+impl IntoResponse for IdentityTreeError {
+    fn into_response(self) -> axum::response::Response {
+        let status_code = self.to_status_code();
+        let response_body = self.to_string();
+        (status_code, response_body).into_response()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::HashMap;
 
     use eyre::eyre;
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
@@ -584,7 +616,7 @@ mod test {
             .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
 
         // Apply updates to the tree
-        identity_tree.apply_updates_to_root(&new_root)?;
+        identity_tree.apply_updates_to_root(&new_root);
 
         assert_eq!(identity_tree.tree.root(), expected_root);
         assert_eq!(identity_tree.tree_updates.len(), 0);

@@ -11,6 +11,7 @@ use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
+use super::identity_tree::IdentityTreeError;
 use super::{Hash, InclusionProof, WorldTree};
 
 pub type ChainId = u64;
@@ -97,7 +98,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
-) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
+) -> Result<(StatusCode, Json<Option<InclusionProof>>), IdentityTreeError> {
     let chain_id = query_params.chain_id.or(req.chain_id);
 
     let inclusion_proof = world_tree
@@ -116,21 +117,5 @@ pub async fn health<M: Middleware>(
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
-    }
-}
-
-impl TreeError {
-    fn to_status_code(&self) -> StatusCode {
-        match self {
-            TreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
-        }
-    }
-}
-
-impl IntoResponse for TreeError {
-    fn into_response(self) -> axum::response::Response {
-        let status_code = self.to_status_code();
-        let response_body = self.to_string();
-        (status_code, response_body).into_response()
     }
 }
