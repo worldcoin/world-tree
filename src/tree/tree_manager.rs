@@ -5,10 +5,12 @@ use std::time::Duration;
 
 use ethers::abi::{AbiDecode, RawLog};
 use ethers::contract::{EthCall, EthEvent};
+use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::Middleware;
 use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
@@ -52,7 +54,7 @@ where
         window_size: u64,
         last_synced_block: u64,
         middleware: Arc<M>,
-    ) -> eyre::Result<Self> {
+    ) -> Result<Self, M::Error> {
         let chain_id = middleware.get_chainid().await?.as_u64();
 
         let filter = Filter::new()
@@ -80,6 +82,21 @@ where
     pub fn spawn(&self, tx: Sender<T::ChannelData>) -> JoinHandle<()> {
         T::spawn(tx, self.block_scanner.clone())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum TreeManagerError<M>
+where
+    M: Middleware + 'static,
+{
+    #[error("Middleware error")]
+    MiddlewareError(<M as Middleware>::Error),
+    #[error("Contract error")]
+    ContractError(#[from] ContractError<M>),
+    #[error("ABI Codec error")]
+    ABICodecError(#[from] AbiError),
+    #[error("Eth ABI error")]
+    EthABIError(#[from] ethers::abi::Error),
 }
 
 #[derive(Default)]
@@ -187,7 +204,7 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
-) -> eyre::Result<BTreeMap<Root, LeafUpdates>> {
+) -> Result<BTreeMap<Root, LeafUpdates>, TreeManagerError<M>> {
     let mut tree_updates = BTreeMap::new();
 
     let mut tasks = FuturesUnordered::new();
@@ -203,7 +220,9 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     let mut sorted_transactions = BTreeMap::new();
 
     while let Some(transaction) = tasks.next().await {
-        let transaction = transaction?.expect("TODO: handle this case");
+        let transaction = transaction
+            .map_err(TreeManagerError::MiddlewareError)?
+            .expect("TODO: handle this case");
 
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");

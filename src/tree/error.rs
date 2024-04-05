@@ -36,9 +36,3 @@ where
     #[error(transparent)]
     SendLogError(#[from] SendError<Log>),
 }
-
-#[derive(Error, Debug)]
-pub enum TreeError {
-    #[error("The world tree is not fully synced")]
-    TreeNotSynced,
-}

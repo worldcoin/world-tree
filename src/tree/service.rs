@@ -11,7 +11,6 @@ use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use super::error::TreeError;
 use super::{Hash, InclusionProof, WorldTree};
 
 pub type ChainId = u64;
