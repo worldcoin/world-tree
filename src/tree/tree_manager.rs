@@ -194,7 +194,9 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     let mut tasks = FuturesUnordered::new();
 
     for log in logs {
-        let tx_hash = log.transaction_hash.expect("TODO: handle this case");
+        let tx_hash = log
+            .transaction_hash
+            .expect("Could not get transaction hash");
 
         tracing::debug!(?tx_hash, "Getting transaction");
 
@@ -206,7 +208,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     while let Some(transaction) = tasks.next().await {
         let transaction = transaction
             .map_err(TreeManagerError::MiddlewareError)?
-            .expect("TODO: handle this case");
+            .expect("Could not get transaction");
 
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
