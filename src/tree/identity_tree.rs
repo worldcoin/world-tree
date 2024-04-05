@@ -1,16 +1,12 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-use axum::response::IntoResponse;
-use ethers::providers::Middleware;
-use eyre::{eyre, OptionExt};
-use hyper::StatusCode;
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::Serialize;
-use thiserror::Error;
 
+use super::error::IdentityTreeError;
 use super::Hash;
 
 pub enum LeafUpdates {
@@ -373,28 +369,6 @@ impl InclusionProof {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum IdentityTreeError {
-    #[error("Root not found")]
-    RootNotFound,
-    #[error("Leaf already exists")]
-    LeafAlreadyExists,
-}
-
-impl IdentityTreeError {
-    fn to_status_code(&self) -> StatusCode {
-        StatusCode::INTERNAL_SERVER_ERROR
-    }
-}
-
-impl IntoResponse for IdentityTreeError {
-    fn into_response(self) -> axum::response::Response {
-        let status_code = self.to_status_code();
-        let response_body = self.to_string();
-        (status_code, response_body).into_response()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -585,7 +559,7 @@ mod test {
         let leaves = generate_leaves();
 
         for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
-            identity_tree.insert(idx as u32, *leaf);
+            identity_tree.insert(idx as u32, *leaf)?;
         }
 
         // Generate the updated tree with all of the leaves

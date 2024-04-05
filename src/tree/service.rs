@@ -4,14 +4,13 @@ use std::sync::Arc;
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use super::identity_tree::IdentityTreeError;
+use super::error::WorldTreeError;
 use super::{Hash, InclusionProof, WorldTree};
 
 pub type ChainId = u64;
@@ -98,13 +97,12 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
-) -> Result<(StatusCode, Json<Option<InclusionProof>>), IdentityTreeError> {
+) -> Result<(StatusCode, Json<Option<InclusionProof>>), WorldTreeError<M>> {
     let chain_id = query_params.chain_id.or(req.chain_id);
 
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)
-        .await
-        .expect("TODO: Handle this case");
+        .await?;
 
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }

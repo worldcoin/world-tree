@@ -5,16 +5,15 @@ use std::time::Duration;
 
 use ethers::abi::{AbiDecode, RawLog};
 use ethers::contract::{EthCall, EthEvent};
-use ethers::prelude::{AbiError, ContractError};
 use ethers::providers::Middleware;
 use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
+use super::error::TreeManagerError;
 use super::identity_tree::{LeafUpdates, Root};
 use super::Hash;
 use crate::abi::{
@@ -82,21 +81,6 @@ where
     pub fn spawn(&self, tx: Sender<T::ChannelData>) -> JoinHandle<()> {
         T::spawn(tx, self.block_scanner.clone())
     }
-}
-
-#[derive(Error, Debug)]
-pub enum TreeManagerError<M>
-where
-    M: Middleware + 'static,
-{
-    #[error("Middleware error")]
-    MiddlewareError(<M as Middleware>::Error),
-    #[error("Contract error")]
-    ContractError(#[from] ContractError<M>),
-    #[error("ABI Codec error")]
-    ABICodecError(#[from] AbiError),
-    #[error("Eth ABI error")]
-    EthABIError(#[from] ethers::abi::Error),
 }
 
 #[derive(Default)]

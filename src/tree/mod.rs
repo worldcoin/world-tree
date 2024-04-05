@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use ethers::contract::ContractError;
 use ethers::providers::Middleware;
 use ethers::types::U256;
 use ruint::Uint;
@@ -22,9 +23,8 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
 
-use self::identity_tree::{
-    IdentityTree, IdentityTreeError, InclusionProof, LeafUpdates, Root,
-};
+use self::error::WorldTreeError;
+use self::identity_tree::{IdentityTree, InclusionProof, LeafUpdates, Root};
 use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
@@ -146,7 +146,9 @@ where
         })
     }
 
-    async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Hash>> {
+    async fn get_latest_roots(
+        &self,
+    ) -> Result<HashMap<u64, Hash>, WorldTreeError<M>> {
         let mut tree_data = vec![];
 
         for bridged_tree in self.bridged_tree_manager.iter() {
@@ -169,7 +171,7 @@ where
         let futures = tree_data.iter().map(|(chain_id, contract)| async move {
             let root: U256 = contract.latest_root().await?;
 
-            eyre::Result::<_, eyre::Report>::Ok((
+            Result::<_, ContractError<M>>::Ok((
                 *chain_id,
                 Uint::<256, 4>::from_limbs(root.0),
             ))
@@ -184,14 +186,16 @@ where
     }
 
     #[instrument(skip(self))]
-    pub async fn sync_to_head(&self) -> eyre::Result<()> {
+
+    pub async fn sync_to_head(&self) -> Result<(), WorldTreeError<M>> {
         // Update the last synced block for each bridged tree to the current block
         for bridged_tree in self.bridged_tree_manager.iter() {
             let current_block = bridged_tree
                 .block_scanner
                 .middleware
                 .get_block_number()
-                .await?
+                .await
+                .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
 
             bridged_tree
@@ -201,7 +205,12 @@ where
         }
 
         // Get all logs from the canonical tree from the last synced block to the chain tip
-        let logs = self.canonical_tree_manager.block_scanner.next().await?;
+        let logs = self
+            .canonical_tree_manager
+            .block_scanner
+            .next()
+            .await
+            .map_err(WorldTreeError::MiddlewareError)?;
 
         if logs.is_empty() {
             return Ok(());
@@ -345,7 +354,7 @@ where
         &self,
         identity_commitment: Hash,
         chain_id: Option<u64>,
-    ) -> Result<Option<InclusionProof>, IdentityTreeError> {
+    ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {
