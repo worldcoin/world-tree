@@ -11,7 +11,7 @@ ethers = { version = "2.0.10", features = [
     "rustls",
     "openssl",
 ] }
-eyre = "0.6.8"
+eyre = "0.6.12"
 serde = "1.0.189"
 metrics = "0.21.1"
 opentelemetry = { version = "0.20.0", features = ["rt-tokio"] }

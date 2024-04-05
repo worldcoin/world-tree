@@ -24,7 +24,7 @@ ethers = { version = "2.0.10", features = [
     "openssl",
 ] }
 ethers-throttle = { path = "crates/ethers-throttle" }
-eyre = "0.6.9"
+eyre = "0.6.12"
 futures = "0.3.28"
 governor = "0.6.0"
 hex = "0.4.3"
