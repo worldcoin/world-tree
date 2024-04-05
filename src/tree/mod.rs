@@ -104,9 +104,7 @@ where
                         leaf_updates = leaf_updates_rx.recv() => {
                             if let Some((root, leaf_updates)) = leaf_updates{
                                 let mut identity_tree = identity_tree.write().await;
-
                                 identity_tree.append_updates(root, leaf_updates);
-                                dbg!(&identity_tree.tree_updates);
 
                                 // Update the root for the canonical chain
                                 chain_state.write().await.insert(canonical_chain_id, root);
@@ -130,16 +128,10 @@ where
                                     nonce: *root_nonce,
                                 };
 
-                                dbg!("getting root by hash", &bridged_root);
-                                dbg!(&identity_tree.tree_updates);
-
-
                                 // If the update is for the chain with the oldest root, apply the updates to the tree
                                 if chain_id == *oldest_root.0 {
                                     identity_tree.apply_updates_to_root(oldest_root.1)?;
                                 }
-
-                                dbg!("after applied updates", &identity_tree.tree_updates);
 
                                 // Update chain state with the new root
                                 chain_state.insert(chain_id, new_root);
@@ -214,17 +206,16 @@ where
         }
 
         // Create a roots hashset to easily index roots by hash
-        let onchain_roots = self
-            .get_latest_roots()
-            .await?
-            .into_iter()
-            .map(|(chain_id, root)| (root, chain_id))
-            .collect::<HashMap<Hash, u64>>();
+        let mut onchain_roots = HashMap::new();
+        for (chain_id, root) in self.get_latest_roots().await? {
+            let chain_ids = onchain_roots.entry(root).or_insert_with(Vec::new);
+            chain_ids.push(chain_id);
+        }
 
         // Iterate through all of the canonical logs until a root on one of the chains is reached. This is the oldest root across all chains
         let mut pivot = 0;
         for log in logs.iter() {
-            let root = Hash::from_le_bytes(log.topics[3].0);
+            let root = Hash::from_be_bytes(log.topics[3].0);
             pivot += 1;
 
             if onchain_roots.contains_key(&root) {
@@ -246,14 +237,11 @@ where
             // Initialize the chain_state with the canonical root corresponding to each chain
             let mut chain_state = self.chain_state.write().await;
             for (root, _) in leaf_updates.iter() {
-                if let Some(chain_id) = onchain_roots.get(&root.hash) {
-                    let root = Root {
-                        hash: root.hash,
-                        nonce: root.nonce,
-                    };
-
+                if let Some(chain_ids) = onchain_roots.get(&root.hash) {
+                    for chain_id in chain_ids {
+                        chain_state.insert(*chain_id, *root);
+                    }
                     identity_tree.roots.insert(root.hash, root.nonce);
-                    chain_state.insert(*chain_id, root);
                 }
             }
 
@@ -296,6 +284,7 @@ where
             let (last_canonical_root, _) = canonical_updates
                 .last_key_value()
                 .expect("No canonical updates");
+
             identity_tree
                 .roots
                 .insert(last_canonical_root.hash, last_canonical_root.nonce);
@@ -338,13 +327,11 @@ where
                 identity_tree.append_updates(root, leaves);
 
                 // Initialize the chain_state with the canonical root corresponding to each chain
-                if let Some(chain_id) = onchain_roots.get(&root.hash) {
-                    let root = Root {
-                        hash: root.hash,
-                        nonce: root.nonce,
-                    };
-
-                    chain_state.insert(*chain_id, root);
+                if let Some(chain_ids) = onchain_roots.get(&root.hash) {
+                    for chain_id in chain_ids {
+                        chain_state.insert(*chain_id, root);
+                    }
+                    identity_tree.roots.insert(root.hash, root.nonce);
                 }
             }
         }

@@ -228,7 +228,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
                 hash: Hash::from_limbs(register_identities_call.post_root.0),
                 nonce: nonce.as_u64() as usize,
             };
-            tracing::info!(?root, "Canonical tree updated");
+            tracing::debug!(?root, "Canonical tree updated");
             tree_updates.insert(root, LeafUpdates::Insert(identity_updates));
 
         } else if function_selector == DeleteIdentitiesCall::selector() {
@@ -248,7 +248,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             }
 
             let root = Root { hash: Hash::from_limbs(delete_identities_call.post_root.0), nonce: nonce.as_u64() as usize };
-            tracing::info!(?root, "Canonical tree updated");
+            tracing::debug!(?root, "Canonical tree updated");
             tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
         } else if function_selector == DeleteIdentitiesWithDeletionProofAndBatchSizeAndPackedDeletionIndicesAndPreRootCall::selector() {
 
@@ -268,7 +268,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
             }
 
             let root = Root { hash: Hash::from_limbs(delete_identities_call.post_root.0), nonce: nonce.as_u64() as usize };
-            tracing::info!(?root, "Canonical tree updated");
+            tracing::debug!(?root, "Canonical tree updated");
             tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
         }
     }

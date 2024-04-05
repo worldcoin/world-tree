@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-use eyre::OptionExt;
+use eyre::{eyre, OptionExt};
 use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
@@ -150,11 +150,18 @@ impl IdentityTree {
         Ok(semaphore::merkle_tree::Proof(proof))
     }
 
-    pub fn insert(&mut self, index: u32, value: Hash) {
-        //TODO: do we want to return an error if a non unique leaf is being inserted?
-        self.leaves.insert(value, index);
+    pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
+        // Check if the leaf laready exists
+        if self.leaves.contains_key(&leaf) {
+            return Err(eyre!("Leaf already exists"));
+        }
+
+        self.leaves.insert(leaf, index);
+
         // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-        self.tree.push(value).expect("Failed to insert into tree");
+        self.tree.push(leaf).expect("Failed to insert into tree");
+
+        Ok(())
     }
 
     pub fn remove(&mut self, index: usize) {
