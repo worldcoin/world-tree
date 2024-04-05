@@ -45,7 +45,7 @@ pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     (depth as usize, offset)
 }
 
-#[derive(Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct Root {
     pub hash: Hash,
     //NOTE: note that this assumes that there is only one wallet that sequences transactions
@@ -66,21 +66,11 @@ impl PartialOrd for Root {
     }
 }
 
-impl PartialEq for Root {
-    fn eq(&self, other: &Self) -> bool {
-        self.hash == other.hash
-    }
-}
-
-impl std::hash::Hash for Root {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.hash.hash(state);
-    }
-}
-
 pub struct IdentityTree {
     pub tree: DynamicMerkleTree<PoseidonHash>,
     pub tree_updates: BTreeMap<Root, StorageUpdates>,
+    // Hashmap of root hash to nonce
+    pub roots: HashMap<Hash, usize>,
     pub leaves: HashMap<Hash, u32>,
 }
 
@@ -91,6 +81,7 @@ impl IdentityTree {
         Self {
             tree,
             tree_updates: BTreeMap::new(),
+            roots: HashMap::new(),
             leaves: HashMap::new(),
         }
     }
@@ -260,14 +251,16 @@ impl IdentityTree {
             updates.entry(update.0).or_insert(update.1);
         }
 
-        dbg!("canonical tree update", &root);
         self.tree_updates.insert(root, updates);
+        self.roots.insert(root.hash, root.nonce);
     }
 
     // Applies updates up to the specified root, inclusive
     pub fn apply_updates_to_root(&mut self, root: &Root) -> eyre::Result<()> {
         // Get the update at the specified root and apply to the tree
         if let Some(update) = self.tree_updates.remove(root) {
+            self.roots.remove(&root.hash);
+
             // Filter out updates that are not leaves
             let mut leaf_updates = update
                 .into_iter()
@@ -300,22 +293,16 @@ impl IdentityTree {
 
         // Split off tree updates at the new root
         // Since the root was already removed from the updates, we can use split_off to separate the updates non inclusive of the root
-        self.tree_updates = self.tree_updates.split_off(root);
+        let current_tree_updates = self.tree_updates.split_off(root);
+
+        // Clean up any roots that are no longer needed
+        for root in self.tree_updates.keys() {
+            self.roots.remove(&root.hash);
+        }
+
+        self.tree_updates = current_tree_updates;
 
         Ok(())
-    }
-
-    pub fn get_root_by_hash(&self, hash: &Hash) -> Option<&Root> {
-        let target_root = Root {
-            hash: *hash,
-            nonce: 0,
-        };
-
-        if let Some((root, _)) = self.tree_updates.get_key_value(&target_root) {
-            Some(root)
-        } else {
-            None
-        }
     }
 }
 
@@ -371,7 +358,7 @@ impl InclusionProof {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, HashMap, HashSet};
 
     use eyre::eyre;
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
@@ -409,56 +396,6 @@ mod test {
 
         assert!(root_1 < root_2);
         assert!(root_2 > root_3);
-    }
-
-    #[test]
-    fn test_eq_root() {
-        let root_1 = Root {
-            hash: Hash::from(1),
-            nonce: 1,
-        };
-
-        let root_2 = Root {
-            hash: Hash::from(1),
-            nonce: 2,
-        };
-
-        let root_3 = Root {
-            hash: Hash::from(2),
-            nonce: 1,
-        };
-
-        assert_eq!(root_1, root_2);
-        assert_ne!(root_1, root_3);
-    }
-
-    #[test]
-    fn test_hash_root() {
-        let root_1 = Root {
-            hash: Hash::from(1),
-            nonce: 1,
-        };
-
-        let root_2 = Root {
-            hash: Hash::from(1),
-            nonce: 2,
-        };
-
-        let root_3 = Root {
-            hash: Hash::from(2),
-            nonce: 1,
-        };
-
-        let mut map = HashSet::new();
-
-        map.insert(root_1);
-
-        assert!(map.contains(&root_2));
-        assert!(!map.contains(&root_3));
-
-        map.insert(root_3);
-
-        assert_eq!(map.len(), 2);
     }
 
     #[test]
@@ -665,7 +602,4 @@ mod test {
 
     #[test]
     fn test_construct_proof_from_root() {}
-
-    #[test]
-    fn test_get_root_by_hash() {}
 }

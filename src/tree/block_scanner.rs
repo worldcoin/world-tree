@@ -80,7 +80,7 @@ where
         self.last_synced_block
             .store(last_synced_block, Ordering::SeqCst);
 
-        tracing::info!(chain_id = ?self.chain_id, ?last_synced_block, "Last synced block updated");
+        tracing::info!(chain_id = ?self.chain_id, ?last_synced_block);
 
         Ok(aggregated_logs)
     }

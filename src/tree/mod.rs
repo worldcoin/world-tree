@@ -5,7 +5,6 @@ pub mod identity_tree;
 pub mod service;
 pub mod tree_manager;
 
-use crate::error::Log as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -28,6 +27,7 @@ use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
 use crate::abi::IBridgedWorldID;
+use crate::error::Log as _;
 use crate::tree::identity_tree::flatten_leaf_updates;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
@@ -106,6 +106,7 @@ where
                                 let mut identity_tree = identity_tree.write().await;
 
                                 identity_tree.append_updates(root, leaf_updates);
+                                dbg!(&identity_tree.tree_updates);
 
                                 // Update the root for the canonical chain
                                 chain_state.write().await.insert(canonical_chain_id, root);
@@ -121,21 +122,27 @@ where
                                     .min_by_key(|&(_, v)| v)
                                     .expect("No roots in chain state");
 
+                                let mut identity_tree = identity_tree.write().await;
+                                // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                                let root_nonce = identity_tree.roots.get(&bridged_root).expect("Could not get root update").clone();
+                                let new_root = Root {
+                                    hash: bridged_root,
+                                    nonce: root_nonce,
+                                };
+
+                                dbg!("getting root by hash", &bridged_root);
+                                dbg!(&identity_tree.tree_updates);
+
+
                                 // If the update is for the chain with the oldest root, apply the updates to the tree
                                 if chain_id == *oldest_root.0 {
-                                    let mut identity_tree = identity_tree.write().await;
                                     identity_tree.apply_updates_to_root(oldest_root.1)?;
                                 }
 
-                                let  identity_tree = identity_tree.read().await;
-                               
-                                dbg!("getting root by hash", &bridged_root);
-
-                                // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                                let new_root = identity_tree.get_root_by_hash(&bridged_root).expect("Could not get root update");
+                                dbg!("after applied updates", &identity_tree.tree_updates);
 
                                 // Update chain state with the new root
-                                chain_state.insert(chain_id, *new_root);
+                                chain_state.insert(chain_id, new_root);
                             }
                         }
                     }
@@ -145,7 +152,7 @@ where
         })
     }
 
-    async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Root>> {
+    async fn get_latest_roots(&self) -> eyre::Result<HashMap<u64, Hash>> {
         let mut tree_data = vec![];
 
         for bridged_tree in self.bridged_tree_manager.iter() {
@@ -177,18 +184,8 @@ where
         let roots = futures::future::try_join_all(futures)
             .await?
             .into_iter()
-            .map(|(chain_id, hash)| {
-                tracing::info!(?chain_id, ?hash, "Latest root");
-
-                let root = Root {
-                    hash,
-                    // We can set the nonce to 0 here
-                    nonce: 0,
-                };
-
-                (chain_id, root)
-            })
-            .collect::<HashMap<u64, Root>>();
+            .map(|(chain_id, hash)| (chain_id, hash))
+            .collect::<HashMap<u64, Hash>>();
 
         Ok(roots)
     }
@@ -210,15 +207,6 @@ where
                 .store(current_block, Ordering::SeqCst);
         }
 
-        // Update the latest root for all chains
-        let mut chain_state = self.chain_state.write().await;
-        *chain_state = self.get_latest_roots().await?;
-
-        let roots = chain_state
-            .iter()
-            .map(|(_, root)| *root)
-            .collect::<HashSet<_>>();
-
         // Get all logs from the canonical tree from the last synced block to the chain tip
         let logs = self.canonical_tree_manager.block_scanner.next().await?;
 
@@ -226,18 +214,21 @@ where
             return Ok(());
         }
 
+        // Create a roots hashset to easily index roots by hash
+        let onchain_roots = self
+            .get_latest_roots()
+            .await?
+            .into_iter()
+            .map(|(chain_id, root)| (root, chain_id))
+            .collect::<HashMap<Hash, u64>>();
+
         // Iterate through all of the canonical logs until a root on one of the chains is reached. This is the oldest root across all chains
         let mut pivot = 0;
         for log in logs.iter() {
-            // We can set post root start index to 0 since the Hash implementation of Root only evaluates the `root` field
-            let post_root = Root {
-                hash: Hash::from_le_bytes(log.topics[3].0),
-                nonce: 0,
-            };
-
+            let root = Hash::from_le_bytes(log.topics[3].0);
             pivot += 1;
 
-            if roots.contains(&post_root) {
+            if onchain_roots.contains_key(&root) {
                 break;
             }
         }
@@ -253,6 +244,21 @@ where
             let leaf_updates =
                 extract_identity_updates(&logs, canonical_middleware).await?;
 
+            // Initialize the chain_state with the canonical root corresponding to each chain
+            let mut chain_state = self.chain_state.write().await;
+            for (root, _) in leaf_updates.iter() {
+                if let Some(chain_id) = onchain_roots.get(&root.hash) {
+                    let root = Root {
+                        hash: root.hash,
+                        nonce: root.nonce,
+                    };
+
+                    identity_tree.roots.insert(root.hash, root.nonce);
+                    chain_state.insert(*chain_id, root);
+                }
+            }
+
+            // Flatten the leaf updates and build the canonical tree
             let flattened_leaves = flatten_leaf_updates(leaf_updates)?;
             let leaves = flattened_leaves
                 .iter()
@@ -285,6 +291,21 @@ where
             )
             .await?;
 
+            let mut chain_state = self.chain_state.write().await;
+
+            // Update the chain state with the last canonical root
+            let (last_canonical_root, _) = canonical_updates
+                .last_key_value()
+                .expect("No canonical updates");
+            identity_tree
+                .roots
+                .insert(last_canonical_root.hash, last_canonical_root.nonce);
+            chain_state.insert(
+                self.canonical_tree_manager.chain_id,
+                *last_canonical_root,
+            );
+
+            // Flatten the leaves and build the canonical tree
             let flattened_leaves = flatten_leaf_updates(canonical_updates)?;
             let canonical_leaves = flattened_leaves
                 .iter()
@@ -316,6 +337,17 @@ where
 
             for (root, leaves) in pending_updates {
                 identity_tree.append_updates(root, leaves);
+
+                // Initialize the chain_state with the canonical root corresponding to each chain
+                if let Some(chain_id) = onchain_roots.get(&root.hash) {
+                    let root = Root {
+                        hash: root.hash,
+                        nonce: root.nonce,
+                    };
+
+                    identity_tree.roots.insert(root.hash, root.nonce);
+                    chain_state.insert(*chain_id, root);
+                }
             }
         }
 
