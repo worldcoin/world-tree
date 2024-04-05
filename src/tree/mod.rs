@@ -199,7 +199,9 @@ where
         }
 
         // Get all logs from the canonical tree from the last synced block to the chain tip
-        let logs = self.canonical_tree_manager.block_scanner.next().await?;
+        let mut logs = self.canonical_tree_manager.block_scanner.next().await?;
+        //FIXME: This will not work, we need to extract all leaf updates and sort by root
+        logs.sort_by_key(|log| log.block_number.unwrap().as_u64());
 
         if logs.is_empty() {
             return Ok(());
