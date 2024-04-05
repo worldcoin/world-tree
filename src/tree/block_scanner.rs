@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
-use futures::stream::{FuturesOrdered, FuturesUnordered};
+use futures::stream::FuturesOrdered;
 use futures::StreamExt;
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
