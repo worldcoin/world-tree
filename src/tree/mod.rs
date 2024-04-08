@@ -348,7 +348,7 @@ where
     pub async fn inclusion_proof(
         &self,
         identity_commitment: Hash,
-        chain_id: Option<u64>,
+        chain_id: Option<ChainId>,
     ) -> eyre::Result<Option<InclusionProof>> {
         let chain_state = self.chain_state.read().await;
 

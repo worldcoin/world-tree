@@ -12,9 +12,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use super::error::TreeError;
-use super::{Hash, InclusionProof, WorldTree};
-
-pub type ChainId = u64;
+use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 pub struct InclusionProofService<M: Middleware + 'static> {
