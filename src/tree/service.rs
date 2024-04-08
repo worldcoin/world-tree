@@ -72,17 +72,12 @@ impl<M: Middleware> InclusionProofService<M> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InclusionProofRequest {
     pub identity_commitment: Hash,
-    chain_id: Option<ChainId>,
 }
 
 impl InclusionProofRequest {
-    pub fn new(
-        identity_commitment: Hash,
-        chain_id: Option<ChainId>,
-    ) -> InclusionProofRequest {
+    pub fn new(identity_commitment: Hash) -> InclusionProofRequest {
         Self {
             identity_commitment,
-            chain_id,
         }
     }
 }
@@ -99,7 +94,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
-    let chain_id = query_params.chain_id.or(req.chain_id);
+    let chain_id = query_params.chain_id;
 
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)

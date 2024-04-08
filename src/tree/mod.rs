@@ -28,7 +28,6 @@ use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
 };
 use crate::abi::IBridgedWorldID;
-use crate::error::Log as _;
 use crate::tree::identity_tree::flatten_leaf_updates;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
