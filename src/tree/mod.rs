@@ -16,6 +16,7 @@ use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
@@ -82,64 +83,69 @@ where
             handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
         }
 
-        handles
-            .push(self.handle_tree_updates(leaf_updates_rx, bridged_root_rx));
+        handles.push(self.handle_canonical_updates(leaf_updates_rx));
+        handles.push(self.handle_bridged_updates(bridged_root_rx));
 
         Ok(handles)
     }
 
-    fn handle_tree_updates(
+    fn handle_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+    ) -> JoinHandle<()> {
+        let canonical_chain_id = self.canonical_tree_manager.chain_id;
+        let identity_tree = self.identity_tree.clone();
+        let chain_state = self.chain_state.clone();
+
+        tokio::spawn(async move {
+            if let Some((root, leaf_updates)) = leaf_updates_rx.recv().await {
+                let mut identity_tree = identity_tree.write().await;
+                identity_tree.append_updates(root, leaf_updates);
+
+                // Update the root for the canonical chain
+                chain_state.write().await.insert(canonical_chain_id, root);
+            }
+        })
+    }
+
+    fn handle_bridged_updates(
+        &self,
         mut bridged_root_rx: Receiver<(u64, Hash)>,
     ) -> JoinHandle<()> {
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
-        let canonical_chain_id = self.canonical_tree_manager.chain_id;
 
         tokio::spawn(async move {
             loop {
-                async {
-                    tokio::select! {
-                        leaf_updates = leaf_updates_rx.recv() => {
-                            if let Some((root, leaf_updates)) = leaf_updates{
-                                let mut identity_tree = identity_tree.write().await;
-                                identity_tree.append_updates(root, leaf_updates);
+                if let Some((chain_id, bridged_root)) =
+                    bridged_root_rx.recv().await
+                {
+                    // Get the oldest root across all chains
+                    let mut chain_state = chain_state.write().await;
+                    let oldest_root: (&u64, &Root) = chain_state
+                        .iter()
+                        .min_by_key(|&(_, v)| v)
+                        .expect("No roots in chain state");
 
-                                // Update the root for the canonical chain
-                                chain_state.write().await.insert(canonical_chain_id, root);
-                            }
-                        }
+                    let mut identity_tree = identity_tree.write().await;
+                    // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                    let root_nonce = identity_tree
+                        .roots
+                        .get(&bridged_root)
+                        .expect("Could not get root update");
+                    let new_root = Root {
+                        hash: bridged_root,
+                        nonce: *root_nonce,
+                    };
 
-                        bridged_root = bridged_root_rx.recv() => {
-                            if let Some((chain_id, bridged_root)) = bridged_root{
-                                // Get the oldest root across all chains
-                                let mut chain_state = chain_state.write().await;
-                                let oldest_root: (&u64, &Root) = chain_state
-                                    .iter()
-                                    .min_by_key(|&(_, v)| v)
-                                    .expect("No roots in chain state");
-
-                                let mut identity_tree = identity_tree.write().await;
-                                // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                                let root_nonce = identity_tree.roots.get(&bridged_root).expect("Could not get root update");
-                                let new_root = Root {
-                                    hash: bridged_root,
-                                    nonce: *root_nonce,
-                                };
-
-                                // If the update is for the chain with the oldest root, apply the updates to the tree
-                                if chain_id == *oldest_root.0 {
-                                    identity_tree.apply_updates_to_root(oldest_root.1)?;
-                                }
-
-                                // Update chain state with the new root
-                                chain_state.insert(chain_id, new_root);
-                            }
-                        }
+                    // If the update is for the chain with the oldest root, apply the updates to the tree
+                    if chain_id == *oldest_root.0 {
+                        identity_tree.apply_updates_to_root(oldest_root.1);
                     }
-                    Ok(())
-                }.await.log();
+
+                    // Update chain state with the new root
+                    chain_state.insert(chain_id, new_root);
+                }
             }
         })
     }
@@ -361,3 +367,41 @@ where
         Ok(inclusion_proof)
     }
 }
+
+macro_rules! impl_primitive_num {
+    (pub struct $outer:ident($tname:ty)) => {
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            Serialize,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Deserialize,
+        )]
+        pub struct $outer(pub $tname);
+
+        impl std::fmt::Display for $outer {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+
+        impl std::str::FromStr for $outer {
+            type Err = <$tname as std::str::FromStr>::Err;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let n = s.parse::<$tname>()?;
+
+                Ok(Self(n))
+            }
+        }
+    };
+}
+
+impl_primitive_num!(pub struct ChainId(u64));
+impl_primitive_num!(pub struct TreeDepth(usize));
+impl_primitive_num!(pub struct BatchSize(usize));

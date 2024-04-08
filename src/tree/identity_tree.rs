@@ -263,7 +263,7 @@ impl IdentityTree {
     }
 
     // Applies updates up to the specified root, inclusive
-    pub fn apply_updates_to_root(&mut self, root: &Root) -> eyre::Result<()> {
+    pub fn apply_updates_to_root(&mut self, root: &Root) {
         // Get the update at the specified root and apply to the tree
         if let Some(update) = self.tree_updates.remove(root) {
             self.roots.remove(&root.hash);
@@ -293,7 +293,8 @@ impl IdentityTree {
                     //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
                     self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
                 } else {
-                    self.tree.push(val)?;
+                    // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
+                    self.tree.push(val).expect("Could not push leaf");
                 }
             }
         }
@@ -308,8 +309,6 @@ impl IdentityTree {
         }
 
         self.tree_updates = current_tree_updates;
-
-        Ok(())
     }
 }
 
@@ -584,7 +583,7 @@ mod test {
             .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
 
         // Apply updates to the tree
-        identity_tree.apply_updates_to_root(&new_root)?;
+        identity_tree.apply_updates_to_root(&new_root);
 
         assert_eq!(identity_tree.tree.root(), expected_root);
         assert_eq!(identity_tree.tree_updates.len(), 0);
