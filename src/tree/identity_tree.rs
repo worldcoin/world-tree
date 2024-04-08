@@ -7,7 +7,10 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::Serialize;
 
-use super::Hash;
+use super::{Hash, LeafIndex, NodeIndex};
+
+pub type Leaves = HashMap<LeafIndex, Hash>;
+pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
 pub enum LeafUpdates {
     Insert(Leaves),
@@ -22,12 +25,6 @@ impl From<LeafUpdates> for Leaves {
         }
     }
 }
-
-// Node index to hash, 0 indexed from the root
-pub type StorageUpdates = HashMap<u32, Hash>;
-
-// Leaf index to hash, 0 indexed from the initial leaf
-pub type Leaves = HashMap<u32, Hash>;
 
 pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
     let leaf_0 = (1 << tree_depth) - 1;
@@ -129,7 +126,7 @@ impl IdentityTree {
             };
 
             let sibling = updates
-                .get(&sibling_idx)
+                .get(&sibling_idx.into())
                 .copied()
                 .or_else(|| {
                     let (depth, offset) =
@@ -173,13 +170,13 @@ impl IdentityTree {
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
     pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
         // Update leaves
-        match leaf_updates {
-            LeafUpdates::Insert(ref updates) => {
+        match &leaf_updates {
+            LeafUpdates::Insert(updates) => {
                 for (idx, val) in updates.iter() {
-                    self.leaves.insert(*val, *idx);
+                    self.leaves.insert(*val, idx.into());
                 }
             }
-            LeafUpdates::Delete(ref updates) => {
+            LeafUpdates::Delete(updates) => {
                 for (_, val) in updates.iter() {
                     self.leaves.remove(val);
                 }
@@ -192,8 +189,8 @@ impl IdentityTree {
         // Convert leaf indices into storage indices and insert into updates
         let leaves: Leaves = leaf_updates.into();
         for (leaf_idx, hash) in leaves.into_iter() {
-            let storage_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
-            updates.insert(storage_idx, hash);
+            let storage_idx = leaf_to_storage_idx(*leaf_idx, self.tree.depth());
+            updates.insert(storage_idx.into(), hash);
 
             // Queue the parent index
             let parent_idx = (storage_idx - 1) / 2;
@@ -212,7 +209,7 @@ impl IdentityTree {
             // Check if the parent is already in the updates hashmap, indicating it has already been calculated
             //TODO: note why we set to 0 if idx is 0
             let parent_idx = if node_idx == 0 { 0 } else { (node_idx - 1) / 2 };
-            if updates.contains_key(&parent_idx) {
+            if updates.contains_key(&parent_idx.into()) {
                 continue;
             }
 
@@ -221,9 +218,9 @@ impl IdentityTree {
 
             // Get the left sibling, with precedence given to the updates
             let left = updates
-                .get(&left_sibling_idx)
+                .get(&left_sibling_idx.into())
                 .copied()
-                .or_else(|| prev_update.get(&left_sibling_idx).copied())
+                .or_else(|| prev_update.get(&left_sibling_idx.into()).copied())
                 .or_else(|| {
                     let (depth, offset) =
                         storage_idx_to_coords(left_sibling_idx as usize);
@@ -233,9 +230,9 @@ impl IdentityTree {
 
             // Get the right sibling, with precedence given to the updates
             let right = updates
-                .get(&right_sibling_idx)
+                .get(&right_sibling_idx.into())
                 .copied()
-                .or_else(|| prev_update.get(&right_sibling_idx).copied())
+                .or_else(|| prev_update.get(&right_sibling_idx.into()).copied())
                 .or_else(|| {
                     let (depth, offset) =
                         storage_idx_to_coords(right_sibling_idx as usize);
@@ -245,7 +242,7 @@ impl IdentityTree {
 
             let hash = PoseidonHash::hash_node(&left, &right);
 
-            updates.insert(node_idx, hash);
+            updates.insert(node_idx.into(), hash);
 
             // Queue the parent index if not the root
             if node_idx != 0 {
@@ -254,8 +251,8 @@ impl IdentityTree {
         }
 
         // Flatten any remaining updates from the previous update
-        for update in prev_update {
-            updates.entry(update.0).or_insert(update.1);
+        for (node_idx, hash) in prev_update {
+            updates.entry(node_idx).or_insert(hash);
         }
 
         self.tree_updates.insert(root, updates);
@@ -272,9 +269,9 @@ impl IdentityTree {
             let mut leaf_updates = update
                 .into_iter()
                 .filter_map(|(idx, value)| {
-                    if idx >= 1 << self.tree.depth() {
+                    if *idx >= 1 << self.tree.depth() {
                         let leaf_idx =
-                            storage_to_leaf_idx(idx, self.tree.depth());
+                            storage_to_leaf_idx(*idx, self.tree.depth());
                         Some((leaf_idx, value))
                     } else {
                         None
@@ -314,7 +311,7 @@ impl IdentityTree {
 
 pub fn flatten_leaf_updates(
     leaf_updates: BTreeMap<Root, LeafUpdates>,
-) -> eyre::Result<Vec<(u32, Hash)>> {
+) -> eyre::Result<Vec<(LeafIndex, Hash)>> {
     let mut flattened_updates = HashMap::new();
 
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
@@ -374,7 +371,7 @@ mod test {
     use crate::tree::identity_tree::{
         storage_idx_to_coords, storage_to_leaf_idx,
     };
-    use crate::tree::Hash;
+    use crate::tree::{Hash, LeafIndex};
 
     const TREE_DEPTH: usize = 2;
     const NUM_LEAVES: usize = 1 << TREE_DEPTH;
@@ -531,8 +528,8 @@ mod test {
         let leaf_updates = leaves[(NUM_LEAVES / 2)..NUM_LEAVES]
             .iter()
             .enumerate()
-            .map(|(idx, value)| (idx as u32, *value))
-            .collect::<HashMap<u32, Hash>>();
+            .map(|(idx, value)| ((idx as u32).into(), *value))
+            .collect::<HashMap<LeafIndex, Hash>>();
 
         identity_tree
             .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
@@ -576,8 +573,10 @@ mod test {
         let leaf_updates = leaves[(NUM_LEAVES / 2)..]
             .iter()
             .enumerate()
-            .map(|(idx, value)| ((NUM_LEAVES / 2 + idx) as u32, *value))
-            .collect::<HashMap<u32, Hash>>();
+            .map(|(idx, value)| {
+                (LeafIndex((NUM_LEAVES / 2 + idx) as u32), *value)
+            })
+            .collect::<HashMap<LeafIndex, Hash>>();
 
         identity_tree
             .append_updates(new_root, LeafUpdates::Insert(leaf_updates));

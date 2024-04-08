@@ -6,6 +6,7 @@ pub mod service;
 pub mod tree_manager;
 
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -256,7 +257,7 @@ where
                 .iter()
                 .map(|(idx, hash)| {
                     if hash != &Hash::ZERO {
-                        identity_tree.leaves.insert(*hash, *idx);
+                        identity_tree.leaves.insert(*hash, idx.into());
                     } else {
                         identity_tree.leaves.remove(hash);
                     }
@@ -304,7 +305,7 @@ where
                 .iter()
                 .map(|(idx, hash)| {
                     if hash != &Hash::ZERO {
-                        identity_tree.leaves.insert(*hash, *idx);
+                        identity_tree.leaves.insert(*hash, idx.into());
                     } else {
                         identity_tree.leaves.remove(hash);
                     }
@@ -367,7 +368,7 @@ where
     }
 }
 
-macro_rules! impl_primitive_num {
+macro_rules! primitive_newtype {
     (pub struct $outer:ident($tname:ty)) => {
         #[derive(
             Debug,
@@ -385,22 +386,45 @@ macro_rules! impl_primitive_num {
 
         impl std::fmt::Display for $outer {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.0.fmt(f)
+                write!(f, "{}", self.0)
             }
         }
 
-        impl std::str::FromStr for $outer {
-            type Err = <$tname as std::str::FromStr>::Err;
+        impl Deref for $outer {
+            type Target = $tname;
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let n = s.parse::<$tname>()?;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
 
-                Ok(Self(n))
+        impl DerefMut for $outer {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+        impl From<$tname> for $outer {
+            fn from(value: $tname) -> Self {
+                $outer(value)
+            }
+        }
+
+        impl From<$outer> for $tname {
+            fn from(value: $outer) -> Self {
+                value.0
+            }
+        }
+
+        impl From<&$outer> for $tname {
+            fn from(value: &$outer) -> Self {
+                value.0
             }
         }
     };
 }
 
-impl_primitive_num!(pub struct ChainId(u64));
-impl_primitive_num!(pub struct TreeDepth(usize));
-impl_primitive_num!(pub struct BatchSize(usize));
+primitive_newtype!(pub struct ChainId(u64));
+// Node index to hash, 0 indexed from the root
+primitive_newtype!(pub struct NodeIndex(u32));
+// Leaf index to hash, 0 indexed from the initial leaf
+primitive_newtype!(pub struct LeafIndex(u32));

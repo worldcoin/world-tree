@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
 use super::identity_tree::{LeafUpdates, Root};
-use super::Hash;
+use super::{Hash, LeafIndex};
 use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
     TreeChangedFilter,
@@ -212,7 +212,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     for (nonce, transaction) in sorted_transactions {
         let calldata = &transaction.input;
 
-        let mut identity_updates = HashMap::new();
+        let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();
 
         let function_selector = Selector::try_from(&calldata[0..4])
             .expect("Transaction data does not contain a function selector");
@@ -232,7 +232,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
                 .enumerate()
             {
                 identity_updates.insert(
-                    start_index + i as u32,
+                    (start_index + i as u32).into(),
                     Hash::from_limbs(identity.0),
                 );
             }
@@ -255,7 +255,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
             // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
             for i in indices.into_iter().take_while(|x| *x < 2_u32.pow(30)) {
-                identity_updates.insert(i, Hash::ZERO);
+                identity_updates.insert(i.into(), Hash::ZERO);
             }
 
             let root = Root {
