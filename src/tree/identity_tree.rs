@@ -441,7 +441,9 @@ mod test {
         // Generate new leaves and insert into the tree
         let leaves = generate_leaves();
         for (idx, leaf) in leaves.iter().enumerate() {
-            identity_tree.insert(idx as u32, *leaf);
+            identity_tree
+                .insert(idx as u32, *leaf)
+                .expect("Could not insert leaf");
         }
 
         // Initialize an expected tree with the same leaves
@@ -470,7 +472,9 @@ mod test {
         // Generate new leaves and insert into the tree
         let leaves = generate_leaves();
         for (idx, leaf) in leaves.iter().enumerate() {
-            identity_tree.insert(idx as u32, *leaf);
+            identity_tree
+                .insert(idx as u32, *leaf)
+                .expect("Could not insert leaf");
         }
 
         // Remove each leaf from the tree

@@ -13,7 +13,7 @@ pub struct BlockScanner<M: Middleware + 'static> {
     /// The onchain data provider
     pub middleware: Arc<M>,
     /// The block from which to start parsing a given event
-    pub last_synced_block: AtomicU64,
+    pub next_block: AtomicU64,
     /// The maximum block range to parse
     window_size: u64,
     /// Filter specifying the address and topics to match on when scanning
@@ -35,7 +35,7 @@ where
         let chain_id = middleware.get_chainid().await?.as_u64();
         Ok(Self {
             middleware,
-            last_synced_block: AtomicU64::new(current_block),
+            next_block: AtomicU64::new(current_block),
             window_size,
             filter,
             chain_id,
@@ -46,27 +46,25 @@ where
     /// Note that the logs are unsorted and should be handled accordingly.
     pub async fn next(&self) -> Result<Vec<Log>, M::Error> {
         let latest_block = self.middleware.get_block_number().await?.as_u64();
-        let mut last_synced_block =
-            self.last_synced_block.load(Ordering::SeqCst);
+        let mut next_block = self.next_block.load(Ordering::SeqCst);
 
         let mut tasks = FuturesOrdered::new();
-        while last_synced_block < latest_block {
-            let from_block = last_synced_block + 1;
-            let to_block = (from_block + self.window_size).min(latest_block);
+        while next_block < latest_block {
+            let to_block = (next_block + self.window_size).min(latest_block);
 
-            tracing::debug!(chain_id = ?self.chain_id, ?from_block, ?to_block, "Scanning blocks");
+            tracing::debug!(chain_id = ?self.chain_id, from_block = ?next_block, ?to_block, "Scanning blocks");
 
             let filter = self
                 .filter
                 .clone()
-                .from_block(BlockNumber::Number(from_block.into()))
+                .from_block(BlockNumber::Number(next_block.into()))
                 .to_block(BlockNumber::Number(to_block.into()));
 
             let middleware = self.middleware.clone();
 
             tasks.push_back(async move { middleware.get_logs(&filter).await });
 
-            last_synced_block = to_block;
+            next_block = to_block + 1;
         }
 
         //Sort all of the results
@@ -78,10 +76,9 @@ where
             aggregated_logs.extend(logs);
         }
 
-        self.last_synced_block
-            .store(last_synced_block, Ordering::SeqCst);
+        self.next_block.store(next_block, Ordering::SeqCst);
 
-        tracing::debug!(chain_id = ?self.chain_id, ?last_synced_block, "Last synced block updated");
+        tracing::debug!(chain_id = ?self.chain_id, last_synced_block = ?next_block - 1, "Last synced block updated");
 
         Ok(aggregated_logs)
     }

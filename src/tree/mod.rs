@@ -200,8 +200,8 @@ where
 
             bridged_tree
                 .block_scanner
-                .last_synced_block
-                .store(current_block, Ordering::SeqCst);
+                .next_block
+                .store(current_block + 1, Ordering::SeqCst);
         }
 
         // Get all logs from the canonical tree from the last synced block to the chain tip
