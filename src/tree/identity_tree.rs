@@ -12,57 +12,6 @@ use super::{Hash, LeafIndex, NodeIndex};
 pub type Leaves = HashMap<LeafIndex, Hash>;
 pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
-pub enum LeafUpdates {
-    Insert(Leaves),
-    Delete(Leaves),
-}
-
-impl From<LeafUpdates> for Leaves {
-    fn from(val: LeafUpdates) -> Self {
-        match val {
-            LeafUpdates::Insert(leaves) => leaves,
-            LeafUpdates::Delete(leaves) => leaves,
-        }
-    }
-}
-
-pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
-    let leaf_0 = (1 << tree_depth) - 1;
-    leaf_0 + leaf_idx
-}
-
-pub fn storage_to_leaf_idx(storage_idx: u32, tree_depth: usize) -> u32 {
-    let leaf_0 = (1 << tree_depth) - 1;
-    storage_idx - leaf_0
-}
-
-pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
-    let depth = (index + 1).ilog2();
-    let offset = index - (2usize.pow(depth) - 1);
-    (depth as usize, offset)
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct Root {
-    pub hash: Hash,
-    //NOTE: note that this assumes that there is only one wallet that sequences transactions
-    // we should update to a syncing mechanism that can account for multiple sequencers
-    pub nonce: usize,
-}
-
-//TODO: comments as to why we only compare nonce and for parial eq we compare hash
-impl Ord for Root {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.nonce.cmp(&other.nonce)
-    }
-}
-
-impl PartialOrd for Root {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 pub struct IdentityTree {
     pub tree: DynamicMerkleTree<PoseidonHash>,
     pub tree_updates: BTreeMap<Root, StorageUpdates>,
@@ -81,70 +30,6 @@ impl IdentityTree {
             roots: HashMap::new(),
             leaves: HashMap::new(),
         }
-    }
-
-    pub fn inclusion_proof(
-        &self,
-        leaf: Hash,
-        root: Option<&Root>,
-    ) -> eyre::Result<Option<InclusionProof>> {
-        let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
-
-        if let Some(root) = root {
-            if root.hash == self.tree.root() {
-                let proof = self.tree.proof(*leaf_idx as usize);
-                Ok(Some(InclusionProof::new(self.tree.root(), proof)))
-            } else {
-                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
-                Ok(Some(InclusionProof::new(root.hash, proof)))
-            }
-        } else {
-            let proof = self.tree.proof(*leaf_idx as usize);
-            Ok(Some(InclusionProof::new(self.tree.root(), proof)))
-        }
-    }
-
-    pub fn construct_proof_from_root(
-        &self,
-        leaf_idx: u32,
-        root: &Root,
-    ) -> eyre::Result<Proof> {
-        let updates = self
-            .tree_updates
-            .get(root)
-            .ok_or_eyre("Could not find root in tree updates")?;
-
-        let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
-
-        let mut proof: Vec<Branch<Hash>> = vec![];
-
-        while node_idx > 0 {
-            let sibling_idx = if node_idx % 2 == 0 {
-                node_idx - 1
-            } else {
-                node_idx + 1
-            };
-
-            let sibling = updates
-                .get(&sibling_idx.into())
-                .copied()
-                .or_else(|| {
-                    let (depth, offset) =
-                        storage_idx_to_coords(sibling_idx as usize);
-                    Some(self.tree.get_node(depth, offset))
-                })
-                .expect("Could not find node in tree");
-
-            proof.push(if node_idx % 2 == 0 {
-                Branch::Right(sibling)
-            } else {
-                Branch::Left(sibling)
-            });
-
-            node_idx = (node_idx - 1) / 2;
-        }
-
-        Ok(semaphore::merkle_tree::Proof(proof))
     }
 
     pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
@@ -169,6 +54,7 @@ impl IdentityTree {
 
     // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
     pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
+        //TODO: update leaves
         // Update leaves
         match &leaf_updates {
             LeafUpdates::Insert(updates) => {
@@ -182,6 +68,8 @@ impl IdentityTree {
                 }
             }
         }
+
+        //TODO: flatten updates and apply to tree
 
         let mut updates = HashMap::new();
         let mut node_queue = VecDeque::new();
@@ -207,35 +95,42 @@ impl IdentityTree {
 
         while let Some(node_idx) = node_queue.pop_back() {
             // Check if the parent is already in the updates hashmap, indicating it has already been calculated
-            //TODO: note why we set to 0 if idx is 0
-            let parent_idx = if node_idx == 0 { 0 } else { (node_idx - 1) / 2 };
+            let parent_idx = if node_idx == 0 {
+                continue;
+            } else {
+                (node_idx - 1) / 2
+            };
             if updates.contains_key(&parent_idx.into()) {
                 continue;
             }
 
-            let left_sibling_idx = node_idx * 2 + 1;
-            let right_sibling_idx = node_idx * 2 + 2;
+            let left_child_idx = node_idx * 2 + 1;
+            let right_child_idx = node_idx * 2 + 2;
 
-            // Get the left sibling, with precedence given to the updates
+            // Get the left child, with precedence given to the updates
             let left = updates
-                .get(&left_sibling_idx.into())
+                .get(&left_child_idx.into())
                 .copied()
-                .or_else(|| prev_update.get(&left_sibling_idx.into()).copied())
+                // If the left child is not in the updates, check the previous update
+                .or_else(|| prev_update.get(&left_child_idx.into()).copied())
+                // Otherwise, get the node from the tree
                 .or_else(|| {
                     let (depth, offset) =
-                        storage_idx_to_coords(left_sibling_idx as usize);
+                        storage_idx_to_coords(left_child_idx as usize);
                     Some(self.tree.get_node(depth, offset))
                 })
                 .expect("Could not find node in tree");
 
-            // Get the right sibling, with precedence given to the updates
+            // Get the right child, with precedence given to the updates
             let right = updates
-                .get(&right_sibling_idx.into())
+                .get(&right_child_idx.into())
                 .copied()
-                .or_else(|| prev_update.get(&right_sibling_idx.into()).copied())
+                // If the right child is not in the updates, check the previous update
+                .or_else(|| prev_update.get(&right_child_idx.into()).copied())
+                // Otherwise, get the node from the tree
                 .or_else(|| {
                     let (depth, offset) =
-                        storage_idx_to_coords(right_sibling_idx as usize);
+                        storage_idx_to_coords(right_child_idx as usize);
                     Some(self.tree.get_node(depth, offset))
                 })
                 .expect("Could not find node in tree");
@@ -307,11 +202,75 @@ impl IdentityTree {
 
         self.tree_updates = current_tree_updates;
     }
+
+    pub fn inclusion_proof(
+        &self,
+        leaf: Hash,
+        root: Option<&Root>,
+    ) -> eyre::Result<Option<InclusionProof>> {
+        let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
+
+        if let Some(root) = root {
+            if root.hash == self.tree.root() {
+                let proof = self.tree.proof(*leaf_idx as usize);
+                Ok(Some(InclusionProof::new(self.tree.root(), proof)))
+            } else {
+                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
+                Ok(Some(InclusionProof::new(root.hash, proof)))
+            }
+        } else {
+            let proof = self.tree.proof(*leaf_idx as usize);
+            Ok(Some(InclusionProof::new(self.tree.root(), proof)))
+        }
+    }
+
+    pub fn construct_proof_from_root(
+        &self,
+        leaf_idx: u32,
+        root: &Root,
+    ) -> eyre::Result<Proof> {
+        let updates = self
+            .tree_updates
+            .get(root)
+            .ok_or_eyre("Could not find root in tree updates")?;
+
+        let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
+
+        let mut proof: Vec<Branch<Hash>> = vec![];
+
+        while node_idx > 0 {
+            let sibling_idx = if node_idx % 2 == 0 {
+                node_idx - 1
+            } else {
+                node_idx + 1
+            };
+
+            let sibling = updates
+                .get(&sibling_idx.into())
+                .copied()
+                .or_else(|| {
+                    let (depth, offset) =
+                        storage_idx_to_coords(sibling_idx as usize);
+                    Some(self.tree.get_node(depth, offset))
+                })
+                .expect("Could not find node in tree");
+
+            proof.push(if node_idx % 2 == 0 {
+                Branch::Right(sibling)
+            } else {
+                Branch::Left(sibling)
+            });
+
+            node_idx = (node_idx - 1) / 2;
+        }
+
+        Ok(semaphore::merkle_tree::Proof(proof))
+    }
 }
 
 pub fn flatten_leaf_updates(
     leaf_updates: BTreeMap<Root, LeafUpdates>,
-) -> eyre::Result<Vec<(LeafIndex, Hash)>> {
+) -> Vec<(LeafIndex, Hash)> {
     let mut flattened_updates = HashMap::new();
 
     // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
@@ -326,7 +285,57 @@ pub fn flatten_leaf_updates(
     let mut updates = flattened_updates.into_iter().collect::<Vec<_>>();
     updates.sort_by_key(|(idx, _)| *idx);
 
-    Ok(updates)
+    updates
+}
+
+pub enum LeafUpdates {
+    Insert(Leaves),
+    Delete(Leaves),
+}
+
+impl From<LeafUpdates> for Leaves {
+    fn from(val: LeafUpdates) -> Self {
+        match val {
+            LeafUpdates::Insert(leaves) => leaves,
+            LeafUpdates::Delete(leaves) => leaves,
+        }
+    }
+}
+
+pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
+    let leaf_0 = (1 << tree_depth) - 1;
+    leaf_0 + leaf_idx
+}
+
+pub fn storage_to_leaf_idx(storage_idx: u32, tree_depth: usize) -> u32 {
+    let leaf_0 = (1 << tree_depth) - 1;
+    storage_idx - leaf_0
+}
+
+pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
+    let depth = (index + 1).ilog2();
+    let offset = index - (2usize.pow(depth) - 1);
+    (depth as usize, offset)
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct Root {
+    pub hash: Hash,
+    //NOTE: note that this assumes that there is only one wallet that sequences transactions
+    // we should update to a syncing mechanism that can account for multiple sequencers
+    pub nonce: usize,
+}
+
+impl Ord for Root {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.nonce.cmp(&other.nonce)
+    }
+}
+
+impl PartialOrd for Root {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Debug, Serialize)]
