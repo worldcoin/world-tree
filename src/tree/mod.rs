@@ -1,103 +1,455 @@
 pub mod block_scanner;
 pub mod config;
 pub mod error;
+pub mod identity_tree;
 pub mod service;
-pub mod tree_data;
-pub mod tree_updater;
+pub mod tree_manager;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::{BTreeMap, HashMap};
+use std::ops::{Deref, DerefMut};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Duration;
 
-use error::TreeAvailabilityError;
 use ethers::providers::Middleware;
-use ethers::types::H160;
-use semaphore::lazy_merkle_tree::{Canonical, LazyMerkleTree};
+use ethers::types::U256;
+use ruint::Uint;
+use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use tracing::instrument;
 
-use self::tree_data::TreeData;
-use self::tree_updater::TreeUpdater;
+use self::identity_tree::{IdentityTree, InclusionProof, LeafUpdates, Root};
+use self::tree_manager::{
+    extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
+};
+use crate::abi::IBridgedWorldID;
+use crate::tree::identity_tree::flatten_leaf_updates;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
-pub const SYNC_TO_HEAD_SLEEP_SECONDS: u64 = 5;
-
-/// An abstraction over a tree with a history of changes
-///
-/// In our data model the `tree` is the oldest available tree.
-/// The entires in `tree_history` represent new additions to the tree.
-pub struct WorldTree<M: Middleware> {
-    /// All the leaves of the tree and their corresponding root hash
-    pub tree_data: Arc<RwLock<TreeData>>,
-    /// The object in charge of syncing the tree from calldata
-    pub tree_updater: Arc<TreeUpdater<M>>,
-    /// Boolean to indicate when the tree state is synced wth the chain head upon spawning the `WorldTree`.
-    pub synced: Arc<AtomicBool>,
+/// The `WorldTree` syncs and maintains the state of the onchain Merkle tree representing all unique humans across multiple chains
+/// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
+pub struct WorldTree<M: Middleware + 'static> {
+    /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
+    pub identity_tree: Arc<RwLock<IdentityTree>>,
+    /// Responsible for listening to state changes to the tree on mainnet
+    pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
+    /// Responsible for listening to state changes state changes to bridged WorldIDs
+    pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+    /// Mapping of chain Id -> root hash, representing the latest root for each chain
+    pub chain_state: Arc<RwLock<HashMap<u64, Root>>>,
+    /// Flag to indicate if the tree is synced to the latest block on startup. Once the tree is initially synced to the chain tip, this field is set to true
+    pub synced: AtomicBool,
 }
 
-impl<M: Middleware> WorldTree<M> {
-    /// Initializes a new instance of `WorldTree`.
-    ///
-    /// # Arguments
-    ///
-    /// * `tree` - The `PoseidonTree` used for the merkle tree representation.
-    /// * `tree_history_size` - The number of historical tree roots to keep in memory.
-    /// * `address` - The smart contract address of the `WorldIDIdentityManager`.
-    /// * `creation_block` - The block number at which the contract was deployed.
-    /// * `middleware` - Provider to interact with Ethereum.
+impl<M> WorldTree<M>
+where
+    M: Middleware + 'static,
+{
     pub fn new(
-        tree: PoseidonTree<Canonical>,
-        tree_history_size: usize,
-        address: H160,
-        creation_block: u64,
-        window_size: u64,
-        middleware: Arc<M>,
+        tree_depth: usize,
+        canonical_tree_manager: TreeManager<M, CanonicalTree>,
+        bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
     ) -> Self {
+        let identity_tree = IdentityTree::new(tree_depth);
+
         Self {
-            tree_data: Arc::new(RwLock::new(TreeData::new(
-                tree,
-                tree_history_size,
-            ))),
-            tree_updater: Arc::new(TreeUpdater::new(
-                address,
-                creation_block,
-                window_size,
-                middleware,
-            )),
-            synced: Arc::new(AtomicBool::new(false)),
+            identity_tree: Arc::new(RwLock::new(identity_tree)),
+            canonical_tree_manager,
+            bridged_tree_manager,
+            chain_state: Arc::new(RwLock::new(HashMap::new())),
+            synced: AtomicBool::new(false),
         }
     }
 
-    /// Spawns a task that continually syncs the `TreeData` to the state at the chain head.
-    #[instrument(skip(self))]
-    pub fn spawn(&self) -> JoinHandle<Result<(), TreeAvailabilityError<M>>> {
-        let tree_data = self.tree_data.clone();
-        let tree_updater = self.tree_updater.clone();
+    /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
+    pub async fn spawn(&self) -> eyre::Result<Vec<JoinHandle<()>>> {
+        let start_time = Instant::now();
 
-        tracing::info!("Spawning thread to sync tree");
-        let synced = self.synced.clone();
+        // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
+        tracing::info!("Syncing to head");
+        self.sync_to_head().await?;
+        tracing::info!("Synced to head in {:?} seconds", start_time.elapsed());
+
+        let (leaf_updates_tx, leaf_updates_rx) =
+            tokio::sync::mpsc::channel(100);
+        let (bridged_root_tx, bridged_root_rx) =
+            tokio::sync::mpsc::channel(100);
+
+        // Spawn the tree managers to listen to the canonical and bridged trees for updates
+        let mut handles = vec![];
+        handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
+
+        //TODO: handle if there are no bridged roots to spawn, otherwise the channel will close
+        for bridged_tree in self.bridged_tree_manager.iter() {
+            handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
+        }
+
+        // Spawn a task to handle canonical updates, appending new identity updates to `pending_updates` as they arrive
+        handles.push(self.handle_canonical_updates(leaf_updates_rx));
+
+        // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
+        // pending updates when a new common root is bridged to all chains
+        handles.push(self.handle_bridged_updates(bridged_root_rx));
+
+        Ok(handles)
+    }
+
+    /// Spawns a task to handle updates to the canonical tree on mainnet.
+    /// All updates are added to `pending_updates` and the mainnet root is updated with the latest root
+    fn handle_canonical_updates(
+        &self,
+        mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+    ) -> JoinHandle<()> {
+        let canonical_chain_id = self.canonical_tree_manager.chain_id;
+        let identity_tree = self.identity_tree.clone();
+        let chain_state = self.chain_state.clone();
 
         tokio::spawn(async move {
-            let start = tokio::time::Instant::now();
-            tree_updater.sync_to_head(&tree_data).await?;
-            let sync_time = start.elapsed();
+            if let Some((root, leaf_updates)) = leaf_updates_rx.recv().await {
+                let mut identity_tree = identity_tree.write().await;
+                identity_tree.append_updates(root, leaf_updates);
 
-            tracing::info!(?sync_time, "WorldTree synced to chain head");
-            synced.store(true, Ordering::Relaxed);
-
-            loop {
-                tree_updater.sync_to_head(&tree_data).await?;
-
-                tokio::time::sleep(Duration::from_secs(
-                    SYNC_TO_HEAD_SLEEP_SECONDS,
-                ))
-                .await;
+                // Update the root for the canonical chain
+                chain_state.write().await.insert(canonical_chain_id, root);
             }
         })
     }
+
+    /// Spawns a task to handle updates to the bridged trees
+    /// If an update results in an updated common root across all chains, all pending updates up to the previous root are applied to the tree
+    fn handle_bridged_updates(
+        &self,
+        mut bridged_root_rx: Receiver<(u64, Hash)>,
+    ) -> JoinHandle<()> {
+        let identity_tree = self.identity_tree.clone();
+        let chain_state = self.chain_state.clone();
+
+        tokio::spawn(async move {
+            loop {
+                if let Some((chain_id, bridged_root)) =
+                    bridged_root_rx.recv().await
+                {
+                    // Get the oldest root across all chains
+                    let mut chain_state = chain_state.write().await;
+                    let oldest_root: (&u64, &Root) = chain_state
+                        .iter()
+                        .min_by_key(|&(_, v)| v)
+                        .expect("No roots in chain state");
+
+                    let mut identity_tree = identity_tree.write().await;
+                    // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                    let root_nonce = identity_tree
+                        .roots
+                        .get(&bridged_root)
+                        .expect("Could not get root update");
+                    let new_root = Root {
+                        hash: bridged_root,
+                        nonce: *root_nonce,
+                    };
+
+                    // If the update is for the chain with the oldest root, apply the updates to the tree
+                    if chain_id == *oldest_root.0 {
+                        identity_tree.apply_updates_to_root(oldest_root.1);
+                    }
+
+                    // Update chain state with the new root
+                    chain_state.insert(chain_id, new_root);
+                }
+            }
+        })
+    }
+
+    /// Fetches the latest root for all bridged chains
+    /// Returns a HashMap<Hash, Vec<u64>> representing a given root and the chain IDs where the root is the latest on that chain
+    async fn latest_bridged_roots(
+        &self,
+    ) -> eyre::Result<HashMap<Hash, Vec<u64>>> {
+        // Get the latest root for all bridged chains and set the last synced block to the current block
+        let futures =
+            self.bridged_tree_manager
+                .iter()
+                .map(|tree_manager| async move {
+                    let bridged_world_id = IBridgedWorldID::new(
+                        tree_manager.address,
+                        tree_manager.block_scanner.middleware.clone(),
+                    );
+
+                    let block_number = tree_manager
+                        .block_scanner
+                        .middleware
+                        .get_block_number()
+                        .await?
+                        .as_u64();
+
+                    let root: U256 = bridged_world_id
+                        .latest_root()
+                        .block(block_number)
+                        .await?;
+
+                    eyre::Result::<_, eyre::Report>::Ok((
+                        tree_manager.chain_id,
+                        Uint::<256, 4>::from_limbs(root.0),
+                    ))
+                });
+
+        let roots = futures::future::try_join_all(futures)
+            .await?
+            .into_iter()
+            .collect::<Vec<(u64, Hash)>>();
+
+        // Group roots by hash for easier indexing when finding the latest root for multiple chains
+        let mut grouped_roots = HashMap::new();
+        for (chain_id, root) in roots {
+            let chain_ids = grouped_roots.entry(root).or_insert_with(Vec::new);
+            chain_ids.push(chain_id);
+        }
+
+        Ok(grouped_roots)
+    }
+
+    /// Syncs the world tree to the latest block on mainnet, updating the canonical tree and bridged trees from identity updates extracted from logs
+    #[instrument(skip(self))]
+    pub async fn sync_to_head(&self) -> eyre::Result<()> {
+        // Get all logs from the mainnet tree starting from the last synced block, up to the chain tip
+        let logs = self.canonical_tree_manager.block_scanner.next().await?;
+        if logs.is_empty() {
+            return Ok(());
+        }
+
+        // Extract identity updates from the logs and build the tree from the updates
+        let identity_updates = extract_identity_updates(
+            &logs,
+            self.canonical_tree_manager.block_scanner.middleware.clone(),
+        )
+        .await?;
+
+        self.build_tree_from_updates(identity_updates).await?;
+
+        Ok(())
+    }
+
+    async fn build_tree_from_updates(
+        &self,
+        identity_updates: BTreeMap<Root, LeafUpdates>,
+    ) -> eyre::Result<()> {
+        // Initialize the state of `self.roots` and `self.chain_state` with the latest roots from the identity updates
+        self.initialize_roots(&identity_updates).await?;
+
+        // The "canonical" tree is comprised of identity updates included in the most recent common root across all chains
+        // All updates that have not yet been bridged to all chains are considered "pending" updates
+        // We split up the updates into canonical and pending groups in order to build the canonical tree in memory and store the pending updates in the tree_updates map
+        let (canonical_updates, pending_updates) =
+            self.split_updates_at_canonical_root(identity_updates).await;
+
+        // Build the tree from leaves extracted from the canonical updates
+        self.build_canonical_tree(canonical_updates).await;
+
+        // Apply any pending updates that have not been bridged to all chains yet
+        if !pending_updates.is_empty() {
+            let mut identity_tree = self.identity_tree.write().await;
+            for (root, leaves) in pending_updates {
+                identity_tree.append_updates(root, leaves);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Initializes `roots` and `chain_state` with the latest roots from the identity updates
+    async fn initialize_roots(
+        &self,
+        identity_updates: &BTreeMap<Root, LeafUpdates>,
+    ) -> eyre::Result<()> {
+        let mut identity_tree = self.identity_tree.write().await;
+        let mut chain_state = self.chain_state.write().await;
+
+        // Get the latest root from all bridged chains
+        let latest_bridged_roots = self.latest_bridged_roots().await?;
+
+        // Update chain state for bridged roots
+        for root in identity_updates.keys() {
+            if let Some(chain_ids) = latest_bridged_roots.get(&root.hash) {
+                for chain_id in chain_ids {
+                    chain_state.insert(*chain_id, *root);
+                }
+                identity_tree.roots.insert(root.hash, root.nonce);
+            }
+        }
+
+        // Update chain state for mainnet root
+        let latest_mainnet_root =
+            identity_updates.keys().last().expect("No updates");
+
+        identity_tree
+            .roots
+            .insert(latest_mainnet_root.hash, latest_mainnet_root.nonce);
+
+        chain_state
+            .insert(self.canonical_tree_manager.chain_id, *latest_mainnet_root);
+
+        Ok(())
+    }
+
+    /// Builds the canonical tree from identity updates
+    pub async fn build_canonical_tree(
+        &self,
+        identity_updates: BTreeMap<Root, LeafUpdates>,
+    ) {
+        let mut identity_tree = self.identity_tree.write().await;
+
+        // Flatten the leaves and build the canonical tree
+        let flattened_leaves = flatten_leaf_updates(identity_updates);
+
+        // Update the latest leaves and collect the canonical leaf values
+        let canonical_leaves = flattened_leaves
+            .iter()
+            .map(|(idx, hash)| {
+                if hash != &Hash::ZERO {
+                    identity_tree.leaves.insert(*hash, idx.into());
+                } else {
+                    identity_tree.leaves.remove(hash);
+                }
+
+                *hash
+            })
+            .collect::<Vec<_>>();
+
+        // Build the tree from leaves
+        tracing::info!(num_leaves = ?canonical_leaves.len(), "Building the canonical tree");
+        let tree = DynamicMerkleTree::new_with_leaves(
+            (),
+            identity_tree.tree.depth(),
+            &Hash::ZERO,
+            &canonical_leaves,
+        );
+
+        identity_tree.tree = tree;
+    }
+
+    /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state
+    async fn split_updates_at_canonical_root(
+        &self,
+        mut identity_updates: BTreeMap<Root, LeafUpdates>,
+    ) -> (BTreeMap<Root, LeafUpdates>, BTreeMap<Root, LeafUpdates>) {
+        let chain_state = self.chain_state.read().await;
+        let (_, oldest_root) = chain_state
+            .iter()
+            .min_by_key(|&(_, v)| v)
+            .expect("No roots in chain state");
+
+        //TODO: this can be more efficient
+        let roots = identity_updates.keys().cloned().collect::<Vec<_>>();
+
+        // Find the root at which to split the updates. `chain_state` holds the state of the latest roots for all chains.
+        // The oldest common root across all chains signifies the point at which the updates should be split into canonical and pending updates
+        let mut pivot = roots.len();
+        for (idx, root) in roots.iter().enumerate().rev() {
+            if root == oldest_root {
+                pivot = idx + 1;
+                break;
+            }
+        }
+
+        // If the oldest root is the latest root, all updates are canonical
+        if pivot == roots.len() {
+            (identity_updates, BTreeMap::new())
+        } else {
+            // If there are pending updates, split off at the next root after the oldest root,
+            // since `split_off` returns everything after the given key, including the key
+            let pending_updates = identity_updates.split_off(&roots[pivot]);
+
+            (identity_updates, pending_updates)
+        }
+    }
+
+    /// Returns an inclusion proof for a given identity commitment.
+    /// If a chain ID is provided, the proof is generated for the given chain.
+    pub async fn inclusion_proof(
+        &self,
+        identity_commitment: Hash,
+        chain_id: Option<ChainId>,
+    ) -> eyre::Result<Option<InclusionProof>> {
+        let chain_state = self.chain_state.read().await;
+
+        let root = if let Some(chain_id) = chain_id {
+            chain_state.get(&chain_id)
+        } else {
+            None
+        };
+
+        let inclusion_proof = self
+            .identity_tree
+            .read()
+            .await
+            .inclusion_proof(identity_commitment, root)?;
+
+        Ok(inclusion_proof)
+    }
 }
+
+macro_rules! primitive_newtype {
+    (pub struct $outer:ident($tname:ty)) => {
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            Serialize,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Deserialize,
+        )]
+        pub struct $outer(pub $tname);
+
+        impl std::fmt::Display for $outer {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl Deref for $outer {
+            type Target = $tname;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl DerefMut for $outer {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+        impl From<$tname> for $outer {
+            fn from(value: $tname) -> Self {
+                $outer(value)
+            }
+        }
+
+        impl From<$outer> for $tname {
+            fn from(value: $outer) -> Self {
+                value.0
+            }
+        }
+
+        impl From<&$outer> for $tname {
+            fn from(value: &$outer) -> Self {
+                value.0
+            }
+        }
+    };
+}
+
+primitive_newtype!(pub struct ChainId(u64));
+primitive_newtype!(pub struct NodeIndex(u32));
+primitive_newtype!(pub struct LeafIndex(u32));

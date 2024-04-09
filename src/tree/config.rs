@@ -9,9 +9,14 @@ pub const CONFIG_PREFIX: &str = "WLD";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServiceConfig {
-    pub world_tree: WorldTreeConfig,
-
-    pub provider: ProviderConfig,
+    pub tree_depth: usize,
+    /// Configuration for the canonical tree on mainnet
+    pub canonical_tree: TreeConfig,
+    /// Configuration for bridged trees
+    pub bridged_trees: Option<Vec<TreeConfig>>,
+    /// Socket at which to serve the service
+    #[serde(default = "default::socket_address")]
+    pub socket_address: SocketAddr,
 }
 
 impl ServiceConfig {
@@ -38,23 +43,12 @@ impl ServiceConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WorldTreeConfig {
-    /// Address of the World Tree
-    pub world_id_contract_address: Address,
-    /// Maximum window size when scanning blocks for TreeChanged events
+pub struct TreeConfig {
+    pub address: Address,
     #[serde(default = "default::window_size")]
     pub window_size: u64,
-    /// Creation block of the World Tree
-    pub creation_block: u64,
-    /// Quantity of recent tree changes to cache. This allows inclusion proof requests to specify a historical root
-    pub tree_history_size: usize,
-    /// Depth of the World Tree
-    pub tree_depth: usize,
-    /// Depth of merkle tree that should be represented as a densely populated prefix. The remainder of the tree will be represented with pointer-based structures.
-    pub dense_prefix_depth: usize,
-    /// Socket at which to serve the service
-    #[serde(default = "default::socket_address")]
-    pub socket_address: SocketAddr,
+    pub last_synced_block: u64,
+    pub provider: ProviderConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -62,8 +56,8 @@ pub struct ProviderConfig {
     /// Ethereum RPC endpoint
     #[serde(with = "crate::serde_utils::url")]
     pub rpc_endpoint: Url,
-    /// Request per minute limit
-    pub throttle: Option<u32>,
+    #[serde(default = "default::provider_throttle")]
+    pub throttle: u32,
 }
 
 mod default {
@@ -75,5 +69,9 @@ mod default {
 
     pub fn window_size() -> u64 {
         1000
+    }
+
+    pub fn provider_throttle() -> u32 {
+        0
     }
 }
