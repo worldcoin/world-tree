@@ -13,7 +13,9 @@ use std::sync::Arc;
 use ethers::providers::Middleware;
 use ethers::types::U256;
 use ruint::Uint;
-use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+use semaphore::cascading_merkle_tree::{
+    CascadingMerkleTree, CascadingTreeStorage,
+};
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -36,9 +38,12 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// The `WorldTree` syncs and maintains the state of the onchain Merkle tree representing all unique humans across multiple chains
 /// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
-pub struct WorldTree<M: Middleware + 'static> {
+pub struct WorldTree<
+    M: Middleware + 'static,
+    S: CascadingTreeStorage<PoseidonHash>,
+> {
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
-    pub identity_tree: Arc<RwLock<IdentityTree>>,
+    pub identity_tree: Arc<RwLock<IdentityTree<S>>>,
     /// Responsible for listening to state changes to the tree on mainnet
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     /// Responsible for listening to state changes state changes to bridged WorldIDs
@@ -49,11 +54,28 @@ pub struct WorldTree<M: Middleware + 'static> {
     pub synced: AtomicBool,
 }
 
-impl<M> WorldTree<M>
+impl<M, S> WorldTree<M, S>
 where
     M: Middleware + 'static,
+    S: CascadingTreeStorage<PoseidonHash>,
 {
     pub fn new(
+        tree_depth: usize,
+        canonical_tree_manager: TreeManager<M, CanonicalTree>,
+        bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+    ) -> Self {
+        let identity_tree = IdentityTree::new(tree_depth);
+
+        Self {
+            identity_tree: Arc::new(RwLock::new(identity_tree)),
+            canonical_tree_manager,
+            bridged_tree_manager,
+            chain_state: Arc::new(RwLock::new(HashMap::new())),
+            synced: AtomicBool::new(false),
+        }
+    }
+
+    pub fn new_from_mmap_cache(
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
@@ -324,7 +346,7 @@ where
 
         // Build the tree from leaves
         tracing::info!(num_leaves = ?canonical_leaves.len(), "Building the canonical tree");
-        let tree = DynamicMerkleTree::new_with_leaves(
+        let tree = CascadingMerkleTree::new_with_leaves(
             (),
             identity_tree.tree.depth(),
             &Hash::ZERO,
