@@ -183,6 +183,7 @@ impl TreeVersion for BridgedTree {
     }
 }
 
+/// Extract identity updates from logs emitted by the `WorldIdIdentityManager`.
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
@@ -191,24 +192,24 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
     let mut tasks = FuturesUnordered::new();
 
+    // Fetch the transactions for each log concurrently
     for log in logs {
         let tx_hash = log.transaction_hash.expect("TODO: handle this case");
-
         tracing::debug!(?tx_hash, "Getting transaction");
-
         tasks.push(middleware.get_transaction(tx_hash));
     }
 
     let mut sorted_transactions = BTreeMap::new();
 
+    // Sort the transactions by nonce. These should be in order due to the block scanner, but we sort them for redundancy in the case of out-of-order logs.
     while let Some(transaction) = tasks.next().await {
         let transaction = transaction?.expect("TODO: handle this case");
-
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
         sorted_transactions.insert(transaction.nonce, transaction);
     }
 
+    // Process each transaction, constructing identity updates for each root
     for (nonce, transaction) in sorted_transactions {
         let calldata = &transaction.input;
 
