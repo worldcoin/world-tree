@@ -35,6 +35,7 @@ pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// The `WorldTree` syncs and maintains the state of the onchain Merkle tree representing all unique humans across multiple chains
+/// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
 pub struct WorldTree<M: Middleware + 'static> {
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
     pub identity_tree: Arc<RwLock<IdentityTree>>,
@@ -72,6 +73,7 @@ where
     pub async fn spawn(&self) -> eyre::Result<Vec<JoinHandle<()>>> {
         let start_time = Instant::now();
 
+        // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
         tracing::info!("Syncing to head");
         self.sync_to_head().await?;
         tracing::info!("Synced to head in {:?} seconds", start_time.elapsed());
@@ -81,7 +83,7 @@ where
         let (bridged_root_tx, bridged_root_rx) =
             tokio::sync::mpsc::channel(100);
 
-        // Spawn the tree managers for the canonical and bridged trees
+        // Spawn the tree managers to listen to the canonical and bridged trees for updates
         let mut handles = vec![];
         handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
 
@@ -90,7 +92,11 @@ where
             handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
         }
 
+        // Spawn a task to handle canonical updates, appending new identity updates to `pending_updates` as they arrive
         handles.push(self.handle_canonical_updates(leaf_updates_rx));
+
+        // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
+        // pending updates when a new common root is bridged to all chains
         handles.push(self.handle_bridged_updates(bridged_root_rx));
 
         Ok(handles)
@@ -339,7 +345,7 @@ where
             .min_by_key(|&(_, v)| v)
             .expect("No roots in chain state");
 
-        //NOTE: this can be more efficient
+        //TODO: this can be more efficient
         let roots = identity_updates.keys().cloned().collect::<Vec<_>>();
 
         // Find the root at which to split the updates. `chain_state` holds the state of the latest roots for all chains.
@@ -445,7 +451,5 @@ macro_rules! primitive_newtype {
 }
 
 primitive_newtype!(pub struct ChainId(u64));
-// Node index to hash, 0 indexed from the root
 primitive_newtype!(pub struct NodeIndex(u32));
-// Leaf index to hash, 0 indexed from the initial leaf
 primitive_newtype!(pub struct LeafIndex(u32));

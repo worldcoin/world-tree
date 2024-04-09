@@ -25,11 +25,12 @@ impl<M: Middleware> InclusionProofService<M> {
         Self { world_tree }
     }
 
-    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for a given World ID. This function also spawns a new task to keep the world tree synced to the chain head.
+    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
+    /// This function spawns a task to sync and maintain the state of the world tree across all monitored chains.
     ///
     /// # Arguments
     ///
-    /// * `port` - Port to bind the server to.
+    /// * `addr` - Socket address to bind the server to
     ///
     /// # Returns
     ///
@@ -40,6 +41,7 @@ impl<M: Middleware> InclusionProofService<M> {
     ) -> eyre::Result<Vec<JoinHandle<()>>> {
         let mut handles = vec![];
 
+        // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
         handles.extend(self.world_tree.spawn().await?);
 

@@ -9,7 +9,9 @@ use serde::Serialize;
 
 use super::{Hash, LeafIndex, NodeIndex};
 
+// Leaf index to hash, 0 indexed from the initial leaf
 pub type Leaves = HashMap<LeafIndex, Hash>;
+// Node index to hash, 0 indexed from the root
 pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
 pub struct IdentityTree {
@@ -32,8 +34,10 @@ impl IdentityTree {
         }
     }
 
+    /// Inserts a new leaf into the tree and updates the leaves hashmap
+    /// Returns an error if the leaf already exists
     pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
-        // Check if the leaf laready exists
+        // Check if the leaf already exists
         if self.leaves.contains_key(&leaf) {
             return Err(eyre!("Leaf already exists"));
         }
@@ -46,16 +50,23 @@ impl IdentityTree {
         Ok(())
     }
 
+    /// Removes a leaf from the tree and updates the leaves hashmap
     pub fn remove(&mut self, index: usize) {
         let leaf = self.tree.get_leaf(index);
         self.leaves.remove(&leaf);
         self.tree.set_leaf(index, Hash::ZERO);
     }
 
-    // Appends new leaf updates and newly calculated intermediate nodes to the tree updates
+    // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
     pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
-        //TODO: update leaves
-        // Update leaves
+        self.update_leaves(&leaf_updates);
+
+        let updates = self.construct_storage_updates(leaf_updates);
+        self.tree_updates.insert(root, updates);
+        self.roots.insert(root.hash, root.nonce);
+    }
+
+    fn update_leaves(&mut self, leaf_updates: &LeafUpdates) {
         match &leaf_updates {
             LeafUpdates::Insert(updates) => {
                 for (idx, val) in updates.iter() {
@@ -68,9 +79,17 @@ impl IdentityTree {
                 }
             }
         }
+    }
 
-        //TODO: flatten updates and apply to tree
-
+    /// Constructs storage updates from leaf updates
+    /// The identity tree maintains a sequence of `tree_updates` which consists of BTreeMap<Root, StorageUpdates>,
+    /// representing the updated nodes within the tree for a given root. Each update flattens the previous update and overwrites any nodes that change as a result
+    /// from the newly added leaf updates. Storing the node updates for a given root allows for efficient construction
+    /// of inclusion proofs for a given root without needing to recalculate nodes upon each request.
+    fn construct_storage_updates(
+        &self,
+        leaf_updates: LeafUpdates,
+    ) -> StorageUpdates {
         let mut updates = HashMap::new();
         let mut node_queue = VecDeque::new();
 
@@ -85,9 +104,9 @@ impl IdentityTree {
             node_queue.push_front(parent_idx);
         }
 
+        // Get the previous update to flatten existing storage nodes into the newly updated nodes
         let prev_update = if let Some(update) = self.tree_updates.iter().last()
         {
-            //TODO: Use a more efficient approach than to clone the last update
             update.1.clone()
         } else {
             HashMap::new()
@@ -150,8 +169,7 @@ impl IdentityTree {
             updates.entry(node_idx).or_insert(hash);
         }
 
-        self.tree_updates.insert(root, updates);
-        self.roots.insert(root.hash, root.nonce);
+        updates
     }
 
     // Applies updates up to the specified root, inclusive
@@ -182,7 +200,6 @@ impl IdentityTree {
                 // Insert/update leaves in the canonical tree
                 // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
                 if val == Hash::ZERO {
-                    //TODO:FIXME: is it possible that this leaf is not actually in the dynamic tree already?
                     self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
                 } else {
                     // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
@@ -203,6 +220,9 @@ impl IdentityTree {
         self.tree_updates = current_tree_updates;
     }
 
+    /// Construct an inclusion proof for a given leaf
+    /// If a root is provided, the proof is constructed from the specified root
+    /// Otherwise, the proof is constructed from the current canonical tree
     pub fn inclusion_proof(
         &self,
         leaf: Hash,
@@ -224,20 +244,24 @@ impl IdentityTree {
         }
     }
 
+    /// Construct an inclusion proof for a given leaf at a specified root
     pub fn construct_proof_from_root(
         &self,
         leaf_idx: u32,
         root: &Root,
     ) -> eyre::Result<Proof> {
+        // Get the updates at the specified root
         let updates = self
             .tree_updates
             .get(root)
             .ok_or_eyre("Could not find root in tree updates")?;
 
+        // Convert the leaf index to a storage index for easier indexing
         let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
 
         let mut proof: Vec<Branch<Hash>> = vec![];
 
+        // Traverse the tree from the leaf to the root, constructing the proof along the way with precedence for the updated node values
         while node_idx > 0 {
             let sibling_idx = if node_idx % 2 == 0 {
                 node_idx - 1
@@ -245,6 +269,7 @@ impl IdentityTree {
                 node_idx + 1
             };
 
+            // Check if the sibling is in the updates, otherwise get the node from the tree
             let sibling = updates
                 .get(&sibling_idx.into())
                 .copied()
@@ -255,6 +280,7 @@ impl IdentityTree {
                 })
                 .expect("Could not find node in tree");
 
+            // Add the sibling to the proof and adjust the node index
             proof.push(if node_idx % 2 == 0 {
                 Branch::Right(sibling)
             } else {
@@ -268,6 +294,7 @@ impl IdentityTree {
     }
 }
 
+/// Flattens leaf updates into a single vector of leaf indices and hashes with precedence given to the latest updates
 pub fn flatten_leaf_updates(
     leaf_updates: BTreeMap<Root, LeafUpdates>,
 ) -> Vec<(LeafIndex, Hash)> {
@@ -370,7 +397,7 @@ impl InclusionProof {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::collections::HashMap;
 
     use eyre::eyre;
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
