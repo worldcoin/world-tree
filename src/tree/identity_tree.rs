@@ -239,6 +239,10 @@ impl IdentityTree {
                 Ok(Some(InclusionProof::new(root.hash, proof)))
             }
         } else {
+            if *leaf_idx as usize > self.tree.num_leaves() {
+                return Ok(None);
+            }
+
             let proof = self.tree.proof(*leaf_idx as usize);
             Ok(Some(InclusionProof::new(self.tree.root(), proof)))
         }
@@ -399,8 +403,10 @@ impl InclusionProof {
 mod test {
     use std::collections::HashMap;
 
-    use eyre::eyre;
+    use eyre::{eyre, ContextCompat};
+    use rand::{Rng, SeedableRng};
     use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+    use semaphore::merkle_tree::Branch;
     use semaphore::poseidon_tree::PoseidonHash;
 
     use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates, Root};
@@ -412,8 +418,19 @@ mod test {
     const TREE_DEPTH: usize = 2;
     const NUM_LEAVES: usize = 1 << TREE_DEPTH;
 
-    fn generate_leaves() -> Vec<Hash> {
-        (0..NUM_LEAVES).map(Hash::from).collect::<Vec<_>>()
+    fn infinite_leaves() -> impl Iterator<Item = Hash> {
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(42);
+
+        std::iter::from_fn(move || {
+            let mut limbs: [u64; 4] = rng.gen();
+            limbs[3] = 0; // nullify most significant limb to keep the values in the Field
+
+            Some(Hash::from_limbs(limbs))
+        })
+    }
+
+    fn generate_all_leaves() -> Vec<Hash> {
+        infinite_leaves().take(NUM_LEAVES).collect()
     }
 
     #[test]
@@ -475,7 +492,7 @@ mod test {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate new leaves and insert into the tree
-        let leaves = generate_leaves();
+        let leaves = generate_all_leaves();
         for (idx, leaf) in leaves.iter().enumerate() {
             identity_tree
                 .insert(idx as u32, *leaf)
@@ -506,7 +523,7 @@ mod test {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate new leaves and insert into the tree
-        let leaves = generate_leaves();
+        let leaves = generate_all_leaves();
         for (idx, leaf) in leaves.iter().enumerate() {
             identity_tree
                 .insert(idx as u32, *leaf)
@@ -542,7 +559,7 @@ mod test {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate the first half of the leaves and insert into the tree
-        let leaves = generate_leaves();
+        let leaves = generate_all_leaves();
         for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
         }
@@ -588,7 +605,7 @@ mod test {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate the first half of the leaves and insert into the tree
-        let leaves = generate_leaves();
+        let leaves = generate_all_leaves();
 
         for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
@@ -645,7 +662,102 @@ mod test {
     fn test_flatten_leaf_updates() {}
 
     #[test]
-    fn test_inclusion_proof() {}
+    fn test_inclusion_proof() -> eyre::Result<()> {
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+
+        let leaves: Vec<_> = infinite_leaves().take(4).collect();
+
+        println!("leaves: {:?}", leaves);
+
+        // We insert only the first leaf
+        identity_tree.insert(0, leaves[0])?;
+
+        // Simulate and create updates
+        let (root_012, updates) = {
+            let mut tree = DynamicMerkleTree::<PoseidonHash>::new(
+                (),
+                TREE_DEPTH,
+                &Hash::ZERO,
+            );
+
+            tree.push(leaves[0])?;
+            tree.push(leaves[1])?;
+            tree.push(leaves[2])?;
+
+            let updates = LeafUpdates::Insert(
+                vec![(1.into(), leaves[1]), (2.into(), leaves[2])]
+                    .into_iter()
+                    .collect::<HashMap<LeafIndex, Hash>>(),
+            );
+
+            let root = Root {
+                hash: tree.root(),
+                nonce: 1,
+            };
+
+            (root, updates)
+        };
+
+        identity_tree.append_updates(root_012, updates);
+
+        // Simulate and create updates
+        let (root_0123, updates) = {
+            let mut tree = DynamicMerkleTree::<PoseidonHash>::new(
+                (),
+                TREE_DEPTH,
+                &Hash::ZERO,
+            );
+
+            tree.push(leaves[0])?;
+            tree.push(leaves[1])?;
+            tree.push(leaves[2])?;
+            tree.push(leaves[3])?;
+
+            let updates = LeafUpdates::Insert(
+                vec![(3.into(), leaves[3])]
+                    .into_iter()
+                    .collect::<HashMap<LeafIndex, Hash>>(),
+            );
+
+            let root = Root {
+                hash: tree.root(),
+                nonce: 2,
+            };
+
+            (root, updates)
+        };
+
+        identity_tree.append_updates(root_0123, updates);
+
+        let proof = identity_tree
+            .inclusion_proof(leaves[3], Some(&root_0123))?
+            .context("Missing proof")?;
+
+        assert_eq!(
+            proof.proof.0[0],
+            Branch::Right(leaves[2]),
+            "The first sibling of leaf 3 must be leaf 2"
+        );
+
+        let proof = identity_tree
+            .inclusion_proof(leaves[2], Some(&root_012))?
+            .context("Missing proof")?;
+
+        assert_eq!(
+            proof.proof.0[0],
+            Branch::Left(Hash::ZERO),
+            "The first sibling of leaf 2 must be zero hash"
+        );
+
+        let proof = identity_tree.inclusion_proof(leaves[2], None)?;
+
+        assert!(
+            proof.is_none(),
+            "The canonical tree does not contain this update yet"
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn test_construct_proof_from_root() {}
