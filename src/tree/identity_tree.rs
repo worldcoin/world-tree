@@ -499,6 +499,8 @@ mod test {
                 .expect("Could not insert leaf");
         }
 
+        dbg!(&leaves);
+
         // Initialize an expected tree with the same leaves
         let expected_tree: DynamicMerkleTree<PoseidonHash> =
             DynamicMerkleTree::new_with_leaves(
@@ -512,9 +514,14 @@ mod test {
         assert_eq!(identity_tree.tree.root(), expected_tree.root());
 
         // Assert that each of the leaves are in the leaves hashmap
-        for leaf_idx in 0..1 << TREE_DEPTH {
-            let leaf = Hash::from(leaf_idx);
-            assert_eq!(identity_tree.leaves.get(&leaf), Some(&leaf_idx));
+
+        for (expected_leaf_idx, leaf) in leaves.iter().enumerate() {
+            let leaf_idx = *identity_tree
+                .leaves
+                .get(leaf)
+                .expect("Could not get leaf idx");
+
+            assert_eq!(leaf_idx, expected_leaf_idx as u32);
         }
     }
 
