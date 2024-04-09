@@ -538,13 +538,13 @@ mod test {
     }
 
     #[test]
-    fn test_append_updates() {
+    fn test_append_updates() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_leaves();
         for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
-            identity_tree.insert(idx as u32, *leaf);
+            identity_tree.insert(idx as u32, *leaf)?;
         }
 
         let expected_root = identity_tree.tree.root();
@@ -579,6 +579,8 @@ mod test {
         assert_eq!(identity_tree.tree_updates.len(), 1);
 
         //TODO: assert expected updates
+
+        Ok(())
     }
 
     #[test]
@@ -589,7 +591,7 @@ mod test {
         let leaves = generate_leaves();
 
         for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
-            identity_tree.insert(idx as u32, *leaf);
+            identity_tree.insert(idx as u32, *leaf)?;
         }
 
         // Generate the updated tree with all of the leaves
