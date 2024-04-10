@@ -63,8 +63,7 @@ where
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
         cache: PathBuf,
     ) -> eyre::Result<Self> {
-        let identity_tree =
-            IdentityTree::restore_from_cache(tree_depth, cache)?;
+        let identity_tree = IdentityTree::new_with_cache(tree_depth, cache)?;
 
         Ok(Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
@@ -238,7 +237,7 @@ where
             &all_logs
         } else {
             // Split the logs
-            let latest_root = self.identity_tree.read().await.tree.root();
+            let latest_root = identity_tree.tree.root();
             let mut pivot = all_logs.len();
             for log in all_logs.iter().rev() {
                 let root = Hash::from_be_bytes(log.topics[3].0);
@@ -250,6 +249,8 @@ where
             let (_, new_logs) = all_logs.split_at(pivot);
             new_logs
         };
+
+        drop(identity_tree);
 
         // Extract identity updates from the logs and build the tree from the updates
         let identity_updates = extract_identity_updates(
@@ -286,6 +287,11 @@ where
                 identity_tree.append_updates(root, leaves);
             }
         }
+
+        // Ensure that the identity tree root matches the canonical root
+        let identity_tree = self.identity_tree.read().await;
+        let canonical_root = identity_tree.tree.root();
+        assert_eq!(identity_tree.tree.root(), canonical_root);
 
         Ok(())
     }
@@ -355,7 +361,7 @@ where
         //TODO: uncomment this once its merged in semaphore-rs
         // tree.insert_many_leaves(&canonical_leaves);
         for leaf in canonical_leaves {
-            identity_tree.tree.push(leaf);
+            identity_tree.tree.push(leaf).expect("TODO: handle this");
         }
     }
 

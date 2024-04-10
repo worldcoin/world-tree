@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ethers::types::Address;
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,8 @@ pub struct ServiceConfig {
     pub tree_depth: usize,
     /// Configuration for the canonical tree on mainnet
     pub canonical_tree: TreeConfig,
+    /// Path to mmap file responsible for caching the state of the canonical tree
+    pub tree_cache: PathBuf,
     /// Configuration for bridged trees
     pub bridged_trees: Option<Vec<TreeConfig>>,
     /// Socket at which to serve the service

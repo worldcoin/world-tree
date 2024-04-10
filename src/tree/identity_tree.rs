@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fs::OpenOptions;
+use std::io;
 use std::path::PathBuf;
 
 use eyre::{eyre, OptionExt};
@@ -44,7 +46,8 @@ impl IdentityTree<MmapVec<Hash>> {
         let mmap_vec: MmapVec<Hash> =
             match unsafe { MmapVec::restore(&file_path) } {
                 Ok(mmap_vec) => mmap_vec,
-                Err(_) => unsafe {
+                Err(e) => unsafe {
+                    //TODO: handle if not file creation error
                     let file = std::fs::OpenOptions::new()
                         .read(true)
                         .write(true)
@@ -55,40 +58,20 @@ impl IdentityTree<MmapVec<Hash>> {
                 },
             };
 
-        let tree = CascadingMerkleTree::<PoseidonHash, _>::from_storage(
-            mmap_vec,
-            depth,
-            &Hash::ZERO,
-        )?;
-
-        Ok(Self {
-            tree,
-            tree_updates: BTreeMap::new(),
-            roots: HashMap::new(),
-            leaves: HashMap::new(),
-        })
-    }
-
-    //NOTE: that the leaves and tree are restored but the roots and tree updates are not
-    //TODO:
-    pub fn restore_from_cache(
-        depth: usize,
-        file_path: PathBuf,
-    ) -> eyre::Result<Self> {
-        let mmap_vec: MmapVec<Hash> = unsafe { MmapVec::restore(file_path)? };
+        //TODO: update to use from storage
+        // let tree = CascadingMerkleTree::<PoseidonHash, _>::from_storage(
+        //     mmap_vec,
+        //     depth,
+        //     &Hash::ZERO,
+        // )?;
 
         let tree =
-            CascadingMerkleTree::from_storage(mmap_vec, depth, &Hash::ZERO)?;
-
-        // Restore the leaves hashmap
-        let mut leaves = HashMap::new();
-        tree.leaves()
-            .enumerate()
-            .for_each(|(idx, leaf): (usize, Hash)| {
-                if leaf != Hash::ZERO {
-                    leaves.insert(leaf, idx as u32);
-                }
-            });
+            CascadingMerkleTree::<PoseidonHash, _>::from_storage_with_leaves(
+                mmap_vec,
+                depth,
+                &Hash::ZERO,
+                &vec![],
+            );
 
         Ok(Self {
             tree,
@@ -831,7 +814,7 @@ mod test {
             identity_tree.tree.push(*leaf)?;
         }
 
-        let restored_tree = IdentityTree::restore_from_cache(TREE_DEPTH, path)?;
+        let restored_tree = IdentityTree::new_with_cache(TREE_DEPTH, path)?;
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
