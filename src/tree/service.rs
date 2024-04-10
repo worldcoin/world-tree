@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};

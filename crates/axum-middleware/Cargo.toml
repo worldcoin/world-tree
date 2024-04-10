@@ -9,4 +9,4 @@ axum = "0.6.20"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 bytes = "1.5.0"
 futures-util = "0.3.29"
-common = { path = "../common" }
+telemetry-batteries = { git = "https://github.com/worldcoin/telemetry-batteries.git", rev = "802a4f39f358e077b11c8429b4c65f3e45b85959" }

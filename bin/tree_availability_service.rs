@@ -2,14 +2,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
-use common::metrics::init_statsd_exporter;
-use common::shutdown_tracer_provider;
-use common::tracing::{init_datadog_subscriber, init_subscriber};
 use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tracing::Level;
+use telemetry_batteries::metrics::statsd::StatsdBattery;
+use telemetry_batteries::tracing::datadog::DatadogBattery;
+use telemetry_batteries::tracing::TracingShutdownHandle;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use world_tree::tree::config::ServiceConfig;
 use world_tree::tree::service::InclusionProofService;
 use world_tree::tree::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
@@ -29,10 +30,6 @@ struct Opts {
     datadog: bool,
 }
 
-const SERVICE_NAME: &str = "tree-availability-service";
-const METRICS_HOST: &str = "localhost";
-const METRICS_PORT: u16 = 8125;
-
 #[tokio::main]
 pub async fn main() -> eyre::Result<()> {
     dotenv::dotenv().ok();
@@ -41,12 +38,33 @@ pub async fn main() -> eyre::Result<()> {
 
     let config = ServiceConfig::load(opts.config.as_deref())?;
 
-    if opts.datadog {
-        init_datadog_subscriber(SERVICE_NAME, Level::INFO);
-        init_statsd_exporter(METRICS_HOST, METRICS_PORT);
+    let _tracing_shutdown_handle = if let Some(telemetry) = &config.telemetry {
+        let tracing_shutdown_handle = DatadogBattery::init(
+            telemetry.traces_endpoint.as_deref(),
+            &telemetry.service_name,
+            None,
+            true,
+        );
+
+        if let Some(metrics_config) = &telemetry.metrics {
+            StatsdBattery::init(
+                &metrics_config.host,
+                metrics_config.port,
+                metrics_config.queue_size,
+                metrics_config.buffer_size,
+                Some(&metrics_config.prefix),
+            )?;
+        }
+
+        tracing_shutdown_handle
     } else {
-        init_subscriber(Level::INFO);
-    }
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().pretty().compact())
+            .with(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+
+        TracingShutdownHandle
+    };
 
     let world_tree = initialize_world_tree(&config).await?;
 
@@ -59,8 +77,6 @@ pub async fn main() -> eyre::Result<()> {
         tracing::error!("TreeAvailabilityError: {:?}", result);
         result?;
     }
-
-    shutdown_tracer_provider();
 
     Ok(())
 }
