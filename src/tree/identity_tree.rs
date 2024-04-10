@@ -2,9 +2,8 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 
 use eyre::{eyre, OptionExt};
-use semaphore::cascading_merkle_tree::{
-    CascadingMerkleTree, CascadingTreeStorage, MmapTreeStorageConfig, MmapVec,
-};
+use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
@@ -17,7 +16,7 @@ pub type Leaves = HashMap<LeafIndex, Hash>;
 // Node index to hash, 0 indexed from the root
 pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
-pub struct IdentityTree<S: CascadingTreeStorage<PoseidonHash>> {
+pub struct IdentityTree<S> {
     pub tree: CascadingMerkleTree<PoseidonHash, S>,
     pub tree_updates: BTreeMap<Root, StorageUpdates>,
     // Hashmap of root hash to nonce
@@ -25,38 +24,61 @@ pub struct IdentityTree<S: CascadingTreeStorage<PoseidonHash>> {
     pub leaves: HashMap<Hash, u32>,
 }
 
-impl IdentityTree<Vec<Field>> {
-    pub fn new(depth: usize) -> Self {
-        let tree = CascadingMerkleTree::new((), depth, &Hash::ZERO);
-        Self {
+impl IdentityTree<Vec<Hash>> {
+    pub fn new(depth: usize) -> eyre::Result<Self> {
+        let tree = CascadingMerkleTree::new(depth, &Hash::ZERO)?;
+        Ok(Self {
             tree,
             tree_updates: BTreeMap::new(),
             roots: HashMap::new(),
             leaves: HashMap::new(),
-        }
+        })
     }
 }
 
-impl IdentityTree<MmapVec<PoseidonHash>> {
-    pub fn new_with_cache(depth: usize, file_path: PathBuf) -> Self {
-        let config = unsafe { MmapTreeStorageConfig::new(file_path) };
-        let tree = CascadingMerkleTree::new(config, depth, &Hash::ZERO);
+impl IdentityTree<MmapVec<Hash>> {
+    pub fn new_with_cache(
+        depth: usize,
+        file_path: PathBuf,
+    ) -> eyre::Result<Self> {
+        let mmap_vec: MmapVec<Hash> =
+            match unsafe { MmapVec::restore(&file_path) } {
+                Ok(mmap_vec) => mmap_vec,
+                Err(_) => unsafe {
+                    let file = std::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create(true)
+                        .open(&file_path)?;
 
-        Self {
+                    MmapVec::create(file)?
+                },
+            };
+
+        let tree = CascadingMerkleTree::<PoseidonHash, _>::from_storage(
+            mmap_vec,
+            depth,
+            &Hash::ZERO,
+        )?;
+
+        Ok(Self {
             tree,
             tree_updates: BTreeMap::new(),
             roots: HashMap::new(),
             leaves: HashMap::new(),
-        }
+        })
     }
 
     //NOTE: that the leaves and tree are restored but the roots and tree updates are not
-    pub fn partially_restore_from_cache(
+    //TODO:
+    pub fn restore_from_cache(
         depth: usize,
         file_path: PathBuf,
     ) -> eyre::Result<Self> {
-        let config = unsafe { MmapTreeStorageConfig::new(file_path) };
-        let tree = CascadingMerkleTree::restore(config, depth, &Hash::ZERO)?;
+        let mmap_vec: MmapVec<Hash> = unsafe { MmapVec::restore(file_path)? };
+
+        let tree =
+            CascadingMerkleTree::from_storage(mmap_vec, depth, &Hash::ZERO)?;
 
         // Restore the leaves hashmap
         let mut leaves = HashMap::new();
@@ -79,7 +101,7 @@ impl IdentityTree<MmapVec<PoseidonHash>> {
 
 impl<S> IdentityTree<S>
 where
-    S: CascadingTreeStorage<PoseidonHash>,
+    S: GenericStorage<Hash>,
 {
     /// Inserts a new leaf into the tree and updates the leaves hashmap
     /// Returns an error if the leaf already exists
@@ -536,8 +558,8 @@ mod test {
     }
 
     #[test]
-    fn test_insert() {
-        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+    fn test_insert() -> eyre::Result<()> {
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH)?;
 
         // Generate new leaves and insert into the tree
         let leaves = generate_all_leaves();
@@ -549,12 +571,7 @@ mod test {
 
         // Initialize an expected tree with the same leaves
         let expected_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                (),
-                TREE_DEPTH,
-                &Hash::ZERO,
-                &leaves,
-            );
+            CascadingMerkleTree::with_leaves(TREE_DEPTH, &Hash::ZERO, &leaves);
 
         // Ensure the tree roots are equal
         assert_eq!(identity_tree.tree.root(), expected_tree.root());
@@ -564,11 +581,13 @@ mod test {
             let leaf = Hash::from(leaf_idx);
             assert_eq!(identity_tree.leaves.get(&leaf), Some(&leaf_idx));
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_remove() {
-        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+    fn test_remove() -> eyre::Result<()> {
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH)?;
 
         // Generate new leaves and insert into the tree
         let leaves = generate_all_leaves();
@@ -585,8 +604,7 @@ mod test {
 
         // Initialize an expected tree with all leaves set to 0x00
         let expected_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                (),
+            CascadingMerkleTree::with_leaves(
                 TREE_DEPTH,
                 &Hash::ZERO,
                 &vec![Hash::default(); leaves.len()],
@@ -600,11 +618,13 @@ mod test {
             let leaf_hash = Hash::from(leaf);
             assert_eq!(identity_tree.leaves.get(&leaf_hash), None);
         }
+
+        Ok(())
     }
 
     #[test]
     fn test_append_updates() -> eyre::Result<()> {
-        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH)?;
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
@@ -616,12 +636,7 @@ mod test {
 
         // Generate the updated tree with all of the leaves
         let updated_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                (),
-                TREE_DEPTH,
-                &Hash::ZERO,
-                &leaves,
-            );
+            CascadingMerkleTree::with_leaves(TREE_DEPTH, &Hash::ZERO, &leaves);
 
         // Append the new leaves to the tree
         let new_root = Root {
@@ -650,7 +665,7 @@ mod test {
 
     #[test]
     fn test_apply_updates_to_root() -> eyre::Result<()> {
-        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH)?;
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
@@ -661,12 +676,7 @@ mod test {
 
         // Generate the updated tree with all of the leaves
         let expected_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                (),
-                TREE_DEPTH,
-                &Hash::ZERO,
-                &leaves,
-            );
+            CascadingMerkleTree::with_leaves(TREE_DEPTH, &Hash::ZERO, &leaves);
 
         let expected_root = expected_tree.root();
 
@@ -711,7 +721,7 @@ mod test {
 
     #[test]
     fn test_inclusion_proof() -> eyre::Result<()> {
-        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH)?;
 
         let leaves: Vec<_> = infinite_leaves().take(4).collect();
 
@@ -723,10 +733,9 @@ mod test {
         // Simulate and create updates
         let (root_012, updates) = {
             let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
-                (),
                 TREE_DEPTH,
                 &Hash::ZERO,
-            );
+            )?;
 
             tree.push(leaves[0])?;
             tree.push(leaves[1])?;
@@ -751,10 +760,9 @@ mod test {
         // Simulate and create updates
         let (root_0123, updates) = {
             let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
-                (),
                 TREE_DEPTH,
                 &Hash::ZERO,
-            );
+            )?;
 
             tree.push(leaves[0])?;
             tree.push(leaves[1])?;
@@ -815,15 +823,15 @@ mod test {
         let path = PathBuf::from("tree_cache");
 
         let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, path.clone());
+            IdentityTree::new_with_cache(TREE_DEPTH, path.clone())?;
+
         let leaves = generate_all_leaves();
 
         for leaf in leaves.iter() {
             identity_tree.tree.push(*leaf)?;
         }
 
-        let restored_tree =
-            IdentityTree::partially_restore_from_cache(TREE_DEPTH, path)?;
+        let restored_tree = IdentityTree::restore_from_cache(TREE_DEPTH, path)?;
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 

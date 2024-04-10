@@ -7,6 +7,7 @@ pub mod tree_manager;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ use ruint::Uint;
 use semaphore::cascading_merkle_tree::{
     CascadingMerkleTree, CascadingTreeStorage,
 };
+use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -38,12 +40,9 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 /// The `WorldTree` syncs and maintains the state of the onchain Merkle tree representing all unique humans across multiple chains
 /// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
-pub struct WorldTree<
-    M: Middleware + 'static,
-    S: CascadingTreeStorage<PoseidonHash>,
-> {
+pub struct WorldTree<M: Middleware + 'static> {
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
-    pub identity_tree: Arc<RwLock<IdentityTree<S>>>,
+    pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     /// Responsible for listening to state changes to the tree on mainnet
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     /// Responsible for listening to state changes state changes to bridged WorldIDs
@@ -54,41 +53,26 @@ pub struct WorldTree<
     pub synced: AtomicBool,
 }
 
-impl<M, S> WorldTree<M, S>
+impl<M> WorldTree<M>
 where
     M: Middleware + 'static,
-    S: CascadingTreeStorage<PoseidonHash>,
 {
     pub fn new(
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
-    ) -> Self {
-        let identity_tree = IdentityTree::new(tree_depth);
+        cache: PathBuf,
+    ) -> eyre::Result<Self> {
+        let identity_tree =
+            IdentityTree::restore_from_cache(tree_depth, cache)?;
 
-        Self {
+        Ok(Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_manager,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
             synced: AtomicBool::new(false),
-        }
-    }
-
-    pub fn new_from_mmap_cache(
-        tree_depth: usize,
-        canonical_tree_manager: TreeManager<M, CanonicalTree>,
-        bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
-    ) -> Self {
-        let identity_tree = IdentityTree::new(tree_depth);
-
-        Self {
-            identity_tree: Arc::new(RwLock::new(identity_tree)),
-            canonical_tree_manager,
-            bridged_tree_manager,
-            chain_state: Arc::new(RwLock::new(HashMap::new())),
-            synced: AtomicBool::new(false),
-        }
+        })
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
@@ -240,15 +224,36 @@ where
     /// Syncs the world tree to the latest block on mainnet, updating the canonical tree and bridged trees from identity updates extracted from logs
     #[instrument(skip(self))]
     pub async fn sync_to_head(&self) -> eyre::Result<()> {
+        let identity_tree = self.identity_tree.read().await;
+
         // Get all logs from the mainnet tree starting from the last synced block, up to the chain tip
-        let logs = self.canonical_tree_manager.block_scanner.next().await?;
-        if logs.is_empty() {
+        let all_logs = self.canonical_tree_manager.block_scanner.next().await?;
+        //TODO: We should handle the case where the tree is not empty and there is no logs
+        if all_logs.is_empty() {
             return Ok(());
         }
 
+        // If the tree is populated, only process logs that are newer than the latest root
+        let logs = if identity_tree.leaves.is_empty() {
+            &all_logs
+        } else {
+            // Split the logs
+            let latest_root = self.identity_tree.read().await.tree.root();
+            let mut pivot = all_logs.len();
+            for log in all_logs.iter().rev() {
+                let root = Hash::from_be_bytes(log.topics[3].0);
+                pivot += 1;
+                if root == latest_root {
+                    break;
+                }
+            }
+            let (_, new_logs) = all_logs.split_at(pivot);
+            new_logs
+        };
+
         // Extract identity updates from the logs and build the tree from the updates
         let identity_updates = extract_identity_updates(
-            &logs,
+            logs,
             self.canonical_tree_manager.block_scanner.middleware.clone(),
         )
         .await?;
@@ -346,14 +351,12 @@ where
 
         // Build the tree from leaves
         tracing::info!(num_leaves = ?canonical_leaves.len(), "Building the canonical tree");
-        let tree = CascadingMerkleTree::new_with_leaves(
-            (),
-            identity_tree.tree.depth(),
-            &Hash::ZERO,
-            &canonical_leaves,
-        );
 
-        identity_tree.tree = tree;
+        //TODO: uncomment this once its merged in semaphore-rs
+        // tree.insert_many_leaves(&canonical_leaves);
+        for leaf in canonical_leaves {
+            identity_tree.tree.push(leaf);
+        }
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state
