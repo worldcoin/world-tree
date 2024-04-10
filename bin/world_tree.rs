@@ -24,10 +24,6 @@ struct Opts {
     /// Path to the configuration file
     #[clap(short, long)]
     config: Option<PathBuf>,
-
-    /// Enable datadog backend for instrumentation
-    #[clap(long, env)]
-    datadog: bool,
 }
 
 #[tokio::main]

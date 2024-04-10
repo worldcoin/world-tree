@@ -49,8 +49,8 @@ url = "2.5.0"
 reqwest = { version = "0.11.22", features = ["json"] }
 
 [[bin]]
-name = "tree-availability-service"
-path = "bin/tree_availability_service.rs"
+name = "world-tree"
+path = "bin/world_tree.rs"
 
 [[bench]]
 name  = "tree_data"
