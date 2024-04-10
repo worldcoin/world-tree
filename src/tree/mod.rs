@@ -87,17 +87,18 @@ where
         let mut handles = vec![];
         handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
 
-        //TODO: handle if there are no bridged roots to spawn, otherwise the channel will close
-        for bridged_tree in self.bridged_tree_manager.iter() {
-            handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
+        if !self.bridged_tree_manager.is_empty() {
+            for bridged_tree in self.bridged_tree_manager.iter() {
+                handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
+            }
+
+            // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
+            // pending updates when a new common root is bridged to all chains
+            handles.push(self.handle_bridged_updates(bridged_root_rx));
         }
 
         // Spawn a task to handle canonical updates, appending new identity updates to `pending_updates` as they arrive
         handles.push(self.handle_canonical_updates(leaf_updates_rx));
-
-        // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
-        // pending updates when a new common root is bridged to all chains
-        handles.push(self.handle_bridged_updates(bridged_root_rx));
 
         Ok(handles)
     }
@@ -382,7 +383,7 @@ where
         let root = if let Some(chain_id) = chain_id {
             chain_state.get(&chain_id)
         } else {
-            None
+            return Err(eyre::eyre!("Chain ID not found"));
         };
 
         let inclusion_proof = self
