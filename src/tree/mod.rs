@@ -113,12 +113,15 @@ where
         let chain_state = self.chain_state.clone();
 
         tokio::spawn(async move {
-            if let Some((root, leaf_updates)) = leaf_updates_rx.recv().await {
-                let mut identity_tree = identity_tree.write().await;
-                identity_tree.append_updates(root, leaf_updates);
+            loop {
+                if let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
+                {
+                    let mut identity_tree = identity_tree.write().await;
+                    identity_tree.append_updates(root, leaf_updates);
 
-                // Update the root for the canonical chain
-                chain_state.write().await.insert(canonical_chain_id, root);
+                    // Update the root for the canonical chain
+                    chain_state.write().await.insert(canonical_chain_id, root);
+                }
             }
         })
     }
