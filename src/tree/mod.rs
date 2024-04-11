@@ -199,6 +199,12 @@ where
                         .block(block_number)
                         .await?;
 
+                    // Set the latest block number for the tree manager
+                    tree_manager.block_scanner.next_block.store(
+                        block_number + 1,
+                        std::sync::atomic::Ordering::SeqCst,
+                    );
+
                     eyre::Result::<_, eyre::Report>::Ok((
                         tree_manager.chain_id,
                         Uint::<256, 4>::from_limbs(root.0),
