@@ -70,7 +70,9 @@ where
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
-    pub async fn spawn(&self) -> eyre::Result<Vec<JoinHandle<()>>> {
+    pub async fn spawn(
+        &self,
+    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let start_time = Instant::now();
 
         // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
@@ -107,19 +109,22 @@ where
     fn handle_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
-    ) -> JoinHandle<()> {
+    ) -> JoinHandle<eyre::Result<()>> {
         let canonical_chain_id = self.canonical_tree_manager.chain_id;
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
 
         tokio::spawn(async move {
-            if let Some((root, leaf_updates)) = leaf_updates_rx.recv().await {
+            while let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
+            {
                 let mut identity_tree = identity_tree.write().await;
                 identity_tree.append_updates(root, leaf_updates);
 
                 // Update the root for the canonical chain
                 chain_state.write().await.insert(canonical_chain_id, root);
             }
+
+            Err(eyre::eyre!("Leaf updates channel closed"))
         })
     }
 
@@ -128,42 +133,42 @@ where
     fn handle_bridged_updates(
         &self,
         mut bridged_root_rx: Receiver<(u64, Hash)>,
-    ) -> JoinHandle<()> {
+    ) -> JoinHandle<eyre::Result<()>> {
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
 
         tokio::spawn(async move {
-            loop {
-                if let Some((chain_id, bridged_root)) =
-                    bridged_root_rx.recv().await
-                {
-                    // Get the oldest root across all chains
-                    let mut chain_state = chain_state.write().await;
-                    let oldest_root: (&u64, &Root) = chain_state
-                        .iter()
-                        .min_by_key(|&(_, v)| v)
-                        .expect("No roots in chain state");
+            while let Some((chain_id, bridged_root)) =
+                bridged_root_rx.recv().await
+            {
+                // Get the oldest root across all chains
+                let mut chain_state = chain_state.write().await;
+                let oldest_root: (&u64, &Root) = chain_state
+                    .iter()
+                    .min_by_key(|&(_, v)| v)
+                    .expect("No roots in chain state");
 
-                    let mut identity_tree = identity_tree.write().await;
-                    // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-                    let root_nonce = identity_tree
-                        .roots
-                        .get(&bridged_root)
-                        .expect("Could not get root update");
-                    let new_root = Root {
-                        hash: bridged_root,
-                        nonce: *root_nonce,
-                    };
+                let mut identity_tree = identity_tree.write().await;
+                // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
+                let root_nonce = identity_tree
+                    .roots
+                    .get(&bridged_root)
+                    .expect("Could not get root update");
+                let new_root = Root {
+                    hash: bridged_root,
+                    nonce: *root_nonce,
+                };
 
-                    // If the update is for the chain with the oldest root, apply the updates to the tree
-                    if chain_id == *oldest_root.0 {
-                        identity_tree.apply_updates_to_root(oldest_root.1);
-                    }
-
-                    // Update chain state with the new root
-                    chain_state.insert(chain_id, new_root);
+                // If the update is for the chain with the oldest root, apply the updates to the tree
+                if chain_id == *oldest_root.0 {
+                    identity_tree.apply_updates_to_root(oldest_root.1);
                 }
+
+                // Update chain state with the new root
+                chain_state.insert(chain_id, new_root);
             }
+
+            Err(eyre::eyre!("Bridged root channel closed"))
         })
     }
 
@@ -193,6 +198,12 @@ where
                         .latest_root()
                         .block(block_number)
                         .await?;
+
+                    // Set the latest block number for the tree manager
+                    tree_manager.block_scanner.next_block.store(
+                        block_number + 1,
+                        std::sync::atomic::Ordering::SeqCst,
+                    );
 
                     eyre::Result::<_, eyre::Report>::Ok((
                         tree_manager.chain_id,
