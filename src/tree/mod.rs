@@ -124,7 +124,7 @@ where
                 chain_state.write().await.insert(canonical_chain_id, root);
             }
 
-            return Err(eyre::eyre!("Leaf updates channel closed"));
+            Err(eyre::eyre!("Leaf updates channel closed"))
         })
     }
 
@@ -168,7 +168,7 @@ where
                 chain_state.insert(chain_id, new_root);
             }
 
-            return Err(eyre::eyre!("Bridged root channel closed"));
+            Err(eyre::eyre!("Bridged root channel closed"))
         })
     }
 
