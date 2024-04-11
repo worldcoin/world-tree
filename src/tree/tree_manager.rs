@@ -29,7 +29,7 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<()>;
+    ) -> JoinHandle<eyre::Result<()>>;
 
     fn tree_changed_signature() -> H256;
 }
@@ -76,7 +76,10 @@ where
         })
     }
 
-    pub fn spawn(&self, tx: Sender<T::ChannelData>) -> JoinHandle<()> {
+    pub fn spawn(
+        &self,
+        tx: Sender<T::ChannelData>,
+    ) -> JoinHandle<eyre::Result<()>> {
         T::spawn(tx, self.block_scanner.clone())
     }
 }
@@ -89,7 +92,7 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<()> {
+    ) -> JoinHandle<eyre::Result<()>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware
@@ -140,7 +143,7 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<()> {
+    ) -> JoinHandle<eyre::Result<()>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware

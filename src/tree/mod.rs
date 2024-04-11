@@ -70,7 +70,9 @@ where
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
-    pub async fn spawn(&self) -> eyre::Result<Vec<JoinHandle<()>>> {
+    pub async fn spawn(
+        &self,
+    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let start_time = Instant::now();
 
         // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
