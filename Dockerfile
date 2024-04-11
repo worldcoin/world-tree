@@ -54,7 +54,7 @@ RUN cargo chef cook --release --recipe-path ./recipe.json
 # Copy the remaining source code
 COPY . .
 
-ARG BIN=tree-availability-service
+ARG BIN=world-tree
 
 # Build the binary
 RUN cargo build --release --bin $BIN --no-default-features
@@ -66,7 +66,7 @@ RUN /src/target/release/$BIN --version
 # cc variant because we need libgcc and others
 FROM gcr.io/distroless/cc-debian12:nonroot
 
-ARG BIN=tree-availability-service
+ARG BIN=world-tree
 
 # Copy the binary
 # This is ok when building but when running fails with:

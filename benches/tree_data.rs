@@ -36,7 +36,7 @@ fn bench_insert_identities(c: &mut Criterion) {
             },
             |(mut tree, leaves)| {
                 for (idx, leaf) in leaves.iter().enumerate() {
-                    tree.insert(idx as u32, *leaf);
+                    tree.insert(idx as u32, *leaf).unwrap();
                 }
             },
             BatchSize::SmallInput,

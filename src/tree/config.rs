@@ -17,6 +17,9 @@ pub struct ServiceConfig {
     /// Socket at which to serve the service
     #[serde(default = "default::socket_address")]
     pub socket_address: SocketAddr,
+
+    #[serde(default)]
+    pub telemetry: Option<TelemetryConfig>,
 }
 
 impl ServiceConfig {
@@ -58,6 +61,25 @@ pub struct ProviderConfig {
     pub rpc_endpoint: Url,
     #[serde(default = "default::provider_throttle")]
     pub throttle: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryConfig {
+    // Service name - used for logging, metrics and tracing
+    pub service_name: String,
+    // Traces
+    pub traces_endpoint: Option<String>,
+    // Metrics
+    pub metrics: Option<MetricsConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricsConfig {
+    pub host: String,
+    pub port: u16,
+    pub queue_size: usize,
+    pub buffer_size: usize,
+    pub prefix: String,
 }
 
 mod default {
