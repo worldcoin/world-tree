@@ -42,7 +42,7 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<()>>> {
+    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
         let mut handles = vec![];
 
         // Spawn a task to sync and maintain the state of the world tree
@@ -62,8 +62,9 @@ where
             tracing::info!("Spawning server");
             axum::Server::bind(&addr)
                 .serve(router.into_make_service())
-                .await
-                .expect("axum server failed");
+                .await?;
+
+            Ok(())
         });
 
         handles.push(server_handle);

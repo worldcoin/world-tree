@@ -560,9 +560,11 @@ mod test {
         assert_eq!(identity_tree.tree.root(), expected_tree.root());
 
         // Assert that each of the leaves are in the leaves hashmap
-        for leaf_idx in 0..1 << TREE_DEPTH {
-            let leaf = Hash::from(leaf_idx);
-            assert_eq!(identity_tree.leaves.get(&leaf), Some(&leaf_idx));
+        for (leaf_idx, leaf) in leaves.iter().enumerate() {
+            assert_eq!(
+                identity_tree.leaves.get(leaf),
+                Some(&(leaf_idx as u32))
+            );
         }
 
         Ok(())
