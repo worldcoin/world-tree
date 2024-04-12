@@ -14,9 +14,7 @@ use std::sync::Arc;
 use ethers::providers::Middleware;
 use ethers::types::U256;
 use ruint::Uint;
-use semaphore::cascading_merkle_tree::{
-    CascadingMerkleTree, CascadingTreeStorage,
-};
+use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
