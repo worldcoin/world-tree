@@ -31,7 +31,7 @@ hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 metrics = "0.21.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 ruint = "1.11.0"
-semaphore = { git = "https://github.com/worldcoin/semaphore-rs", rev = "8d236f3", features = [
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs", branch = "main", commit= "fb648ddb528612d46bf5b7c926969ae35ee304f9", features = [
     "depth_20",
 ] }
 serde = { version = "1.0.189", features = ["derive"] }

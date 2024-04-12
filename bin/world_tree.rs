@@ -132,6 +132,6 @@ async fn initialize_world_tree(
         config.tree_depth,
         canonical_tree_manager,
         bridged_tree_managers,
-        PathBuf::from("tree-cache"),
+        &config.tree_cache,
     )?))
 }

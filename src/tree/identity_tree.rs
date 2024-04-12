@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use eyre::{eyre, OptionExt};
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
@@ -47,7 +48,9 @@ impl IdentityTree<MmapVec<Hash>> {
         let mmap_vec: MmapVec<Hash> =
             match unsafe { MmapVec::restore(&file_path) } {
                 Ok(mmap_vec) => mmap_vec,
-                Err(e) => unsafe {
+
+                Err(_e) => unsafe {
+                    tracing::info!("Cache not found, creating new cache file");
                     //TODO: handle if not file creation error
                     let file = std::fs::OpenOptions::new()
                         .read(true)
@@ -66,18 +69,38 @@ impl IdentityTree<MmapVec<Hash>> {
                 &Hash::ZERO,
             )
         } else {
-            CascadingMerkleTree::<PoseidonHash, _>::restore(
+            let now = Instant::now();
+            tracing::info!("Restoring tree from cache");
+            let tree = CascadingMerkleTree::<PoseidonHash, _>::restore(
                 mmap_vec,
                 depth,
                 &Hash::ZERO,
-            )?
+            )?;
+
+            tracing::info!("Restored tree from cache in {:?}", now.elapsed());
+            dbg!(tree.root());
+            dbg!(tree.num_leaves());
+            tree
         };
+
+        // If the tree has leaves, restore the leaves hashmap
+        let leaves = tree
+            .leaves()
+            .enumerate()
+            .filter_map(|(idx, leaf)| {
+                if leaf != Hash::ZERO {
+                    Some((leaf, idx as u32))
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<Hash, u32>>();
 
         Ok(Self {
             tree,
+            leaves,
             tree_updates: BTreeMap::new(),
             roots: HashMap::new(),
-            leaves: HashMap::new(),
         })
     }
 }
