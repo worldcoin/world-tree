@@ -428,34 +428,7 @@ where
         // Build the tree from leaves
         tracing::info!(num_new_leaves = ?canonical_leaves.len(), "Building the canonical tree");
 
-        // //FIXME: only use this during testing when the cache is empty, comment out otherwise
-        // let mmap_vec: MmapVec<Hash> = unsafe {
-        //     //TODO: handle if not file creation error
-        //     let file = std::fs::OpenOptions::new()
-        //         .read(true)
-        //         .write(true)
-        //         .create(true)
-        //         .open("tree-cache")
-        //         .expect("bad");
-
-        //     MmapVec::create(file).expect("bad")
-        // };
-
-        // let tree: CascadingMerkleTree<PoseidonHash, _> =
-        //     CascadingMerkleTree::new_with_leaves(
-        //         mmap_vec,
-        //         30,
-        //         &Hash::ZERO,
-        //         &canonical_leaves,
-        //     );
-        // identity_tree.tree = tree;
-        // //FIXME: ^^
-
-        //TODO: uncomment this once its merged in semaphore-rs
-        // tree.insert_many_leaves(&canonical_leaves);
-        for leaf in canonical_leaves {
-            identity_tree.tree.push(leaf).expect("TODO: handle this");
-        }
+        identity_tree.tree.extend_from_slice(&canonical_leaves);
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state
@@ -514,6 +487,8 @@ where
             .read()
             .await
             .inclusion_proof(identity_commitment, root)?;
+
+        dbg!(&inclusion_proof);
 
         Ok(inclusion_proof)
     }

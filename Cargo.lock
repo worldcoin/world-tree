@@ -4619,7 +4619,7 @@ dependencies = [
 [[package]]
 name = "semaphore"
 version = "0.1.0"
-source = "git+https://github.com/worldcoin/semaphore-rs?branch=main#fb648ddb528612d46bf5b7c926969ae35ee304f9"
+source = "git+https://github.com/worldcoin/semaphore-rs?rev=e4b7db277cc0f76ace1cb7bf493055788c542ec3#e4b7db277cc0f76ace1cb7bf493055788c542ec3"
 dependencies = [
  "ark-bn254",
  "ark-circom",
@@ -4656,12 +4656,12 @@ dependencies = [
 [[package]]
 name = "semaphore-depth-config"
 version = "0.1.0"
-source = "git+https://github.com/worldcoin/semaphore-rs?branch=main#fb648ddb528612d46bf5b7c926969ae35ee304f9"
+source = "git+https://github.com/worldcoin/semaphore-rs?rev=e4b7db277cc0f76ace1cb7bf493055788c542ec3#e4b7db277cc0f76ace1cb7bf493055788c542ec3"
 
 [[package]]
 name = "semaphore-depth-macros"
 version = "0.1.0"
-source = "git+https://github.com/worldcoin/semaphore-rs?branch=main#fb648ddb528612d46bf5b7c926969ae35ee304f9"
+source = "git+https://github.com/worldcoin/semaphore-rs?rev=e4b7db277cc0f76ace1cb7bf493055788c542ec3#e4b7db277cc0f76ace1cb7bf493055788c542ec3"
 dependencies = [
  "itertools 0.10.5",
  "proc-macro2",
