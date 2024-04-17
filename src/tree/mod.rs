@@ -116,9 +116,12 @@ where
         &self,
         leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+        // If there are no bridged trees, apply canonical updates to the tree as they arrive
         if self.bridged_tree_manager.is_empty() {
             self.apply_canonical_updates(leaf_updates_rx)
         } else {
+            // Otherwise, append canonical updates to `tree_updates`
+            // which will be applied to the tree once the root is bridged to all chains
             self.append_canonical_updates(leaf_updates_rx)
         }
     }
