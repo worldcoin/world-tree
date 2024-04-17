@@ -172,10 +172,10 @@ where
 
                 // If only one chain contains the oldest root the root update is for the oldest chain
                 // apply the updates to the oldest root
-                if oldest_chain_ids.len() == 1 {
-                    if chain_id == oldest_chain_ids[0] {
-                        identity_tree.apply_updates_to_root(&oldest_root);
-                    }
+                if oldest_chain_ids.len() == 1
+                    && chain_id == oldest_chain_ids[0]
+                {
+                    identity_tree.apply_updates_to_root(oldest_root);
                 }
 
                 // Update chain state with the new root
