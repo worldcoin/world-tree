@@ -137,14 +137,22 @@ where
 
         // If we are monitoring bridged chains, apply canonical updates to tree updates until the root is bridged to all chains
         tokio::spawn(async move {
-            while let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
+            while let Some((new_root, leaf_updates)) =
+                leaf_updates_rx.recv().await
             {
+                tracing::info!(
+                    ?new_root,
+                    "Leaf updates received, appending tree updates"
+                );
                 let mut identity_tree = identity_tree.write().await;
 
-                identity_tree.append_updates(root, leaf_updates);
+                identity_tree.append_updates(new_root, leaf_updates);
 
                 // Update the root for the canonical chain
-                chain_state.write().await.insert(canonical_chain_id, root);
+                chain_state
+                    .write()
+                    .await
+                    .insert(canonical_chain_id, new_root);
             }
 
             Err(WorldTreeError::LeafChannelClosed)
@@ -162,8 +170,14 @@ where
             self.chain_state.clone();
 
         tokio::spawn(async move {
-            while let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
+            while let Some((new_root, leaf_updates)) =
+                leaf_updates_rx.recv().await
             {
+                tracing::info!(
+                    ?new_root,
+                    "Leaf updates received, applying to the canonical tree"
+                );
+
                 match leaf_updates {
                     LeafUpdates::Insert(leaves) => {
                         let mut identity_tree = identity_tree.write().await;
@@ -188,7 +202,10 @@ where
                 }
 
                 // Update the root for the canonical chain
-                chain_state.write().await.insert(canonical_chain_id, root);
+                chain_state
+                    .write()
+                    .await
+                    .insert(canonical_chain_id, new_root);
             }
 
             Err(WorldTreeError::LeafChannelClosed)
@@ -208,6 +225,8 @@ where
             while let Some((chain_id, bridged_root)) =
                 bridged_root_rx.recv().await
             {
+                tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
+
                 let mut identity_tree = identity_tree.write().await;
                 // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
                 let root_nonce = identity_tree
@@ -238,6 +257,12 @@ where
                 if oldest_chain_ids.len() == 1
                     && chain_id == oldest_chain_ids[0]
                 {
+                    tracing::info!(
+                        ?chain_id,
+                        ?oldest_root,
+                        "Applying updates to the canonical tree"
+                    );
+
                     identity_tree.apply_updates_to_root(oldest_root);
                 }
 
@@ -297,6 +322,7 @@ where
         // Group roots by hash for easier indexing when finding the latest root for multiple chains
         let mut grouped_roots = HashMap::new();
         for (chain_id, root) in roots {
+            tracing::info!(?chain_id, ?root, "Latest root");
             let chain_ids = grouped_roots.entry(root).or_insert_with(Vec::new);
             chain_ids.push(chain_id);
         }
@@ -308,8 +334,10 @@ where
     #[instrument(skip(self))]
     pub async fn sync_to_head(&self) -> Result<(), WorldTreeError<M>> {
         // Get logs from the canonical tree on mainnet
+        tracing::info!("Getting canonical logs");
         let logs = self.get_canonical_logs().await?;
 
+        tracing::info!("Extracting identity updates from logs");
         // Extract identity updates from the logs and build the tree from the updates
         let identity_updates = extract_identity_updates(
             &logs,
@@ -381,18 +409,6 @@ where
             for (root, leaves) in pending_updates {
                 identity_tree.append_updates(root, leaves);
             }
-        }
-
-        // Ensure that the identity tree root matches the canonical root
-        let chain_state = self.chain_state.read().await;
-        let canonical_root = chain_state
-            .get(&self.canonical_tree_manager.chain_id)
-            .expect("Could not get canonical root");
-
-        let identity_tree = self.identity_tree.read().await;
-
-        if identity_tree.tree.root() != canonical_root.hash {
-            return Err(WorldTreeError::UnexpectedRoot);
         }
 
         Ok(())
@@ -524,16 +540,6 @@ where
             for leaf_idx in deletions {
                 identity_tree.tree.set_leaf(leaf_idx, Hash::ZERO);
             }
-        }
-
-        let chain_state = self.chain_state.read().await;
-        let canonical_chain_id = self.canonical_tree_manager.chain_id;
-        let canonical_root = chain_state
-            .get(&canonical_chain_id)
-            .expect("Could not get canonical root");
-
-        if canonical_root.hash != identity_tree.tree.root() {
-            return Err(WorldTreeError::UnexpectedRoot);
         }
 
         Ok(())
