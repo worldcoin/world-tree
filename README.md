@@ -74,3 +74,5 @@ curl -X POST http://localhost:8080/inclusionProof -H "Content-Type: application/
 ```
 
 **Note:** It currently takes a while for the service to startup and sync due to a number of reasons. During this time the requests will be either rejected (while anvil is starting up) or you'll receive 503 responses (while the world-tree service is syncing).
+
+
