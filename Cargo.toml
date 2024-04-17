@@ -30,6 +30,7 @@ hex = "0.4"
 hyper = { version = "^0.14.27", features = ["server", "tcp", "http1", "http2"] }
 metrics = "0.21.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
+rayon = "1.10.0"
 ruint = "1.11.0"
 semaphore = { git = "https://github.com/worldcoin/semaphore-rs", rev = "60a313d72d171f99e8b5b2e28ecd178413b2bb77", features = [
     "depth_20",

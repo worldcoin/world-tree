@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{Log, U256};
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use ruint::Uint;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
@@ -440,23 +441,23 @@ where
             // and then apply the deletions by setting the leaf idx to Hash::ZERO
 
             // Sort leaf updates into insertions and deletions
-            let num_updates = flattened_leaves.len();
-            let mut insertions = Vec::with_capacity(num_updates);
-            let mut deletions = Vec::with_capacity(num_updates);
-            for (leaf_idx, value) in flattened_leaves.into_iter() {
-                if value == Hash::ZERO {
-                    deletions.push(leaf_idx.0 as usize);
-                } else {
-                    insertions.push(value);
-                }
-            }
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) =
+                flattened_leaves.into_par_iter().partition_map(
+                    |(leaf_idx, value)| {
+                        if value != Hash::ZERO {
+                            Either::Left(value)
+                        } else {
+                            Either::Right(leaf_idx.0 as usize)
+                        }
+                    },
+                );
 
             // Extend the tree with the new insertions
             identity_tree.tree.extend_from_slice(&insertions);
 
             // Update the tree with the deletions
             for leaf_idx in deletions {
-                identity_tree.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
+                identity_tree.tree.set_leaf(leaf_idx, Hash::ZERO);
             }
         }
 

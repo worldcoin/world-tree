@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use eyre::{eyre, OptionExt};
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
@@ -258,17 +259,16 @@ where
 
             leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            // Sort leaf updates into insertions and deletions
-            let num_updates = leaf_updates.len();
-            let mut insertions = Vec::with_capacity(num_updates);
-            let mut deletions = Vec::with_capacity(num_updates);
-            for (leaf_idx, value) in leaf_updates.into_iter() {
-                if value == Hash::ZERO {
-                    deletions.push(leaf_idx as usize);
-                } else {
-                    insertions.push(value);
-                }
-            }
+            // Partition the leaf updates into insertions and deletions
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
+                .into_par_iter()
+                .partition_map(|(leaf_idx, value)| {
+                    if value != Hash::ZERO {
+                        Either::Left(value)
+                    } else {
+                        Either::Right(leaf_idx as usize)
+                    }
+                });
 
             // Insert/delete leaves in the canonical tree
             // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
