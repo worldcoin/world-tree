@@ -258,25 +258,25 @@ where
 
             leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            let (deletions, insertions) = leaf_updates.into_iter().fold(
-                (Vec::new(), Vec::new()),
-                |(mut deletions, mut insertions), (leaf_idx, value)| {
-                    if value == Hash::ZERO {
-                        deletions.push(leaf_idx);
-                    } else {
-                        insertions.push(value);
-                    }
-                    (deletions, insertions)
-                },
-            );
-
-            // Insert/update leaves in the canonical tree
-            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-            for leaf_idx in deletions {
-                self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
+            // Sort leaf updates into insertions and deletions
+            let num_updates = leaf_updates.len();
+            let mut insertions = Vec::with_capacity(num_updates);
+            let mut deletions = Vec::with_capacity(num_updates);
+            for (leaf_idx, value) in leaf_updates.into_iter() {
+                if value == Hash::ZERO {
+                    deletions.push(leaf_idx as usize);
+                } else {
+                    insertions.push(value);
+                }
             }
 
+            // Insert/delete leaves in the canonical tree
+            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
             self.tree.extend_from_slice(&insertions);
+
+            for leaf_idx in deletions {
+                self.tree.set_leaf(leaf_idx, Hash::ZERO);
+            }
         }
 
         // Split off tree updates at the new root

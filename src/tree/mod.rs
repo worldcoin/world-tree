@@ -410,24 +410,50 @@ where
         // Flatten the leaves and build the canonical tree
         let flattened_leaves = flatten_leaf_updates(identity_updates);
 
-        // Update the latest leaves and collect the canonical leaf values
-        let canonical_leaves = flattened_leaves
-            .iter()
-            .map(|(idx, hash)| {
-                if hash != &Hash::ZERO {
-                    identity_tree.leaves.insert(*hash, idx.into());
-                } else {
-                    identity_tree.leaves.remove(hash);
-                }
-
-                *hash
-            })
-            .collect::<Vec<_>>();
+        // Update the latest leaves
+        for (idx, hash) in flattened_leaves.iter() {
+            if hash != &Hash::ZERO {
+                identity_tree.leaves.insert(*hash, idx.into());
+            } else {
+                identity_tree.leaves.remove(hash);
+            }
+        }
 
         // Build the tree from leaves
-        tracing::info!(num_new_leaves = ?canonical_leaves.len(), "Building the canonical tree");
+        tracing::info!(num_new_leaves = ?flattened_leaves.len(), "Building the canonical tree");
 
-        identity_tree.tree.extend_from_slice(&canonical_leaves);
+        // If the tree is empty, we insert all of the canonical leaf updates
+        if identity_tree.tree.num_leaves() == 0 {
+            let canonical_leaves = flattened_leaves
+                .iter()
+                .map(|(_, hash)| *hash)
+                .collect::<Vec<_>>();
+
+            identity_tree.tree.extend_from_slice(&canonical_leaves);
+        } else {
+            // If the tree is already populated, we insert the new insertions
+            // and then apply the deletions by setting the leaf idx to Hash::ZERO
+
+            // Sort leaf updates into insertions and deletions
+            let num_updates = flattened_leaves.len();
+            let mut insertions = Vec::with_capacity(num_updates);
+            let mut deletions = Vec::with_capacity(num_updates);
+            for (leaf_idx, value) in flattened_leaves.into_iter() {
+                if value == Hash::ZERO {
+                    deletions.push(leaf_idx.0 as usize);
+                } else {
+                    insertions.push(value);
+                }
+            }
+
+            // Extend the tree with the new insertions
+            identity_tree.tree.extend_from_slice(&insertions);
+
+            // Update the tree with the deletions
+            for leaf_idx in deletions {
+                identity_tree.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
+            }
+        }
 
         let chain_state = self.chain_state.read().await;
         let canonical_chain_id = self.canonical_tree_manager.chain_id;
