@@ -373,7 +373,7 @@ where
             self.split_updates_at_canonical_root(identity_updates).await;
 
         // Build the tree from leaves extracted from the canonical updates
-        self.build_canonical_tree(canonical_updates).await;
+        self.build_canonical_tree(canonical_updates).await?;
 
         // Apply any pending updates that have not been bridged to all chains yet
         if !pending_updates.is_empty() {

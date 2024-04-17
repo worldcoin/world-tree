@@ -122,7 +122,7 @@ where
     pub fn extend_from_slice(&mut self, leaves: &[(u32, Hash)]) {
         // Update the leaves hashmap and collect the new leaf values
         let leaves = leaves
-            .into_iter()
+            .iter()
             .map(|(idx, hash)| {
                 self.leaves.insert(*hash, *idx);
                 *hash
