@@ -1,6 +1,4 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::fs::OpenOptions;
-use std::io;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -78,8 +76,6 @@ impl IdentityTree<MmapVec<Hash>> {
             )?;
 
             tracing::info!("Restored tree from cache in {:?}", now.elapsed());
-            dbg!(tree.root());
-            dbg!(tree.num_leaves());
             tree
         };
 

@@ -7,7 +7,6 @@ use axum::response::IntoResponse;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
-use semaphore::generic_storage::GenericStorage;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 

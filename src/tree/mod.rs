@@ -14,8 +14,7 @@ use std::sync::Arc;
 use ethers::providers::Middleware;
 use ethers::types::{Log, U256};
 use ruint::Uint;
-use semaphore::cascading_merkle_tree::CascadingMerkleTree;
-use semaphore::generic_storage::{GenericStorage, MmapVec};
+use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -429,6 +428,21 @@ where
         tracing::info!(num_new_leaves = ?canonical_leaves.len(), "Building the canonical tree");
 
         identity_tree.tree.extend_from_slice(&canonical_leaves);
+
+        let chain_state = self.chain_state.read().await;
+        let canonical_chain_id = self.canonical_tree_manager.chain_id;
+        let canonical_root = chain_state
+            .get(&canonical_chain_id)
+            .expect("Could not get canonical root");
+
+        if canonical_root.hash != identity_tree.tree.root() {
+            //TODO: propagate an error
+            panic!(
+                "Tree root does not match canonical root, {:?}, {:?}",
+                canonical_root.hash,
+                identity_tree.tree.root()
+            );
+        }
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state
@@ -487,8 +501,6 @@ where
             .read()
             .await
             .inclusion_proof(identity_commitment, root)?;
-
-        dbg!(&inclusion_proof);
 
         Ok(inclusion_proof)
     }
