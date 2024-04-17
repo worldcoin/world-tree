@@ -256,20 +256,27 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            // Sort leaves by leaf idx
             leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            // Apply all leaf updates to the tree
-            for (leaf_idx, val) in leaf_updates {
-                // Insert/update leaves in the canonical tree
-                // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-                if val == Hash::ZERO {
-                    self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
-                } else {
-                    // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-                    self.tree.push(val).expect("Could not push leaf");
-                }
+            let (deletions, insertions) = leaf_updates.into_iter().fold(
+                (Vec::new(), Vec::new()),
+                |(mut deletions, mut insertions), (leaf_idx, value)| {
+                    if value == Hash::ZERO {
+                        deletions.push(leaf_idx);
+                    } else {
+                        insertions.push(value);
+                    }
+                    (deletions, insertions)
+                },
+            );
+
+            // Insert/update leaves in the canonical tree
+            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+            for leaf_idx in deletions {
+                self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
             }
+
+            self.tree.extend_from_slice(&insertions);
         }
 
         // Split off tree updates at the new root
