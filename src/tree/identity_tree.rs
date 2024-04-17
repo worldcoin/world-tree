@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
@@ -259,19 +260,25 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            // Sort leaves by leaf idx
             leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            // Apply all leaf updates to the tree
-            for (leaf_idx, val) in leaf_updates {
-                // Insert/update leaves in the canonical tree
-                // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-                if val == Hash::ZERO {
-                    self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
-                } else {
-                    // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-                    self.tree.push(val).expect("Could not push leaf");
-                }
+            // Partition the leaf updates into insertions and deletions
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
+                .into_par_iter()
+                .partition_map(|(leaf_idx, value)| {
+                    if value != Hash::ZERO {
+                        Either::Left(value)
+                    } else {
+                        Either::Right(leaf_idx as usize)
+                    }
+                });
+
+            // Insert/delete leaves in the canonical tree
+            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+            self.tree.extend_from_slice(&insertions);
+
+            for leaf_idx in deletions {
+                self.tree.set_leaf(leaf_idx, Hash::ZERO);
             }
         }
 

@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use ethers::providers::Middleware;
 use ethers::types::{Log, U256};
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use ruint::Uint;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
@@ -360,8 +361,9 @@ where
                 nonce: 0,
             };
 
-            // If bridged trees are present, ensure that the same root is bridged to all chains and update the chain state
-            if !self.bridged_tree_manager.is_empty() {
+            // If the latest bridged roots is empty, this means that we are not monitoring any bridged chains
+            // and we do not need to check the following
+            if !latest_bridged_roots.is_empty() {
                 let chain_ids = latest_bridged_roots
                     .get(&latest_root)
                     .expect("No bridged roots match the latest canonical root");
@@ -419,24 +421,50 @@ where
         // Flatten the leaves and build the canonical tree
         let flattened_leaves = flatten_leaf_updates(identity_updates);
 
-        // Update the latest leaves and collect the canonical leaf values
-        let canonical_leaves = flattened_leaves
-            .iter()
-            .map(|(idx, hash)| {
-                if hash != &Hash::ZERO {
-                    identity_tree.leaves.insert(*hash, idx.into());
-                } else {
-                    identity_tree.leaves.remove(hash);
-                }
-
-                *hash
-            })
-            .collect::<Vec<_>>();
+        // Update the latest leaves
+        for (idx, hash) in flattened_leaves.iter() {
+            if hash != &Hash::ZERO {
+                identity_tree.leaves.insert(*hash, idx.into());
+            } else {
+                identity_tree.leaves.remove(hash);
+            }
+        }
 
         // Build the tree from leaves
-        tracing::info!(num_new_leaves = ?canonical_leaves.len(), "Building the canonical tree");
+        tracing::info!(num_new_leaves = ?flattened_leaves.len(), "Building the canonical tree");
 
-        identity_tree.tree.extend_from_slice(&canonical_leaves);
+        // If the tree is empty, we insert all of the canonical leaf updates
+        if identity_tree.tree.num_leaves() == 0 {
+            let canonical_leaves = flattened_leaves
+                .iter()
+                .map(|(_, hash)| *hash)
+                .collect::<Vec<_>>();
+
+            identity_tree.tree.extend_from_slice(&canonical_leaves);
+        } else {
+            // If the tree is already populated, we insert the new insertions
+            // and then apply the deletions by setting the leaf idx to Hash::ZERO
+
+            // Sort leaf updates into insertions and deletions
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) =
+                flattened_leaves.into_par_iter().partition_map(
+                    |(leaf_idx, value)| {
+                        if value != Hash::ZERO {
+                            Either::Left(value)
+                        } else {
+                            Either::Right(leaf_idx.0 as usize)
+                        }
+                    },
+                );
+
+            // Extend the tree with the new insertions
+            identity_tree.tree.extend_from_slice(&insertions);
+
+            // Update the tree with the deletions
+            for leaf_idx in deletions {
+                identity_tree.tree.set_leaf(leaf_idx, Hash::ZERO);
+            }
+        }
 
         let chain_state = self.chain_state.read().await;
         let canonical_chain_id = self.canonical_tree_manager.chain_id;

@@ -12,16 +12,23 @@ pub struct ServiceConfig {
     pub tree_depth: usize,
     /// Configuration for the canonical tree on mainnet
     pub canonical_tree: TreeConfig,
-    /// Path to mmap file responsible for caching the state of the canonical tree
-    pub tree_cache: PathBuf,
+    /// Configuration for tree cache
+    pub cache: CacheConfig,
     /// Configuration for bridged trees
     pub bridged_trees: Option<Vec<TreeConfig>>,
     /// Socket at which to serve the service
     #[serde(default = "default::socket_address")]
     pub socket_address: SocketAddr,
-
     #[serde(default)]
     pub telemetry: Option<TelemetryConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CacheConfig {
+    /// Path to mmap file responsible for caching the state of the canonical tree
+    pub cache_file: PathBuf,
+    #[serde(default)]
+    pub purge_cache: bool,
 }
 
 impl ServiceConfig {
