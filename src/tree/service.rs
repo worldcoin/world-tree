@@ -3,14 +3,13 @@ use std::sync::Arc;
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use super::error::TreeError;
+use super::error::WorldTreeError;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -41,7 +40,7 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
+    ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
         let mut handles = vec![];
 
         // Spawn a task to sync and maintain the state of the world tree
@@ -97,7 +96,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
-) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
+) -> Result<(StatusCode, Json<Option<InclusionProof>>), WorldTreeError<M>> {
     let chain_id = query_params.chain_id;
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)
@@ -110,20 +109,4 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
 #[tracing::instrument(level = "debug")]
 pub async fn health() -> StatusCode {
     StatusCode::OK
-}
-
-impl TreeError {
-    fn to_status_code(&self) -> StatusCode {
-        match self {
-            TreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
-        }
-    }
-}
-
-impl IntoResponse for TreeError {
-    fn into_response(self) -> axum::response::Response {
-        let status_code = self.to_status_code();
-        let response_body = self.to_string();
-        (status_code, response_body).into_response()
-    }
 }

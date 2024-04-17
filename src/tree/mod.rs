@@ -26,6 +26,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
 
+use self::error::WorldTreeError;
 use self::identity_tree::{IdentityTree, InclusionProof, LeafUpdates, Root};
 use self::tree_manager::{
     extract_identity_updates, BridgedTree, CanonicalTree, TreeManager,
@@ -60,7 +61,7 @@ where
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
         cache: &PathBuf,
-    ) -> eyre::Result<Self> {
+    ) -> Result<Self, WorldTreeError<M>> {
         let identity_tree =
             IdentityTree::new_with_cache(tree_depth, cache.to_owned())?;
 
@@ -76,7 +77,8 @@ where
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(
         &self,
-    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
+    ) -> Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>, WorldTreeError<M>>
+    {
         let start_time = Instant::now();
 
         // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
@@ -114,7 +116,7 @@ where
     fn handle_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         let canonical_chain_id = self.canonical_tree_manager.chain_id;
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
@@ -129,7 +131,7 @@ where
                 chain_state.write().await.insert(canonical_chain_id, root);
             }
 
-            Err(eyre::eyre!("Leaf updates channel closed"))
+            Err(WorldTreeError::LeafChannelClosed)
         })
     }
 
@@ -138,7 +140,7 @@ where
     fn handle_bridged_updates(
         &self,
         mut bridged_root_rx: Receiver<(u64, Hash)>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
 
@@ -183,7 +185,7 @@ where
                 chain_state.insert(chain_id, new_root);
             }
 
-            Err(eyre::eyre!("Bridged root channel closed"))
+            Err(WorldTreeError::BridgedRootChannelClosed)
         })
     }
 
@@ -191,7 +193,7 @@ where
     /// Returns a HashMap<Hash, Vec<u64>> representing a given root and the chain IDs where the root is the latest on that chain
     async fn latest_bridged_roots(
         &self,
-    ) -> eyre::Result<HashMap<Hash, Vec<u64>>> {
+    ) -> Result<HashMap<Hash, Vec<u64>>, WorldTreeError<M>> {
         // Get the latest root for all bridged chains and set the last synced block to the current block
         let futures =
             self.bridged_tree_manager
@@ -206,7 +208,8 @@ where
                         .block_scanner
                         .middleware
                         .get_block_number()
-                        .await?
+                        .await
+                        .map_err(WorldTreeError::MiddlewareError)?
                         .as_u64();
 
                     let root: U256 = bridged_world_id
@@ -220,7 +223,7 @@ where
                         std::sync::atomic::Ordering::SeqCst,
                     );
 
-                    eyre::Result::<_, eyre::Report>::Ok((
+                    Result::<_, WorldTreeError<M>>::Ok((
                         tree_manager.chain_id,
                         Uint::<256, 4>::from_limbs(root.0),
                     ))
@@ -243,7 +246,7 @@ where
 
     /// Syncs the world tree to the latest block on mainnet, updating the canonical tree and bridged trees from identity updates extracted from logs
     #[instrument(skip(self))]
-    pub async fn sync_to_head(&self) -> eyre::Result<()> {
+    pub async fn sync_to_head(&self) -> Result<(), WorldTreeError<M>> {
         // Get logs from the canonical tree on mainnet
         let logs = self.get_canonical_logs().await?;
 
@@ -259,13 +262,18 @@ where
         Ok(())
     }
 
-    async fn get_canonical_logs(&self) -> eyre::Result<Vec<Log>> {
+    async fn get_canonical_logs(&self) -> Result<Vec<Log>, WorldTreeError<M>> {
         let identity_tree = self.identity_tree.read().await;
 
         // Get all logs from the mainnet tree starting from the last synced block, up to the chain tip
-        let all_logs = self.canonical_tree_manager.block_scanner.next().await?;
+        let all_logs = self
+            .canonical_tree_manager
+            .block_scanner
+            .next()
+            .await
+            .map_err(WorldTreeError::MiddlewareError)?;
         if all_logs.is_empty() {
-            return Err(eyre::eyre!("No logs found for canonical tree"));
+            return Err(WorldTreeError::CanonicalLogsNotFound);
         }
 
         // If the tree is populated, only process logs that are newer than the latest root
@@ -294,7 +302,7 @@ where
     async fn build_tree_from_updates(
         &self,
         identity_updates: BTreeMap<Root, LeafUpdates>,
-    ) -> eyre::Result<()> {
+    ) -> Result<(), WorldTreeError<M>> {
         // Initialize the state of `self.roots` and `self.chain_state` with the latest roots from the identity updates
         self.initialize_roots(&identity_updates).await?;
 
@@ -322,10 +330,9 @@ where
             .expect("Could not get canonical root");
 
         let identity_tree = self.identity_tree.read().await;
+
         if identity_tree.tree.root() != canonical_root.hash {
-            return Err(eyre::eyre!(
-                "Identity tree root does not match canonical root"
-            ));
+            return Err(WorldTreeError::UnexpectedRoot);
         }
 
         Ok(())
@@ -335,7 +342,7 @@ where
     async fn initialize_roots(
         &self,
         identity_updates: &BTreeMap<Root, LeafUpdates>,
-    ) -> eyre::Result<()> {
+    ) -> Result<(), WorldTreeError<M>> {
         let mut identity_tree = self.identity_tree.write().await;
         let mut chain_state = self.chain_state.write().await;
 
@@ -363,9 +370,7 @@ where
 
                 // Ensure that all bridged chains have the same root
                 if chain_ids.len() != self.bridged_tree_manager.len() {
-                    return Err(eyre::eyre!(
-                    "Identity updates are empty but bridged roots are not the same",
-                    ));
+                    return Err(WorldTreeError::IncongruentRoots);
                 }
 
                 // Update chain_state for all roots
@@ -410,7 +415,7 @@ where
     pub async fn build_canonical_tree(
         &self,
         identity_updates: BTreeMap<Root, LeafUpdates>,
-    ) {
+    ) -> Result<(), WorldTreeError<M>> {
         let mut identity_tree = self.identity_tree.write().await;
 
         // Flatten the leaves and build the canonical tree
@@ -468,13 +473,10 @@ where
             .expect("Could not get canonical root");
 
         if canonical_root.hash != identity_tree.tree.root() {
-            //TODO: propagate an error
-            panic!(
-                "Tree root does not match canonical root, {:?}, {:?}",
-                canonical_root.hash,
-                identity_tree.tree.root()
-            );
+            return Err(WorldTreeError::UnexpectedRoot);
         }
+
+        Ok(())
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state
@@ -519,13 +521,13 @@ where
         &self,
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
-    ) -> eyre::Result<Option<InclusionProof>> {
+    ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {
             chain_state.get(&chain_id)
         } else {
-            return Err(eyre::eyre!("Chain ID not found"));
+            return Err(WorldTreeError::ChainIdNotFound);
         };
 
         let inclusion_proof = self

@@ -31,7 +31,7 @@ where
         window_size: u64,
         current_block: u64,
         filter: Filter,
-    ) -> eyre::Result<Self> {
+    ) -> Result<Self, M::Error> {
         let chain_id = middleware.get_chainid().await?.as_u64();
         Ok(Self {
             middleware,
