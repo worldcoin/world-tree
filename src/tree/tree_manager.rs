@@ -13,6 +13,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
+use super::error::TreeManagerError;
 use super::identity_tree::{LeafUpdates, Root};
 use super::{Hash, LeafIndex};
 use crate::abi::{
@@ -29,7 +30,7 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>>;
+    ) -> JoinHandle<Result<(), TreeManagerError<M>>>;
 
     fn tree_changed_signature() -> H256;
 }
@@ -51,8 +52,12 @@ where
         window_size: u64,
         last_synced_block: u64,
         middleware: Arc<M>,
-    ) -> eyre::Result<Self> {
-        let chain_id = middleware.get_chainid().await?.as_u64();
+    ) -> Result<Self, TreeManagerError<M>> {
+        let chain_id = middleware
+            .get_chainid()
+            .await
+            .map_err(TreeManagerError::MiddlewareError)?
+            .as_u64();
 
         let filter = Filter::new()
             .address(address)
@@ -65,7 +70,8 @@ where
                 last_synced_block,
                 filter,
             )
-            .await?,
+            .await
+            .map_err(TreeManagerError::MiddlewareError)?,
         );
 
         Ok(Self {
@@ -79,7 +85,7 @@ where
     pub fn spawn(
         &self,
         tx: Sender<T::ChannelData>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
         T::spawn(tx, self.block_scanner.clone())
     }
 }
@@ -92,13 +98,13 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware
                 .get_chainid()
                 .await
-                .expect("Failed to get chain_id")
+                .map_err(TreeManagerError::MiddlewareError)?
                 .as_u64();
             loop {
                 async {
@@ -143,13 +149,13 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<eyre::Result<()>> {
+    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware
                 .get_chainid()
                 .await
-                .expect("Failed to get chain_id")
+                .map_err(TreeManagerError::MiddlewareError)?
                 .as_u64();
 
             loop {
@@ -190,14 +196,17 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
-) -> eyre::Result<BTreeMap<Root, LeafUpdates>> {
+) -> Result<BTreeMap<Root, LeafUpdates>, TreeManagerError<M>> {
     let mut tree_updates = BTreeMap::new();
 
     let mut tasks = FuturesUnordered::new();
 
     // Fetch the transactions for each log concurrently
     for log in logs {
-        let tx_hash = log.transaction_hash.expect("TODO: handle this case");
+        let tx_hash = log
+            .transaction_hash
+            .expect("Could not get transaction hash");
+
         tracing::debug!(?tx_hash, "Getting transaction");
         tasks.push(middleware.get_transaction(tx_hash));
     }
@@ -206,7 +215,10 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
     // Sort the transactions by nonce. These should be in order due to the block scanner, but we sort them for redundancy in the case of out-of-order logs.
     while let Some(transaction) = tasks.next().await {
-        let transaction = transaction?.expect("TODO: handle this case");
+        let transaction = transaction
+            .map_err(TreeManagerError::MiddlewareError)?
+            .expect("Could not get transaction");
+
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
         sorted_transactions.insert(transaction.nonce, transaction);

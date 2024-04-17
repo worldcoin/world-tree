@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use eyre::{eyre, OptionExt};
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
@@ -10,6 +9,7 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::Serialize;
 
+use super::error::IdentityTreeError;
 use super::{Hash, LeafIndex, NodeIndex};
 
 // Leaf index to hash, 0 indexed from the initial leaf
@@ -42,7 +42,7 @@ impl IdentityTree<MmapVec<Hash>> {
     pub fn new_with_cache(
         depth: usize,
         file_path: PathBuf,
-    ) -> eyre::Result<Self> {
+    ) -> Result<Self, IdentityTreeError> {
         let mmap_vec: MmapVec<Hash> =
             match unsafe { MmapVec::restore(&file_path) } {
                 Ok(mmap_vec) => mmap_vec,
@@ -107,12 +107,15 @@ where
 {
     /// Inserts a new leaf into the tree and updates the leaves hashmap
     /// Returns an error if the leaf already exists
-    pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
+    pub fn insert(
+        &mut self,
+        index: u32,
+        leaf: Hash,
+    ) -> Result<(), IdentityTreeError> {
         // Check if the leaf already exists
         if self.leaves.contains_key(&leaf) {
-            return Err(eyre!("Leaf already exists"));
+            return Err(IdentityTreeError::LeafAlreadyExists);
         }
-
         self.leaves.insert(leaf, index);
 
         // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
@@ -298,8 +301,11 @@ where
         &self,
         leaf: Hash,
         root: Option<&Root>,
-    ) -> eyre::Result<Option<InclusionProof>> {
-        let leaf_idx = self.leaves.get(&leaf).ok_or_eyre("Leaf not found")?;
+    ) -> Result<Option<InclusionProof>, IdentityTreeError> {
+        let leaf_idx = match self.leaves.get(&leaf) {
+            Some(idx) => idx,
+            None => return Ok(None),
+        };
 
         if let Some(root) = root {
             if root.hash == self.tree.root() {
@@ -324,12 +330,12 @@ where
         &self,
         leaf_idx: u32,
         root: &Root,
-    ) -> eyre::Result<Proof> {
+    ) -> Result<Proof, IdentityTreeError> {
         // Get the updates at the specified root
         let updates = self
             .tree_updates
             .get(root)
-            .ok_or_eyre("Could not find root in tree updates")?;
+            .ok_or(IdentityTreeError::RootNotFound)?;
 
         // Convert the leaf index to a storage index for easier indexing
         let mut node_idx = leaf_to_storage_idx(leaf_idx, self.tree.depth());
@@ -860,7 +866,7 @@ mod test {
         for leaf in leaves.iter() {
             let proof = restored_tree
                 .inclusion_proof(*leaf, None)?
-                .ok_or(eyre!("Proof not found"))?;
+                .expect("Could not get proof");
 
             assert!(proof.verify(*leaf));
         }
