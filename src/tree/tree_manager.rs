@@ -13,7 +13,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
-use super::error::TreeManagerError;
+use super::error::WorldTreeError;
 use super::identity_tree::{LeafUpdates, Root};
 use super::{Hash, LeafIndex};
 use crate::abi::{
@@ -30,7 +30,7 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), TreeManagerError<M>>>;
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>>;
 
     fn tree_changed_signature() -> H256;
 }
@@ -52,11 +52,11 @@ where
         window_size: u64,
         last_synced_block: u64,
         middleware: Arc<M>,
-    ) -> Result<Self, TreeManagerError<M>> {
+    ) -> Result<Self, WorldTreeError<M>> {
         let chain_id = middleware
             .get_chainid()
             .await
-            .map_err(TreeManagerError::MiddlewareError)?
+            .map_err(WorldTreeError::MiddlewareError)?
             .as_u64();
 
         let filter = Filter::new()
@@ -71,7 +71,7 @@ where
                 filter,
             )
             .await
-            .map_err(TreeManagerError::MiddlewareError)?,
+            .map_err(WorldTreeError::MiddlewareError)?,
         );
 
         Ok(Self {
@@ -85,7 +85,7 @@ where
     pub fn spawn(
         &self,
         tx: Sender<T::ChannelData>,
-    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         T::spawn(tx, self.block_scanner.clone())
     }
 }
@@ -98,13 +98,13 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware
                 .get_chainid()
                 .await
-                .map_err(TreeManagerError::MiddlewareError)?
+                .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
             loop {
                 async {
@@ -149,13 +149,13 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), TreeManagerError<M>>> {
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
                 .middleware
                 .get_chainid()
                 .await
-                .map_err(TreeManagerError::MiddlewareError)?
+                .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
 
             loop {
@@ -196,7 +196,7 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
-) -> Result<BTreeMap<Root, LeafUpdates>, TreeManagerError<M>> {
+) -> Result<BTreeMap<Root, LeafUpdates>, WorldTreeError<M>> {
     let mut tree_updates = BTreeMap::new();
 
     let mut tasks = FuturesUnordered::new();
@@ -216,7 +216,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     // Sort the transactions by nonce. These should be in order due to the block scanner, but we sort them for redundancy in the case of out-of-order logs.
     while let Some(transaction) = tasks.next().await {
         let transaction = transaction
-            .map_err(TreeManagerError::MiddlewareError)?
+            .map_err(WorldTreeError::MiddlewareError)?
             .expect("Could not get transaction");
 
         let tx_hash = transaction.hash;

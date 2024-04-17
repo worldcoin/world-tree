@@ -76,7 +76,8 @@ where
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(
         &self,
-    ) -> Result<Vec<JoinHandle<eyre::Result<()>>>, WorldTreeError<M>> {
+    ) -> Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>, WorldTreeError<M>>
+    {
         let start_time = Instant::now();
 
         // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
@@ -328,6 +329,7 @@ where
             .expect("Could not get canonical root");
 
         let identity_tree = self.identity_tree.read().await;
+
         if identity_tree.tree.root() != canonical_root.hash {
             return Err(WorldTreeError::UnexpectedRoot);
         }

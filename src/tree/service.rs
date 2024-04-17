@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
@@ -41,7 +40,7 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<eyre::Result<()>>>> {
+    ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
         let mut handles = vec![];
 
         // Spawn a task to sync and maintain the state of the world tree

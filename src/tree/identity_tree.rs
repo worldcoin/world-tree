@@ -48,15 +48,8 @@ impl IdentityTree<MmapVec<Hash>> {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(_e) => unsafe {
-                    tracing::info!("Cache not found, creating new cache file");
-                    //TODO: handle if not file creation error
-                    let file = std::fs::OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .open(&file_path)?;
-
-                    MmapVec::create(file)?
+                    MmapVec::open_create(file_path)
+                        .map_err(IdentityTreeError::MmapVecError)?
                 },
             };
 

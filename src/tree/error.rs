@@ -1,24 +1,14 @@
 use axum::response::IntoResponse;
 use ethers::prelude::{AbiError, ContractError};
-use ethers::providers::{Middleware, ProviderError};
-use ethers::types::Log;
+use ethers::providers::Middleware;
 use hyper::StatusCode;
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
 
 #[derive(Error, Debug)]
 pub enum WorldTreeError<M>
 where
     M: Middleware + 'static,
 {
-    #[error("Tree manager error")]
-    TreeManagerError(#[from] TreeManagerError<M>),
-    #[error("Identity tree error")]
-    IdentityTreeError(#[from] IdentityTreeError),
-    #[error("Middleware error")]
-    MiddlewareError(<M as Middleware>::Error),
-    #[error("Contract error")]
-    ContractError(#[from] ContractError<M>),
     #[error("No canonical logs found")]
     CanonicalLogsNotFound,
     #[error("Roots are different when expected to be the same")]
@@ -31,6 +21,18 @@ where
     BridgedRootChannelClosed,
     #[error("Chain ID not found")]
     ChainIdNotFound,
+    #[error(transparent)]
+    IdentityTreeError(#[from] IdentityTreeError),
+    #[error(transparent)]
+    MiddlewareError(<M as Middleware>::Error),
+    #[error(transparent)]
+    ContractError(#[from] ContractError<M>),
+    #[error(transparent)]
+    ABICodecError(#[from] AbiError),
+    #[error(transparent)]
+    EthABIError(#[from] ethers::abi::Error),
+    #[error(transparent)]
+    HyperError(#[from] hyper::Error),
 }
 
 #[derive(Error, Debug)]
@@ -39,12 +41,10 @@ pub enum IdentityTreeError {
     RootNotFound,
     #[error("Leaf already exists")]
     LeafAlreadyExists,
-    #[error("Could not create mmap vec")]
-    MmapVecError,
+    #[error(transparent)]
+    MmapVecError(#[from] eyre::Report),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    // #[error(transparent)]
-    // EyreError(#[from] eyre::Error),
 }
 
 impl<M> WorldTreeError<M>
@@ -65,19 +65,4 @@ where
         let response_body = self.to_string();
         (status_code, response_body).into_response()
     }
-}
-
-#[derive(Error, Debug)]
-pub enum TreeManagerError<M>
-where
-    M: Middleware + 'static,
-{
-    #[error("Middleware error")]
-    MiddlewareError(<M as Middleware>::Error),
-    #[error("Contract error")]
-    ContractError(#[from] ContractError<M>),
-    #[error("ABI Codec error")]
-    ABICodecError(#[from] AbiError),
-    #[error("Eth ABI error")]
-    EthABIError(#[from] ethers::abi::Error),
 }
