@@ -48,8 +48,8 @@ impl IdentityTree<MmapVec<Hash>> {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(_e) => unsafe {
-                    MmapVec::open_create(file_path)
-                        .map_err(IdentityTreeError::MmapVecError)?
+                    tracing::info!("Cache not found, creating new cache file");
+                    MmapVec::open_create(file_path)?
                 },
             };
 
