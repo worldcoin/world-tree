@@ -413,7 +413,7 @@ where
     pub async fn build_canonical_tree(
         &self,
         identity_updates: BTreeMap<Root, LeafUpdates>,
-    ) {
+    ) -> Result<(), WorldTreeError<M>> {
         let mut identity_tree = self.identity_tree.write().await;
 
         // Flatten the leaves and build the canonical tree
@@ -445,13 +445,10 @@ where
             .expect("Could not get canonical root");
 
         if canonical_root.hash != identity_tree.tree.root() {
-            //TODO: propagate an error
-            panic!(
-                "Tree root does not match canonical root, {:?}, {:?}",
-                canonical_root.hash,
-                identity_tree.tree.root()
-            );
+            return Err(WorldTreeError::UnexpectedRoot);
         }
+
+        Ok(())
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state

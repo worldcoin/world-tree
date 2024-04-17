@@ -205,7 +205,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     for log in logs {
         let tx_hash = log
             .transaction_hash
-            .expect("Could not get transaction hash");
+            .ok_or(WorldTreeError::TransactionHashNotFound)?;
 
         tracing::debug!(?tx_hash, "Getting transaction");
         tasks.push(middleware.get_transaction(tx_hash));
@@ -217,7 +217,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     while let Some(transaction) = tasks.next().await {
         let transaction = transaction
             .map_err(WorldTreeError::MiddlewareError)?
-            .expect("Could not get transaction");
+            .ok_or(WorldTreeError::TransactionNotFound)?;
 
         let tx_hash = transaction.hash;
         tracing::debug!(?tx_hash, "Transaction received");
@@ -231,7 +231,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
         let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();
 
         let function_selector = Selector::try_from(&calldata[0..4])
-            .expect("Transaction data does not contain a function selector");
+            .map_err(|_| WorldTreeError::MissingFunctionSelector)?;
 
         if function_selector == RegisterIdentitiesCall::selector() {
             tracing::debug!("Decoding registerIdentities calldata");

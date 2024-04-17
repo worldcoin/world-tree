@@ -21,6 +21,12 @@ where
     BridgedRootChannelClosed,
     #[error("Chain ID not found")]
     ChainIdNotFound,
+    #[error("Transaction hash not found")]
+    TransactionHashNotFound,
+    #[error("Transaction found")]
+    TransactionNotFound,
+    #[error("Calldata does not have a function selector")]
+    MissingFunctionSelector,
     #[error(transparent)]
     IdentityTreeError(#[from] IdentityTreeError),
     #[error(transparent)]
