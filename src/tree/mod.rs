@@ -111,9 +111,20 @@ where
         Ok(handles)
     }
 
-    /// Spawns a task to handle updates to the canonical tree on mainnet.
     /// All updates are added to `pending_updates` and the mainnet root is updated with the latest root
     fn handle_canonical_updates(
+        &self,
+        leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+        if self.bridged_tree_manager.is_empty() {
+            self.apply_canonical_updates(leaf_updates_rx)
+        } else {
+            self.append_canonical_updates(leaf_updates_rx)
+        }
+    }
+
+    // Appends canonical updates to `tree_updates` as they arrive
+    fn append_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
@@ -121,11 +132,57 @@ where
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
 
+        // If we are monitoring bridged chains, apply canonical updates to tree updates until the root is bridged to all chains
         tokio::spawn(async move {
             while let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
             {
                 let mut identity_tree = identity_tree.write().await;
+
                 identity_tree.append_updates(root, leaf_updates);
+
+                // Update the root for the canonical chain
+                chain_state.write().await.insert(canonical_chain_id, root);
+            }
+
+            Err(WorldTreeError::LeafChannelClosed)
+        })
+    }
+
+    // Applies canonical updates to the tree as they arrive
+    fn apply_canonical_updates(
+        &self,
+        mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+        let canonical_chain_id = self.canonical_tree_manager.chain_id;
+        let identity_tree = self.identity_tree.clone();
+        let chain_state: Arc<RwLock<HashMap<u64, Root>>> =
+            self.chain_state.clone();
+
+        tokio::spawn(async move {
+            while let Some((root, leaf_updates)) = leaf_updates_rx.recv().await
+            {
+                match leaf_updates {
+                    LeafUpdates::Insert(leaves) => {
+                        let mut identity_tree = identity_tree.write().await;
+
+                        // Sort the leaf updates by index
+                        let mut leaves = leaves
+                            .into_iter()
+                            .map(|(idx, hash)| (idx.0, hash))
+                            .collect::<Vec<_>>();
+
+                        leaves.sort_by_key(|(idx, _)| *idx);
+
+                        identity_tree.extend_from_slice(&leaves);
+                    }
+                    LeafUpdates::Delete(leaves) => {
+                        let mut identity_tree = identity_tree.write().await;
+
+                        for (leaf_idx, _) in leaves {
+                            identity_tree.remove(leaf_idx.0 as usize);
+                        }
+                    }
+                }
 
                 // Update the root for the canonical chain
                 chain_state.write().await.insert(canonical_chain_id, root);
