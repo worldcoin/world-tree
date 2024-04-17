@@ -348,26 +348,31 @@ where
             // the pending tree_updates will be applied and the root with nonce 0 will no longer be in the chain state hashmap.
             let latest_root = identity_tree.tree.root();
 
-            let chain_ids = latest_bridged_roots
-                .get(&latest_root)
-                .expect("No bridged roots match the latest canonical root");
-
-            // Ensure that all bridged chains have the same root
-            if chain_ids.len() != self.bridged_tree_manager.len() {
-                return Err(eyre::eyre!(
-                    "Identity updates are empty but bridged roots are not the same",
-                ));
-            }
-
             let root = Root {
                 hash: latest_root,
                 nonce: 0,
             };
 
-            // Update chain_state for all roots
-            for chain_id in chain_ids {
-                chain_state.insert(*chain_id, root);
+            // If the latest bridged roots is empty, this means that we are not monitoring any bridged chains
+            // and we do not need to check the following
+            if !latest_bridged_roots.is_empty() {
+                let chain_ids = latest_bridged_roots
+                    .get(&latest_root)
+                    .expect("No bridged roots match the latest canonical root");
+
+                // Ensure that all bridged chains have the same root
+                if chain_ids.len() != self.bridged_tree_manager.len() {
+                    return Err(eyre::eyre!(
+                    "Identity updates are empty but bridged roots are not the same",
+                    ));
+                }
+
+                // Update chain_state for all roots
+                for chain_id in chain_ids {
+                    chain_state.insert(*chain_id, root);
+                }
             }
+
             chain_state.insert(self.canonical_tree_manager.chain_id, root);
 
             // Note that we do not need to insert the root into roots since it is already in the canonical tree.
