@@ -7,13 +7,15 @@ pub mod tree_manager;
 
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
-use ethers::types::U256;
+use ethers::types::{Log, U256};
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use ruint::Uint;
-use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -38,7 +40,7 @@ pub type Hash = <PoseidonHash as Hasher>::Hash;
 /// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
 pub struct WorldTree<M: Middleware + 'static> {
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
-    pub identity_tree: Arc<RwLock<IdentityTree>>,
+    pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     /// Responsible for listening to state changes to the tree on mainnet
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     /// Responsible for listening to state changes state changes to bridged WorldIDs
@@ -57,16 +59,18 @@ where
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
-    ) -> Self {
-        let identity_tree = IdentityTree::new(tree_depth);
+        cache: &PathBuf,
+    ) -> eyre::Result<Self> {
+        let identity_tree =
+            IdentityTree::new_with_cache(tree_depth, cache.to_owned())?;
 
-        Self {
+        Ok(Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_manager,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
             synced: AtomicBool::new(false),
-        }
+        })
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
@@ -142,13 +146,6 @@ where
             while let Some((chain_id, bridged_root)) =
                 bridged_root_rx.recv().await
             {
-                // Get the oldest root across all chains
-                let mut chain_state = chain_state.write().await;
-                let oldest_root: (&u64, &Root) = chain_state
-                    .iter()
-                    .min_by_key(|&(_, v)| v)
-                    .expect("No roots in chain state");
-
                 let mut identity_tree = identity_tree.write().await;
                 // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
                 let root_nonce = identity_tree
@@ -160,9 +157,26 @@ where
                     nonce: *root_nonce,
                 };
 
-                // If the update is for the chain with the oldest root, apply the updates to the tree
-                if chain_id == *oldest_root.0 {
-                    identity_tree.apply_updates_to_root(oldest_root.1);
+                // Get the oldest root across all chains
+                let mut chain_state = chain_state.write().await;
+                let oldest_root = chain_state
+                    .values()
+                    .min()
+                    .expect("No roots in chain state");
+
+                // Collect all chain ids where the root is the oldest root
+                let oldest_chain_ids: Vec<u64> = chain_state
+                    .iter()
+                    .filter(|&(_, v)| v == oldest_root)
+                    .map(|(&k, _)| k)
+                    .collect();
+
+                // If only one chain contains the oldest root the root update is for the oldest chain
+                // apply the updates to the oldest root
+                if oldest_chain_ids.len() == 1
+                    && chain_id == oldest_chain_ids[0]
+                {
+                    identity_tree.apply_updates_to_root(oldest_root);
                 }
 
                 // Update chain state with the new root
@@ -230,11 +244,8 @@ where
     /// Syncs the world tree to the latest block on mainnet, updating the canonical tree and bridged trees from identity updates extracted from logs
     #[instrument(skip(self))]
     pub async fn sync_to_head(&self) -> eyre::Result<()> {
-        // Get all logs from the mainnet tree starting from the last synced block, up to the chain tip
-        let logs = self.canonical_tree_manager.block_scanner.next().await?;
-        if logs.is_empty() {
-            return Ok(());
-        }
+        // Get logs from the canonical tree on mainnet
+        let logs = self.get_canonical_logs().await?;
 
         // Extract identity updates from the logs and build the tree from the updates
         let identity_updates = extract_identity_updates(
@@ -246,6 +257,38 @@ where
         self.build_tree_from_updates(identity_updates).await?;
 
         Ok(())
+    }
+
+    async fn get_canonical_logs(&self) -> eyre::Result<Vec<Log>> {
+        let identity_tree = self.identity_tree.read().await;
+
+        // Get all logs from the mainnet tree starting from the last synced block, up to the chain tip
+        let all_logs = self.canonical_tree_manager.block_scanner.next().await?;
+        if all_logs.is_empty() {
+            return Err(eyre::eyre!("No logs found for canonical tree"));
+        }
+
+        // If the tree is populated, only process logs that are newer than the latest root
+        let logs = if identity_tree.leaves.is_empty() {
+            all_logs
+        } else {
+            // Split the logs
+            let latest_root = identity_tree.tree.root();
+
+            let mut pivot = all_logs.len();
+            for log in all_logs.iter().rev() {
+                let post_root = Hash::from_be_bytes(log.topics[3].0);
+                if post_root == latest_root {
+                    break;
+                }
+                pivot -= 1;
+            }
+
+            let (_, new_logs) = all_logs.split_at(pivot);
+            new_logs.into()
+        };
+
+        Ok(logs)
     }
 
     async fn build_tree_from_updates(
@@ -272,6 +315,19 @@ where
             }
         }
 
+        // Ensure that the identity tree root matches the canonical root
+        let chain_state = self.chain_state.read().await;
+        let canonical_root = chain_state
+            .get(&self.canonical_tree_manager.chain_id)
+            .expect("Could not get canonical root");
+
+        let identity_tree = self.identity_tree.read().await;
+        if identity_tree.tree.root() != canonical_root.hash {
+            return Err(eyre::eyre!(
+                "Identity tree root does not match canonical root"
+            ));
+        }
+
         Ok(())
     }
 
@@ -286,26 +342,66 @@ where
         // Get the latest root from all bridged chains
         let latest_bridged_roots = self.latest_bridged_roots().await?;
 
-        // Update chain state for bridged roots
-        for root in identity_updates.keys() {
-            if let Some(chain_ids) = latest_bridged_roots.get(&root.hash) {
-                for chain_id in chain_ids {
-                    chain_state.insert(*chain_id, *root);
+        if identity_updates.is_empty() {
+            // @dev If there are no identity updates, meaning that the in-memory tree's latest root matches the onchain root across all chains.
+            // In this case, we can set all chains to the latest root, with the root nonce set to 0. When the next canonical update is received,
+            // the root for the canonical chain_id will be updated and once the new root is bridged to all chains,
+            // the pending tree_updates will be applied and the root with nonce 0 will no longer be in the chain state hashmap.
+            let latest_root = identity_tree.tree.root();
+
+            let root = Root {
+                hash: latest_root,
+                nonce: 0,
+            };
+
+            // If the latest bridged roots is empty, this means that we are not monitoring any bridged chains
+            // and we do not need to check the following
+            if !latest_bridged_roots.is_empty() {
+                let chain_ids = latest_bridged_roots
+                    .get(&latest_root)
+                    .expect("No bridged roots match the latest canonical root");
+
+                // Ensure that all bridged chains have the same root
+                if chain_ids.len() != self.bridged_tree_manager.len() {
+                    return Err(eyre::eyre!(
+                    "Identity updates are empty but bridged roots are not the same",
+                    ));
                 }
-                identity_tree.roots.insert(root.hash, root.nonce);
+
+                // Update chain_state for all roots
+                for chain_id in chain_ids {
+                    chain_state.insert(*chain_id, root);
+                }
             }
+
+            chain_state.insert(self.canonical_tree_manager.chain_id, root);
+
+            // Note that we do not need to insert the root into roots since it is already in the canonical tree.
+            // The roots hashmap is only used when applying updates to the tree.
+        } else {
+            // Update chain state for bridged roots
+            for root in identity_updates.keys() {
+                if let Some(chain_ids) = latest_bridged_roots.get(&root.hash) {
+                    for chain_id in chain_ids {
+                        chain_state.insert(*chain_id, *root);
+                    }
+                    identity_tree.roots.insert(root.hash, root.nonce);
+                }
+            }
+
+            // Update chain state for mainnet root
+            let latest_mainnet_root =
+                identity_updates.keys().last().expect("No updates");
+
+            identity_tree
+                .roots
+                .insert(latest_mainnet_root.hash, latest_mainnet_root.nonce);
+
+            chain_state.insert(
+                self.canonical_tree_manager.chain_id,
+                *latest_mainnet_root,
+            );
         }
-
-        // Update chain state for mainnet root
-        let latest_mainnet_root =
-            identity_updates.keys().last().expect("No updates");
-
-        identity_tree
-            .roots
-            .insert(latest_mainnet_root.hash, latest_mainnet_root.nonce);
-
-        chain_state
-            .insert(self.canonical_tree_manager.chain_id, *latest_mainnet_root);
 
         Ok(())
     }
@@ -320,30 +416,65 @@ where
         // Flatten the leaves and build the canonical tree
         let flattened_leaves = flatten_leaf_updates(identity_updates);
 
-        // Update the latest leaves and collect the canonical leaf values
-        let canonical_leaves = flattened_leaves
-            .iter()
-            .map(|(idx, hash)| {
-                if hash != &Hash::ZERO {
-                    identity_tree.leaves.insert(*hash, idx.into());
-                } else {
-                    identity_tree.leaves.remove(hash);
-                }
-
-                *hash
-            })
-            .collect::<Vec<_>>();
+        // Update the latest leaves
+        for (idx, hash) in flattened_leaves.iter() {
+            if hash != &Hash::ZERO {
+                identity_tree.leaves.insert(*hash, idx.into());
+            } else {
+                identity_tree.leaves.remove(hash);
+            }
+        }
 
         // Build the tree from leaves
-        tracing::info!(num_leaves = ?canonical_leaves.len(), "Building the canonical tree");
-        let tree = DynamicMerkleTree::new_with_leaves(
-            (),
-            identity_tree.tree.depth(),
-            &Hash::ZERO,
-            &canonical_leaves,
-        );
+        tracing::info!(num_new_leaves = ?flattened_leaves.len(), "Building the canonical tree");
 
-        identity_tree.tree = tree;
+        // If the tree is empty, we insert all of the canonical leaf updates
+        if identity_tree.tree.num_leaves() == 0 {
+            let canonical_leaves = flattened_leaves
+                .iter()
+                .map(|(_, hash)| *hash)
+                .collect::<Vec<_>>();
+
+            identity_tree.tree.extend_from_slice(&canonical_leaves);
+        } else {
+            // If the tree is already populated, we insert the new insertions
+            // and then apply the deletions by setting the leaf idx to Hash::ZERO
+
+            // Sort leaf updates into insertions and deletions
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) =
+                flattened_leaves.into_par_iter().partition_map(
+                    |(leaf_idx, value)| {
+                        if value != Hash::ZERO {
+                            Either::Left(value)
+                        } else {
+                            Either::Right(leaf_idx.0 as usize)
+                        }
+                    },
+                );
+
+            // Extend the tree with the new insertions
+            identity_tree.tree.extend_from_slice(&insertions);
+
+            // Update the tree with the deletions
+            for leaf_idx in deletions {
+                identity_tree.tree.set_leaf(leaf_idx, Hash::ZERO);
+            }
+        }
+
+        let chain_state = self.chain_state.read().await;
+        let canonical_chain_id = self.canonical_tree_manager.chain_id;
+        let canonical_root = chain_state
+            .get(&canonical_chain_id)
+            .expect("Could not get canonical root");
+
+        if canonical_root.hash != identity_tree.tree.root() {
+            //TODO: propagate an error
+            panic!(
+                "Tree root does not match canonical root, {:?}, {:?}",
+                canonical_root.hash,
+                identity_tree.tree.root()
+            );
+        }
     }
 
     /// Splits the identity updates into canonical and pending updates based on the oldest root in the chain state

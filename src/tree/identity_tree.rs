@@ -1,7 +1,11 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::PathBuf;
+use std::time::Instant;
 
 use eyre::{eyre, OptionExt};
-use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
+use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
@@ -14,17 +18,17 @@ pub type Leaves = HashMap<LeafIndex, Hash>;
 // Node index to hash, 0 indexed from the root
 pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
-pub struct IdentityTree {
-    pub tree: DynamicMerkleTree<PoseidonHash>,
+pub struct IdentityTree<S> {
+    pub tree: CascadingMerkleTree<PoseidonHash, S>,
     pub tree_updates: BTreeMap<Root, StorageUpdates>,
     // Hashmap of root hash to nonce
     pub roots: HashMap<Hash, usize>,
     pub leaves: HashMap<Hash, u32>,
 }
 
-impl IdentityTree {
-    pub fn new(tree_depth: usize) -> Self {
-        let tree = DynamicMerkleTree::new((), tree_depth, &Hash::ZERO);
+impl IdentityTree<Vec<Hash>> {
+    pub fn new(depth: usize) -> Self {
+        let tree = CascadingMerkleTree::new(vec![], depth, &Hash::ZERO);
 
         Self {
             tree,
@@ -33,7 +37,68 @@ impl IdentityTree {
             leaves: HashMap::new(),
         }
     }
+}
 
+impl IdentityTree<MmapVec<Hash>> {
+    pub fn new_with_cache(
+        depth: usize,
+        file_path: PathBuf,
+    ) -> eyre::Result<Self> {
+        let mmap_vec: MmapVec<Hash> =
+            match unsafe { MmapVec::restore(&file_path) } {
+                Ok(mmap_vec) => mmap_vec,
+
+                Err(_e) => unsafe {
+                    tracing::info!("Cache not found, creating new cache file");
+                    MmapVec::open_create(&file_path)?
+                },
+            };
+
+        let tree = if mmap_vec.is_empty() {
+            CascadingMerkleTree::<PoseidonHash, _>::new(
+                mmap_vec,
+                depth,
+                &Hash::ZERO,
+            )
+        } else {
+            let now = Instant::now();
+            tracing::info!("Restoring tree from cache");
+            let tree = CascadingMerkleTree::<PoseidonHash, _>::restore(
+                mmap_vec,
+                depth,
+                &Hash::ZERO,
+            )?;
+
+            tracing::info!("Restored tree from cache in {:?}", now.elapsed());
+            tree
+        };
+
+        // If the tree has leaves, restore the leaves hashmap
+        let leaves = tree
+            .leaves()
+            .enumerate()
+            .filter_map(|(idx, leaf)| {
+                if leaf != Hash::ZERO {
+                    Some((leaf, idx as u32))
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<Hash, u32>>();
+
+        Ok(Self {
+            tree,
+            leaves,
+            tree_updates: BTreeMap::new(),
+            roots: HashMap::new(),
+        })
+    }
+}
+
+impl<S> IdentityTree<S>
+where
+    S: GenericStorage<Hash>,
+{
     /// Inserts a new leaf into the tree and updates the leaves hashmap
     /// Returns an error if the leaf already exists
     pub fn insert(&mut self, index: u32, leaf: Hash) -> eyre::Result<()> {
@@ -192,19 +257,25 @@ impl IdentityTree {
                 })
                 .collect::<Vec<_>>();
 
-            // Sort leaves by leaf idx
             leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            // Apply all leaf updates to the tree
-            for (leaf_idx, val) in leaf_updates {
-                // Insert/update leaves in the canonical tree
-                // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-                if val == Hash::ZERO {
-                    self.tree.set_leaf(leaf_idx as usize, Hash::ZERO);
-                } else {
-                    // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-                    self.tree.push(val).expect("Could not push leaf");
-                }
+            // Partition the leaf updates into insertions and deletions
+            let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
+                .into_par_iter()
+                .partition_map(|(leaf_idx, value)| {
+                    if value != Hash::ZERO {
+                        Either::Left(value)
+                    } else {
+                        Either::Right(leaf_idx as usize)
+                    }
+                });
+
+            // Insert/delete leaves in the canonical tree
+            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+            self.tree.extend_from_slice(&insertions);
+
+            for leaf_idx in deletions {
+                self.tree.set_leaf(leaf_idx, Hash::ZERO);
             }
         }
 
@@ -402,10 +473,11 @@ impl InclusionProof {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     use eyre::{eyre, ContextCompat};
     use rand::{Rng, SeedableRng};
-    use semaphore::dynamic_merkle_tree::DynamicMerkleTree;
+    use semaphore::cascading_merkle_tree::CascadingMerkleTree;
     use semaphore::merkle_tree::Branch;
     use semaphore::poseidon_tree::PoseidonHash;
 
@@ -488,7 +560,7 @@ mod test {
     }
 
     #[test]
-    fn test_insert() {
+    fn test_insert() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate new leaves and insert into the tree
@@ -500,9 +572,9 @@ mod test {
         }
 
         // Initialize an expected tree with the same leaves
-        let expected_tree: DynamicMerkleTree<PoseidonHash> =
-            DynamicMerkleTree::new_with_leaves(
-                (),
+        let expected_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new_with_leaves(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
                 &leaves,
@@ -518,10 +590,12 @@ mod test {
                 Some(&(leaf_idx as u32))
             );
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_remove() {
+    fn test_remove() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
         // Generate new leaves and insert into the tree
@@ -538,9 +612,9 @@ mod test {
         }
 
         // Initialize an expected tree with all leaves set to 0x00
-        let expected_tree: DynamicMerkleTree<PoseidonHash> =
-            DynamicMerkleTree::new_with_leaves(
-                (),
+        let expected_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new_with_leaves(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
                 &vec![Hash::default(); leaves.len()],
@@ -554,6 +628,8 @@ mod test {
             let leaf_hash = Hash::from(leaf);
             assert_eq!(identity_tree.leaves.get(&leaf_hash), None);
         }
+
+        Ok(())
     }
 
     #[test]
@@ -569,9 +645,9 @@ mod test {
         let expected_root = identity_tree.tree.root();
 
         // Generate the updated tree with all of the leaves
-        let updated_tree: DynamicMerkleTree<PoseidonHash> =
-            DynamicMerkleTree::new_with_leaves(
-                (),
+        let updated_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new_with_leaves(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
                 &leaves,
@@ -614,9 +690,9 @@ mod test {
         }
 
         // Generate the updated tree with all of the leaves
-        let expected_tree: DynamicMerkleTree<PoseidonHash> =
-            DynamicMerkleTree::new_with_leaves(
-                (),
+        let expected_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new_with_leaves(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
                 &leaves,
@@ -676,8 +752,8 @@ mod test {
 
         // Simulate and create updates
         let (root_012, updates) = {
-            let mut tree = DynamicMerkleTree::<PoseidonHash>::new(
-                (),
+            let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
             );
@@ -704,8 +780,8 @@ mod test {
 
         // Simulate and create updates
         let (root_0123, updates) = {
-            let mut tree = DynamicMerkleTree::<PoseidonHash>::new(
-                (),
+            let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
+                vec![],
                 TREE_DEPTH,
                 &Hash::ZERO,
             );
@@ -763,4 +839,32 @@ mod test {
 
     #[test]
     fn test_construct_proof_from_root() {}
+
+    #[test]
+    fn test_mmap_cache() -> eyre::Result<()> {
+        let path = PathBuf::from("tree_cache");
+
+        let mut identity_tree =
+            IdentityTree::new_with_cache(TREE_DEPTH, path.clone())?;
+
+        let leaves = generate_all_leaves();
+
+        for leaf in leaves.iter() {
+            identity_tree.tree.push(*leaf)?;
+        }
+
+        let restored_tree = IdentityTree::new_with_cache(TREE_DEPTH, path)?;
+
+        assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
+
+        for leaf in leaves.iter() {
+            let proof = restored_tree
+                .inclusion_proof(*leaf, None)?
+                .ok_or(eyre!("Proof not found"))?;
+
+            assert!(proof.verify(*leaf));
+        }
+
+        Ok(())
+    }
 }

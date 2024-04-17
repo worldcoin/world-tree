@@ -14,12 +14,16 @@ use super::error::TreeError;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
+
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree<M>>,
 }
 
-impl<M: Middleware> InclusionProofService<M> {
+impl<M> InclusionProofService<M>
+where
+    M: Middleware,
+{
     pub fn new(world_tree: Arc<WorldTree<M>>) -> Self {
         Self { world_tree }
     }
@@ -95,7 +99,6 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Json(req): Json<InclusionProofRequest>,
 ) -> Result<(StatusCode, Json<Option<InclusionProof>>), TreeError> {
     let chain_id = query_params.chain_id;
-
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)
         .await

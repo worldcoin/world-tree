@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -128,9 +129,14 @@ async fn initialize_world_tree(
         }
     }
 
+    if config.cache.purge_cache {
+        fs::remove_file(&config.cache.cache_file)?;
+    }
+
     Ok(Arc::new(WorldTree::new(
         config.tree_depth,
         canonical_tree_manager,
         bridged_tree_managers,
-    )))
+        &config.cache.cache_file,
+    )?))
 }
