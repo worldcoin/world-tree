@@ -130,6 +130,7 @@ async fn initialize_world_tree(
     }
 
     if config.cache.purge_cache {
+        tracing::info!("Purging tree cache");
         fs::remove_file(&config.cache.cache_file)?;
     }
 

@@ -13,8 +13,6 @@ where
     CanonicalLogsNotFound,
     #[error("Roots are different when expected to be the same")]
     IncongruentRoots,
-    #[error("Unexpected tree root")]
-    UnexpectedRoot,
     #[error("Leaf channel closed")]
     LeafChannelClosed,
     #[error("Bridged root channel closed")]
