@@ -59,7 +59,7 @@ pub struct TreeConfig {
     pub address: Address,
     #[serde(default = "default::window_size")]
     pub window_size: u64,
-    pub last_synced_block: u64,
+    pub creation_block: u64,
     pub provider: ProviderConfig,
 }
 
