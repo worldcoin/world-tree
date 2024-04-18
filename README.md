@@ -24,10 +24,6 @@ world-tree --config <path_to_config.toml>
 To see an example configuration file, see `bin/world_tree.toml`. You can also specify the necessary configuration variables via environment variables.
 
 
-<br>
-<br>
-
-
 ## Docker usage & local testing
 To run this service for local testing, you can execute the following command.
 
