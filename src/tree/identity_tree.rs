@@ -118,6 +118,21 @@ where
         Ok(())
     }
 
+    /// Extends the tree with new leaves and updates the leaves hashmap
+    pub fn extend_from_slice(&mut self, leaves: &[(u32, Hash)]) {
+        // Update the leaves hashmap and collect the new leaf values
+        let leaves = leaves
+            .iter()
+            .map(|(idx, hash)| {
+                self.leaves.insert(*hash, *idx);
+                *hash
+            })
+            .collect::<Vec<_>>();
+
+        // Insert the new leaves into the tree
+        self.tree.extend_from_slice(&leaves);
+    }
+
     /// Removes a leaf from the tree and updates the leaves hashmap
     pub fn remove(&mut self, index: usize) {
         let leaf = self.tree.get_leaf(index);
