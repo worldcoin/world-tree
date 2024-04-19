@@ -100,8 +100,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     let chain_id = query_params.chain_id;
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)
-        .await
-        .expect("TODO: Handle this case");
+        .await?;
 
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }

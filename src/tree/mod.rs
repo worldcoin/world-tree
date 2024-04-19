@@ -591,9 +591,13 @@ where
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            chain_state.get(&chain_id)
+            let root = chain_state
+                .get(&chain_id)
+                .ok_or(WorldTreeError::ChainIdNotFound)?;
+
+            Some(root)
         } else {
-            return Err(WorldTreeError::ChainIdNotFound);
+            None
         };
 
         let inclusion_proof = self
