@@ -63,6 +63,8 @@ pub async fn main() -> eyre::Result<()> {
         TracingShutdownHandle
     };
 
+    tracing::info!(?config, "Starting World Tree service");
+
     let world_tree = initialize_world_tree(&config).await?;
 
     let handles = InclusionProofService::new(world_tree)
