@@ -7,7 +7,7 @@ use url::Url;
 
 pub const CONFIG_PREFIX: &str = "WLD";
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ServiceConfig {
     pub tree_depth: usize,
     /// Configuration for the canonical tree on mainnet
@@ -15,7 +15,8 @@ pub struct ServiceConfig {
     /// Configuration for tree cache
     pub cache: CacheConfig,
     /// Configuration for bridged trees
-    pub bridged_trees: Option<Vec<TreeConfig>>,
+    #[serde(with = "vec_map", default)]
+    pub bridged_trees: Vec<TreeConfig>,
     /// Socket at which to serve the service
     #[serde(default = "default::socket_address")]
     pub socket_address: SocketAddr,
@@ -59,6 +60,7 @@ pub struct TreeConfig {
     pub address: Address,
     #[serde(default = "default::window_size")]
     pub window_size: u64,
+    #[serde(default)]
     pub creation_block: u64,
     pub provider: ProviderConfig,
 }
@@ -95,14 +97,30 @@ mod default {
     use super::*;
 
     pub fn socket_address() -> SocketAddr {
-        ([127, 0, 0, 1], 8080).into()
+        ([0, 0, 0, 0], 8080).into()
     }
 
     pub fn window_size() -> u64 {
-        1000
+        5000
     }
 
     pub fn provider_throttle() -> u32 {
-        0
+        150
+    }
+}
+
+mod vec_map {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        let v: BTreeMap<usize, T> = Deserialize::deserialize(deserializer)?;
+
+        Ok(v.into_values().collect())
     }
 }

@@ -105,30 +105,27 @@ async fn initialize_world_tree(
 
     let mut bridged_tree_managers = vec![];
 
-    if let Some(bridged_trees) = &config.bridged_trees {
-        for tree_config in bridged_trees.iter() {
-            let bridged_provider_config = &tree_config.provider;
-            let http_provider =
-                Http::new(bridged_provider_config.rpc_endpoint.clone());
+    for tree_config in config.bridged_trees.iter() {
+        let bridged_provider_config = &tree_config.provider;
+        let http_provider =
+            Http::new(bridged_provider_config.rpc_endpoint.clone());
 
-            let throttled_provider = ThrottledJsonRpcClient::new(
-                http_provider,
-                bridged_provider_config.throttle,
-                None,
-            );
-            let bridged_middleware =
-                Arc::new(Provider::new(throttled_provider));
+        let throttled_provider = ThrottledJsonRpcClient::new(
+            http_provider,
+            bridged_provider_config.throttle,
+            None,
+        );
+        let bridged_middleware = Arc::new(Provider::new(throttled_provider));
 
-            let tree_manager = TreeManager::<_, BridgedTree>::new(
-                tree_config.address,
-                tree_config.window_size,
-                tree_config.creation_block,
-                bridged_middleware,
-            )
-            .await?;
+        let tree_manager = TreeManager::<_, BridgedTree>::new(
+            tree_config.address,
+            tree_config.window_size,
+            tree_config.creation_block,
+            bridged_middleware,
+        )
+        .await?;
 
-            bridged_tree_managers.push(tree_manager);
-        }
+        bridged_tree_managers.push(tree_manager);
     }
 
     if config.cache.purge_cache {

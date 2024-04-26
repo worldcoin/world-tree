@@ -12,7 +12,7 @@ anyhow = "1.0"
 axum = "0.6"
 axum-middleware = { path = "crates/axum-middleware" }
 clap = { version = "4.4.8", features = [ "derive", "env" ] }
-config = "0.13.4"
+config = "0.14.0"
 criterion = { version = "0.5.1", features = ["async", "async_futures"] }
 dotenv = "0.15.0"
 ethers = { version = "2.0.10", features = [
