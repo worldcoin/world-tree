@@ -63,14 +63,16 @@ RUN cargo build --release --bin $BIN --no-default-features
 RUN /src/target/release/$BIN --version
 
 ### Runtime stage
-# cc variant because we need libgcc and others
-FROM gcr.io/distroless/cc-debian12:nonroot
+# TODO: Switch to the distroless image once the app has matured
+#       for now using the debian:12 will allow us to inspect
+#       the running container at runtime
+## cc variant because we need libgcc and others
+# FROM gcr.io/distroless/cc-debian12:nonroot
+FROM debian:12
 
 ARG BIN=world-tree
 
 # Copy the binary
-# This is ok when building but when running fails with:
-# `docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "/bin/app": is a directory: unknown: permission denied.`
-COPY --from=build-env --chown=0:10001 --chmod=010 /src/target/release/$BIN /bin/app
+COPY --from=build-env --chown=0:10001 --chmod=454 /src/target/release/$BIN /bin/app
 
 ENTRYPOINT [ "/bin/app" ]
