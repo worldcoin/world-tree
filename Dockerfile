@@ -63,8 +63,12 @@ RUN cargo build --release --bin $BIN --no-default-features
 RUN /src/target/release/$BIN --version
 
 ### Runtime stage
-# cc variant because we need libgcc and others
-FROM gcr.io/distroless/cc-debian12:nonroot
+# TODO: Switch to the distroless image once the app has matured
+#       for now using the debian:12 will allow us to inspect
+#       the running container at runtime
+## cc variant because we need libgcc and others
+# FROM gcr.io/distroless/cc-debian12:nonroot
+FROM debian:12
 
 ARG BIN=world-tree
 
