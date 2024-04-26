@@ -84,7 +84,7 @@ where
         // Sync the identity tree to the chain tip, also updating the chain_state with the latest roots on all chains
         tracing::info!("Syncing to head");
         self.sync_to_head().await?;
-        tracing::info!("Synced to head in {:?}", start_time.elapsed());
+        tracing::info!(sync_time = start_time.elapsed(), "Synced to head" );
 
         let (leaf_updates_tx, leaf_updates_rx) =
             tokio::sync::mpsc::channel(100);
