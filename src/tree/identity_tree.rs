@@ -428,7 +428,7 @@ where
         let next_leaf_index = self.tree.num_leaves();
 
         let leaf_updates = leaves
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(idx, value)| {
                 (LeafIndex((next_leaf_index + idx) as u32), *value)
@@ -746,7 +746,7 @@ mod test {
             .collect::<HashMap<LeafIndex, Hash>>();
 
         identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
+            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
 
         // Ensure that the root is correct
         assert_eq!(identity_tree.tree.root(), expected_root);
@@ -795,7 +795,7 @@ mod test {
             .collect::<HashMap<LeafIndex, Hash>>();
 
         identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
+            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
 
         // Apply updates to the tree
         identity_tree.apply_updates_to_root(&new_root);

@@ -149,7 +149,7 @@ where
                 );
                 let mut identity_tree = identity_tree.write().await;
 
-                identity_tree.append_updates(new_root, leaf_updates);
+                identity_tree.append_updates(new_root, leaf_updates)?;
 
                 // Update the root for the canonical chain
                 chain_state
@@ -410,7 +410,7 @@ where
         if !pending_updates.is_empty() {
             let mut identity_tree = self.identity_tree.write().await;
             for (root, leaves) in pending_updates {
-                identity_tree.append_updates(root, leaves);
+                identity_tree.append_updates(root, leaves)?;
             }
         }
 
@@ -636,7 +636,7 @@ where
             .identity_tree
             .read()
             .await
-            .compute_root(&identity_commitements, root)?;
+            .compute_root(identity_commitements, root)?;
 
         Ok(updated_root)
     }
