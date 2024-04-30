@@ -420,9 +420,9 @@ where
     }
 
     // Computes the updated root hash from a list of new leaves
-    pub fn compute_updated_root(
+    pub fn compute_root(
         &self,
-        leaves: Vec<Hash>,
+        leaves: &[Hash],
         root: Option<&Root>,
     ) -> Result<Hash, IdentityTreeError> {
         let next_leaf_index = self.tree.num_leaves();
@@ -431,7 +431,7 @@ where
             .into_iter()
             .enumerate()
             .map(|(idx, value)| {
-                (LeafIndex((next_leaf_index + idx) as u32), value)
+                (LeafIndex((next_leaf_index + idx) as u32), *value)
             })
             .collect::<HashMap<LeafIndex, Hash>>();
 

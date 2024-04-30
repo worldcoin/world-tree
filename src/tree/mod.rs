@@ -612,32 +612,34 @@ where
         Ok(inclusion_proof)
     }
 
-    //TODO: FIXME: do this
-    // pub async fn compute_root(
-    //     &self,
-    //     identity_commitments: &[Hash],
-    //     chain_id: Option<ChainId>,
-    // ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
-    //     let chain_state = self.chain_state.read().await;
+    /// Computes the updated root given a set of identity commitments.
+    /// If a chain ID is provided, the updated root is calculated from the latest root on the specified chain.
+    /// If no chain ID is provided, the updated root is calculated from the latest root bridged to all chains.
+    pub async fn compute_root(
+        &self,
+        identity_commitements: &[Hash],
+        chain_id: Option<ChainId>,
+    ) -> Result<Hash, WorldTreeError<M>> {
+        let chain_state = self.chain_state.read().await;
 
-    //     let root = if let Some(chain_id) = chain_id {
-    //         let root = chain_state
-    //             .get(&chain_id)
-    //             .ok_or(WorldTreeError::ChainIdNotFound)?;
+        let root = if let Some(chain_id) = chain_id {
+            let root = chain_state
+                .get(&chain_id)
+                .ok_or(WorldTreeError::ChainIdNotFound)?;
 
-    //         Some(root)
-    //     } else {
-    //         None
-    //     };
+            Some(root)
+        } else {
+            None
+        };
 
-    //     let inclusion_proof = self
-    //         .identity_tree
-    //         .read()
-    //         .await
-    //         .inclusion_proof(identity_commitment, root)?;
+        let updated_root = self
+            .identity_tree
+            .read()
+            .await
+            .compute_root(&identity_commitements, root)?;
 
-    //     Ok(inclusion_proof)
-    // }
+        Ok(updated_root)
+    }
 }
 
 macro_rules! primitive_newtype {
