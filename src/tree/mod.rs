@@ -611,6 +611,33 @@ where
 
         Ok(inclusion_proof)
     }
+
+    //TODO: FIXME: do this
+    // pub async fn compute_root(
+    //     &self,
+    //     identity_commitments: &[Hash],
+    //     chain_id: Option<ChainId>,
+    // ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
+    //     let chain_state = self.chain_state.read().await;
+
+    //     let root = if let Some(chain_id) = chain_id {
+    //         let root = chain_state
+    //             .get(&chain_id)
+    //             .ok_or(WorldTreeError::ChainIdNotFound)?;
+
+    //         Some(root)
+    //     } else {
+    //         None
+    //     };
+
+    //     let inclusion_proof = self
+    //         .identity_tree
+    //         .read()
+    //         .await
+    //         .inclusion_proof(identity_commitment, root)?;
+
+    //     Ok(inclusion_proof)
+    // }
 }
 
 macro_rules! primitive_newtype {

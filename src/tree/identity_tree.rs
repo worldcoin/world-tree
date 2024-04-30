@@ -141,12 +141,18 @@ where
     }
 
     // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
-    pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
+    pub fn append_updates(
+        &mut self,
+        root: Root,
+        leaf_updates: LeafUpdates,
+    ) -> Result<(), IdentityTreeError> {
         self.update_leaves(&leaf_updates);
 
-        let updates = self.construct_storage_updates(leaf_updates);
+        let updates = self.construct_storage_updates(leaf_updates, None)?;
         self.tree_updates.insert(root, updates);
         self.roots.insert(root.hash, root.nonce);
+
+        Ok(())
     }
 
     fn update_leaves(&mut self, leaf_updates: &LeafUpdates) {
@@ -169,10 +175,42 @@ where
     /// representing the updated nodes within the tree for a given root. Each update flattens the previous update and overwrites any nodes that change as a result
     /// from the newly added leaf updates. Storing the node updates for a given root allows for efficient construction
     /// of inclusion proofs for a given root without needing to recalculate nodes upon each request.
+    ///
+    /// # Arguments
+    ///
+    /// * `leaf_updates` - The new leaf values used to construct the storage updates.
+    ///
+    ///  * `root` - Optional root to construct updates from, otherwise the most recent update is used.
+    ///
+    /// # Returns
+    ///
+    /// `StorageUpdates` which is a hashmap of node indices to their updated values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specified root is not found in tree updates.
     fn construct_storage_updates(
         &self,
         leaf_updates: LeafUpdates,
-    ) -> StorageUpdates {
+        root: Option<&Root>,
+    ) -> Result<StorageUpdates, IdentityTreeError> {
+        // Get the previous update to flatten existing storage nodes into the newly updated nodes
+        // If a specific root is specified, get the update at that root
+        let prev_update = if let Some(root) = root {
+            if let Some(update) = self.tree_updates.get(root) {
+                update.clone()
+            } else {
+                return Err(IdentityTreeError::RootNotFound);
+            }
+        } else {
+            // Otherwise, get the most recent update
+            if let Some(update) = self.tree_updates.iter().last() {
+                update.1.clone()
+            } else {
+                HashMap::new()
+            }
+        };
+
         let mut updates = HashMap::new();
         let mut node_queue = VecDeque::new();
 
@@ -186,14 +224,6 @@ where
             let parent_idx = (storage_idx - 1) / 2;
             node_queue.push_front(parent_idx);
         }
-
-        // Get the previous update to flatten existing storage nodes into the newly updated nodes
-        let prev_update = if let Some(update) = self.tree_updates.iter().last()
-        {
-            update.1.clone()
-        } else {
-            HashMap::new()
-        };
 
         while let Some(node_idx) = node_queue.pop_back() {
             // Check if the parent is already in the updates hashmap, indicating it has already been calculated
@@ -252,7 +282,7 @@ where
             updates.entry(node_idx).or_insert(hash);
         }
 
-        updates
+        Ok(updates)
     }
 
     // Applies updates up to the specified root, inclusive
@@ -387,6 +417,34 @@ where
         }
 
         Ok(semaphore::merkle_tree::Proof(proof))
+    }
+
+    // Computes the updated root hash from a list of new leaves
+    pub fn compute_updated_root(
+        &self,
+        leaves: Vec<Hash>,
+        root: Option<&Root>,
+    ) -> Result<Hash, IdentityTreeError> {
+        let next_leaf_index = self.tree.num_leaves();
+
+        let leaf_updates = leaves
+            .into_iter()
+            .enumerate()
+            .map(|(idx, value)| {
+                (LeafIndex((next_leaf_index + idx) as u32), value)
+            })
+            .collect::<HashMap<LeafIndex, Hash>>();
+
+        let mut storage_updates = self.construct_storage_updates(
+            LeafUpdates::Insert(leaf_updates),
+            root,
+        )?;
+
+        let updated_root = storage_updates
+            .remove(&NodeIndex(0))
+            .ok_or(IdentityTreeError::RootNotFound)?;
+
+        Ok(updated_root)
     }
 }
 
