@@ -23,8 +23,11 @@ provider.throttle = 150
 window_size = 10000
 
 
+# Note that the following bridged trees are identitified with [bridged_trees.<network>]
+# however this could be any unique identifier, e.g. [bridged_trees.0], [bridged_trees.a], etc.
+
 # OP Mainnet
-[[bridged_trees]]
+[bridged_trees.optimism]
 # Address of the BridgedWorldId contract
 address = "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
 # Creation block of the BridgedWorldId contract
@@ -38,7 +41,7 @@ window_size = 10000
 
 
 # Polygon
-[[bridged_trees]]
+[bridged_trees.polygon]
 # Address of the BridgedWorldId contract
 address = "0xa6d85F3b3bE6Ff6DC52C3aaBe9A35d0ce252b79F"
 # Creation block of the BridgedWorldId contract

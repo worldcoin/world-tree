@@ -15,7 +15,7 @@ pub struct ServiceConfig {
     /// Configuration for tree cache
     pub cache: CacheConfig,
     /// Configuration for bridged trees
-    #[serde(with = "vec_map", default)]
+    #[serde(with = "map_vec", default)]
     pub bridged_trees: Vec<TreeConfig>,
     /// Socket at which to serve the service
     #[serde(default = "default::socket_address")]
@@ -109,7 +109,8 @@ mod default {
     }
 }
 
-mod vec_map {
+// Utility functions to convert map to vec
+mod map_vec {
     use std::collections::BTreeMap;
 
     use serde::{Deserialize, Deserializer};
@@ -119,7 +120,7 @@ mod vec_map {
         D: Deserializer<'de>,
         T: Deserialize<'de>,
     {
-        let v: BTreeMap<usize, T> = Deserialize::deserialize(deserializer)?;
+        let v: BTreeMap<String, T> = Deserialize::deserialize(deserializer)?;
 
         Ok(v.into_values().collect())
     }
