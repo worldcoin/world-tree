@@ -43,10 +43,6 @@ where
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
         let mut handles = vec![];
 
-        // Spawn a task to sync and maintain the state of the world tree
-        tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn().await?);
-
         // Initialize a new router and spawn the server
         tracing::info!(?addr, "Initializing axum server");
 
@@ -65,6 +61,10 @@ where
 
             Ok(())
         });
+
+        // Spawn a task to sync and maintain the state of the world tree
+        tracing::info!("Spawning world tree");
+        handles.extend(self.world_tree.spawn().await?);
 
         handles.push(server_handle);
 

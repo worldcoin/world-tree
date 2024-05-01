@@ -8,7 +8,7 @@ pub mod tree_manager;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
@@ -350,6 +350,8 @@ where
 
         self.build_tree_from_updates(identity_updates).await?;
 
+        self.synced.store(true, Ordering::SeqCst);
+
         Ok(())
     }
 
@@ -591,6 +593,10 @@ where
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
     ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
+        if !self.synced.load(Ordering::SeqCst) {
+            return Err(WorldTreeError::TreeNotSynced);
+        }
+
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {
@@ -620,6 +626,10 @@ where
         identity_commitements: &[Hash],
         chain_id: Option<ChainId>,
     ) -> Result<Hash, WorldTreeError<M>> {
+        if !self.synced.load(Ordering::SeqCst) {
+            return Err(WorldTreeError::TreeNotSynced);
+        }
+
         let chain_state = self.chain_state.read().await;
 
         let root = if let Some(chain_id) = chain_id {
