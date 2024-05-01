@@ -436,8 +436,6 @@ where
             root,
         )?;
 
-        dbg!(&storage_updates);
-
         let updated_root = storage_updates
             .remove(&NodeIndex(0))
             .ok_or(IdentityTreeError::RootNotFound)?;
