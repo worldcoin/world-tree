@@ -19,6 +19,8 @@ where
     BridgedRootChannelClosed,
     #[error("Chain ID not found")]
     ChainIdNotFound,
+    #[error("Tree not synced")]
+    TreeNotSynced,
     #[error("Transaction hash not found")]
     TransactionHashNotFound,
     #[error("Transaction found")]
