@@ -141,12 +141,18 @@ where
     }
 
     // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
-    pub fn append_updates(&mut self, root: Root, leaf_updates: LeafUpdates) {
+    pub fn append_updates(
+        &mut self,
+        root: Root,
+        leaf_updates: LeafUpdates,
+    ) -> Result<(), IdentityTreeError> {
         self.update_leaves(&leaf_updates);
 
-        let updates = self.construct_storage_updates(leaf_updates);
+        let updates = self.construct_storage_updates(leaf_updates, None)?;
         self.tree_updates.insert(root, updates);
         self.roots.insert(root.hash, root.nonce);
+
+        Ok(())
     }
 
     fn update_leaves(&mut self, leaf_updates: &LeafUpdates) {
@@ -169,10 +175,42 @@ where
     /// representing the updated nodes within the tree for a given root. Each update flattens the previous update and overwrites any nodes that change as a result
     /// from the newly added leaf updates. Storing the node updates for a given root allows for efficient construction
     /// of inclusion proofs for a given root without needing to recalculate nodes upon each request.
+    ///
+    /// # Arguments
+    ///
+    /// * `leaf_updates` - The new leaf values used to construct the storage updates.
+    ///
+    ///  * `root` - Optional root to construct updates from, otherwise the most recent update is used.
+    ///
+    /// # Returns
+    ///
+    /// `StorageUpdates` which is a hashmap of node indices to their updated values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the specified root is not found in tree updates.
     fn construct_storage_updates(
         &self,
         leaf_updates: LeafUpdates,
-    ) -> StorageUpdates {
+        root: Option<&Root>,
+    ) -> Result<StorageUpdates, IdentityTreeError> {
+        // Get the previous update to flatten existing storage nodes into the newly updated nodes
+        // If a specific root is specified, get the update at that root
+        let prev_update = if let Some(root) = root {
+            if let Some(update) = self.tree_updates.get(root) {
+                update.clone()
+            } else {
+                return Err(IdentityTreeError::RootNotFound);
+            }
+        } else {
+            // Otherwise, get the most recent update
+            if let Some(update) = self.tree_updates.iter().last() {
+                update.1.clone()
+            } else {
+                HashMap::new()
+            }
+        };
+
         let mut updates = HashMap::new();
         let mut node_queue = VecDeque::new();
 
@@ -183,26 +221,12 @@ where
             updates.insert(storage_idx.into(), hash);
 
             // Queue the parent index
-            let parent_idx = (storage_idx - 1) / 2;
-            node_queue.push_front(parent_idx);
+            node_queue.push_front((storage_idx - 1) / 2);
         }
 
-        // Get the previous update to flatten existing storage nodes into the newly updated nodes
-        let prev_update = if let Some(update) = self.tree_updates.iter().last()
-        {
-            update.1.clone()
-        } else {
-            HashMap::new()
-        };
-
         while let Some(node_idx) = node_queue.pop_back() {
-            // Check if the parent is already in the updates hashmap, indicating it has already been calculated
-            let parent_idx = if node_idx == 0 {
-                continue;
-            } else {
-                (node_idx - 1) / 2
-            };
-            if updates.contains_key(&parent_idx.into()) {
+            // Check if the node index is already in the updates hashmap, indicating it has already been calculated
+            if updates.contains_key(&node_idx.into()) {
                 continue;
             }
 
@@ -242,9 +266,11 @@ where
             updates.insert(node_idx.into(), hash);
 
             // Queue the parent index if not the root
-            if node_idx != 0 {
-                node_queue.push_front(parent_idx);
-            }
+            if node_idx == 0 {
+                break;
+            } else {
+                node_queue.push_front((node_idx - 1) / 2);
+            };
         }
 
         // Flatten any remaining updates from the previous update
@@ -252,7 +278,7 @@ where
             updates.entry(node_idx).or_insert(hash);
         }
 
-        updates
+        Ok(updates)
     }
 
     // Applies updates up to the specified root, inclusive
@@ -387,6 +413,34 @@ where
         }
 
         Ok(semaphore::merkle_tree::Proof(proof))
+    }
+
+    // Computes the updated root hash from a list of new leaves
+    pub fn compute_root(
+        &self,
+        leaves: &[Hash],
+        root: Option<&Root>,
+    ) -> Result<Hash, IdentityTreeError> {
+        let next_leaf_index = self.tree.num_leaves();
+
+        let leaf_updates = leaves
+            .iter()
+            .enumerate()
+            .map(|(idx, value)| {
+                (LeafIndex((next_leaf_index + idx) as u32), *value)
+            })
+            .collect::<HashMap<LeafIndex, Hash>>();
+
+        let mut storage_updates = self.construct_storage_updates(
+            LeafUpdates::Insert(leaf_updates),
+            root,
+        )?;
+
+        let updated_root = storage_updates
+            .remove(&NodeIndex(0))
+            .ok_or(IdentityTreeError::RootNotFound)?;
+
+        Ok(updated_root)
     }
 }
 
@@ -663,8 +717,6 @@ mod test {
             identity_tree.insert(idx as u32, *leaf)?;
         }
 
-        let expected_root = identity_tree.tree.root();
-
         // Generate the updated tree with all of the leaves
         let updated_tree: CascadingMerkleTree<PoseidonHash> =
             CascadingMerkleTree::new_with_leaves(
@@ -681,20 +733,29 @@ mod test {
         };
 
         // Collect the second half of the leaves
+        let offset = NUM_LEAVES / 2;
         let leaf_updates = leaves[(NUM_LEAVES / 2)..NUM_LEAVES]
             .iter()
             .enumerate()
-            .map(|(idx, value)| ((idx as u32).into(), *value))
+            .map(|(idx, value)| (((idx + offset) as u32).into(), *value))
             .collect::<HashMap<LeafIndex, Hash>>();
 
-        identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
+        // Cache the expected root as the tree root should not change from the appended updates
+        let expected_root = identity_tree.tree.root();
 
-        // Ensure that the root is correct
+        identity_tree
+            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
+
+        // Ensure that the root is correct and the updates are stored
         assert_eq!(identity_tree.tree.root(), expected_root);
         assert_eq!(identity_tree.tree_updates.len(), 1);
 
         //TODO: assert expected updates
+
+        identity_tree.apply_updates_to_root(&new_root);
+
+        assert_eq!(identity_tree.tree.root(), updated_tree.root());
+        assert_eq!(identity_tree.tree_updates.len(), 0);
 
         Ok(())
     }
@@ -737,7 +798,7 @@ mod test {
             .collect::<HashMap<LeafIndex, Hash>>();
 
         identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates));
+            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
 
         // Apply updates to the tree
         identity_tree.apply_updates_to_root(&new_root);
@@ -753,6 +814,40 @@ mod test {
             assert_eq!(proof.root, expected_root);
             assert_eq!(proof.proof, expected_tree.proof(leaf_idx));
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compute_root() -> eyre::Result<()> {
+        let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+
+        // Generate the first half of the leaves and insert into the tree
+        let leaves = generate_all_leaves();
+
+        for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
+            identity_tree.insert(idx as u32, *leaf)?;
+        }
+
+        // Generate the updated tree with all of the leaves
+        let expected_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new_with_leaves(
+                vec![],
+                TREE_DEPTH,
+                &Hash::ZERO,
+                &leaves,
+            );
+
+        // Collect the second half of the leaves
+        let leaf_updates = leaves[(NUM_LEAVES / 2)..]
+            .iter()
+            .cloned()
+            .collect::<Vec<Hash>>();
+
+        let updated_root = identity_tree.compute_root(&leaf_updates, None)?;
+        let expected_root = expected_tree.root();
+
+        assert_eq!(updated_root, expected_root);
 
         Ok(())
     }
@@ -797,7 +892,7 @@ mod test {
             (root, updates)
         };
 
-        identity_tree.append_updates(root_012, updates);
+        identity_tree.append_updates(root_012, updates)?;
 
         // Simulate and create updates
         let (root_0123, updates) = {
@@ -826,7 +921,7 @@ mod test {
             (root, updates)
         };
 
-        identity_tree.append_updates(root_0123, updates);
+        identity_tree.append_updates(root_0123, updates)?;
 
         let proof = identity_tree
             .inclusion_proof(leaves[3], Some(&root_0123))?

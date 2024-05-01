@@ -52,6 +52,7 @@ where
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
+            .route("/computeRoot", axum::routing::post(compute_root))
             .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
@@ -87,6 +88,20 @@ impl InclusionProofRequest {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ComputeRootRequest {
+    pub identity_commitments: Vec<Hash>,
+}
+
+impl ComputeRootRequest {
+    pub fn new(identity_commitments: Vec<Hash>) -> ComputeRootRequest {
+        Self {
+            identity_commitments,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChainIdQueryParams {
     chain_id: Option<ChainId>,
 }
@@ -108,4 +123,18 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
 #[tracing::instrument(level = "debug")]
 pub async fn health() -> StatusCode {
     StatusCode::OK
+}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn compute_root<M: Middleware + 'static>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+    Query(query_params): Query<ChainIdQueryParams>,
+    Json(req): Json<ComputeRootRequest>,
+) -> Result<(StatusCode, Json<Hash>), WorldTreeError<M>> {
+    let chain_id = query_params.chain_id;
+    let updated_root = world_tree
+        .compute_root(&req.identity_commitments, chain_id)
+        .await?;
+
+    Ok((StatusCode::OK, Json(updated_root)))
 }

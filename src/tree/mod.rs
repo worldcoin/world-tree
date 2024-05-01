@@ -149,7 +149,7 @@ where
                 );
                 let mut identity_tree = identity_tree.write().await;
 
-                identity_tree.append_updates(new_root, leaf_updates);
+                identity_tree.append_updates(new_root, leaf_updates)?;
 
                 // Update the root for the canonical chain
                 chain_state
@@ -410,7 +410,7 @@ where
         if !pending_updates.is_empty() {
             let mut identity_tree = self.identity_tree.write().await;
             for (root, leaves) in pending_updates {
-                identity_tree.append_updates(root, leaves);
+                identity_tree.append_updates(root, leaves)?;
             }
         }
 
@@ -610,6 +610,35 @@ where
             .inclusion_proof(identity_commitment, root)?;
 
         Ok(inclusion_proof)
+    }
+
+    /// Computes the updated root given a set of identity commitments.
+    /// If a chain ID is provided, the updated root is calculated from the latest root on the specified chain.
+    /// If no chain ID is provided, the updated root is calculated from the latest root bridged to all chains.
+    pub async fn compute_root(
+        &self,
+        identity_commitements: &[Hash],
+        chain_id: Option<ChainId>,
+    ) -> Result<Hash, WorldTreeError<M>> {
+        let chain_state = self.chain_state.read().await;
+
+        let root = if let Some(chain_id) = chain_id {
+            let root = chain_state
+                .get(&chain_id)
+                .ok_or(WorldTreeError::ChainIdNotFound)?;
+
+            Some(root)
+        } else {
+            None
+        };
+
+        let updated_root = self
+            .identity_tree
+            .read()
+            .await
+            .compute_root(identity_commitements, root)?;
+
+        Ok(updated_root)
     }
 }
 
