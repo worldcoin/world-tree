@@ -39,6 +39,8 @@ where
     EthABIError(#[from] ethers::abi::Error),
     #[error(transparent)]
     HyperError(#[from] hyper::Error),
+    #[error("cMix server error: {0}")]
+    CMixError(String),
 }
 
 #[derive(Error, Debug)]

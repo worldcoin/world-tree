@@ -8,6 +8,7 @@ use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
+use xxdk::service::{CMixServer, CMixServerConfig, IncomingRequest};
 
 use super::error::WorldTreeError;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
@@ -40,6 +41,7 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
+        cmix_config: CMixServerConfig,
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
         let mut handles = vec![];
 
@@ -62,11 +64,20 @@ where
             Ok(())
         });
 
+        let xx_router = xxdk::service::Router::new(xx_demo_handler);
+
+        let xx_server_handle = tokio::spawn(async move {
+            tracing::info!("Starting cMix RPC server");
+            CMixServer::serve(xx_router, cmix_config).await.map_err(|e| WorldTreeError::CMixError(e))?;
+            Ok(())
+        });
+
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
         handles.extend(self.world_tree.spawn().await?);
 
         handles.push(server_handle);
+        handles.push(xx_server_handle);
 
         Ok(handles)
     }
@@ -137,4 +148,19 @@ pub async fn compute_root<M: Middleware + 'static>(
         .await?;
 
     Ok((StatusCode::OK, Json(updated_root)))
+}
+
+pub async fn xx_demo_handler(request: IncomingRequest) -> Result<Vec<u8>, String> {
+    let text = String::from_utf8_lossy(&request.text);
+    let sender: String = request.sender_key.iter().map(|b| format!("{b:02x}")).collect();
+    tracing::info!(
+        sender,
+        timestamp = request.timestamp,
+        text = ?text.as_ref(),
+        "Received message via cMix",
+    );
+
+    let mut resp = Vec::from(b"Hi from world-tree! Echoed message: ");
+    resp.extend_from_slice(&request.text);
+    Ok(resp)
 }
