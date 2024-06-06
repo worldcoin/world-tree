@@ -106,7 +106,7 @@ pub struct ChainIdQueryParams {
     chain_id: Option<ChainId>,
 }
 
-#[tracing::instrument(level = "debug", skip(world_tree))]
+#[tracing::instrument(skip(world_tree))]
 pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
