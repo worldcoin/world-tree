@@ -6482,6 +6482,8 @@ dependencies = [
  "hex",
  "hyper",
  "metrics 0.21.1",
+ "opentelemetry",
+ "opentelemetry-datadog",
  "rand",
  "rayon",
  "reqwest",
