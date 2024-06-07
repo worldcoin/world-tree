@@ -6611,7 +6611,7 @@ dependencies = [
 [[package]]
 name = "xxdk"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=312a911910da0c6ee81d0e7dfdfd3d4ae011457a#312a911910da0c6ee81d0e7dfdfd3d4ae011457a"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=2b8d2239c2951906f086533a8c2097da9d39bb41#2b8d2239c2951906f086533a8c2097da9d39bb41"
 dependencies = [
  "base64 0.22.1",
  "lazy_static",
@@ -6625,7 +6625,7 @@ dependencies = [
 [[package]]
 name = "xxdk-sys"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=312a911910da0c6ee81d0e7dfdfd3d4ae011457a#312a911910da0c6ee81d0e7dfdfd3d4ae011457a"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=2b8d2239c2951906f086533a8c2097da9d39bb41#2b8d2239c2951906f086533a8c2097da9d39bb41"
 dependencies = [
  "bindgen",
  "cgo",
