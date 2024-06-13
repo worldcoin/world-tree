@@ -47,10 +47,18 @@ pub enum IdentityTreeError {
     RootNotFound,
     #[error("Leaf already exists")]
     LeafAlreadyExists,
+    #[error("Leaf does not exist in tree")]
+    LeafNotFound,
     #[error(transparent)]
     MmapVecError(#[from] eyre::Report),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+}
+
+impl IdentityTreeError {
+    fn to_status_code(&self) -> StatusCode {
+        todo!()
+    }
 }
 
 impl<M> WorldTreeError<M>
@@ -58,7 +66,7 @@ where
     M: Middleware + 'static,
 {
     fn to_status_code(&self) -> StatusCode {
-        StatusCode::INTERNAL_SERVER_ERROR
+        todo!()
     }
 }
 
