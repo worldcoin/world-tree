@@ -57,7 +57,15 @@ pub enum IdentityTreeError {
 
 impl IdentityTreeError {
     fn to_status_code(&self) -> StatusCode {
-        todo!()
+        match self {
+            IdentityTreeError::RootNotFound
+            | IdentityTreeError::LeafNotFound => StatusCode::NOT_FOUND,
+            IdentityTreeError::MmapVecError(_)
+            | IdentityTreeError::IoError(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            IdentityTreeError::LeafAlreadyExists => StatusCode::CONFLICT,
+        }
     }
 }
 
@@ -66,7 +74,11 @@ where
     M: Middleware + 'static,
 {
     fn to_status_code(&self) -> StatusCode {
-        todo!()
+        match self {
+            WorldTreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
+            WorldTreeError::IdentityTreeError(e) => e.to_status_code(),
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }
 
