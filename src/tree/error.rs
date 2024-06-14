@@ -60,11 +60,7 @@ impl IdentityTreeError {
         match self {
             IdentityTreeError::RootNotFound
             | IdentityTreeError::LeafNotFound => StatusCode::NOT_FOUND,
-            IdentityTreeError::MmapVecError(_)
-            | IdentityTreeError::IoError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-            IdentityTreeError::LeafAlreadyExists => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
