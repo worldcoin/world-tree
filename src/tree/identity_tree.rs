@@ -345,7 +345,7 @@ where
     ) -> Result<Option<InclusionProof>, IdentityTreeError> {
         let leaf_idx = match self.leaves.get(&leaf) {
             Some(idx) => idx,
-            None => return Ok(None),
+            None => return Err(IdentityTreeError::LeafNotFound),
         };
 
         if let Some(root) = root {

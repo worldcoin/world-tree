@@ -162,7 +162,7 @@ const identityCommitments = new SharedArray('identityCommitments', function () {
     "0x25c37cc5bb4f6b754e22282f621c4b498c3b9075cd3cdd4784f93a0e81c64ea9",
     "0x06c9177cf96e954c24bb3723d6002d6f33924c11e52cd75009e9e4414f14aa9c",
     "0x12cf4475a0dee711f3979426bec56c8aa883282874fce0d97464c0939011a841"
-];
+  ];
 });
 
 
@@ -171,7 +171,7 @@ const baseEndpoint = __ENV.TREE_AVAILABILITY_SERVICE_ENDPOINT;
 if (!baseEndpoint) {
   throw new Error('Base endpoint not specified. Use -e TREE_AVAILABILITY_SERVICE_ENDPOINT=your_endpoint');
 }
-const endpoint = `${baseEndpoint}/inclusionProof?chainId=1`;
+const endpoint = `${baseEndpoint}/inclusionProof`;
 
 export default function () {
   const identityCommitment = identityCommitments[Math.floor(Math.random() * identityCommitments.length)];
