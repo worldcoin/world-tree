@@ -1028,10 +1028,6 @@ mod test {
 
         // MmapVec uses the first 4 bytes for metadata (capacity)
         // CascadingMerkleTree uses the first item (32 bytes) for the number of leaves
-        // We also need to maintain the first leaf as it was, because it'll be used to determine the index
-        // for the proof
-        //
-        // Therefore we can scramble the rest of the file, but the values must remain valid Field elements
         let offset = std::mem::size_of::<usize>() // metadata
             + std::mem::size_of::<Hash>(); // the zeroth node - used to store number of leaves
 
@@ -1084,10 +1080,6 @@ mod test {
 
         // MmapVec uses the first 4 bytes for metadata (capacity)
         // CascadingMerkleTree uses the first item (32 bytes) for the number of leaves
-        // We also need to maintain the first leaf as it was, because it'll be used to determine the index
-        // for the proof
-        //
-        // Therefore we can scramble the rest of the file, but the values must remain valid Field elements
         let offset = std::mem::size_of::<usize>() // metadata
             + std::mem::size_of::<Hash>(); // the zeroth node - used to store number of leaves
 
