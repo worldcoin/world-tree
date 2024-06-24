@@ -3,3 +3,4 @@ max_width = 80
 # Nightly only - but very useful!
 group_imports = "StdExternalCrate"
 imports_granularity = "Module"
+edition="2021"

@@ -6611,7 +6611,7 @@ dependencies = [
 [[package]]
 name = "xxdk"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=2b8d2239c2951906f086533a8c2097da9d39bb41#2b8d2239c2951906f086533a8c2097da9d39bb41"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=44b9bf5e31a53eee1daf2b68af568a82340aee96#44b9bf5e31a53eee1daf2b68af568a82340aee96"
 dependencies = [
  "base64 0.22.1",
  "lazy_static",
@@ -6619,13 +6619,14 @@ dependencies = [
  "serde",
  "tokio",
  "tower",
+ "tracing",
  "xxdk-sys",
 ]
 
 [[package]]
 name = "xxdk-sys"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=2b8d2239c2951906f086533a8c2097da9d39bb41#2b8d2239c2951906f086533a8c2097da9d39bb41"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=44b9bf5e31a53eee1daf2b68af568a82340aee96#44b9bf5e31a53eee1daf2b68af568a82340aee96"
 dependencies = [
  "bindgen",
  "cgo",

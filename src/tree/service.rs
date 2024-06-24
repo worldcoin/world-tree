@@ -64,11 +64,16 @@ where
             Ok(())
         });
 
-        let xx_router = xxdk::service::Router::new(xx_demo_handler, self.world_tree.clone());
+        let xx_router = xxdk::service::Router::new(
+            xx_demo_handler,
+            self.world_tree.clone(),
+        );
 
         let xx_server_handle = tokio::spawn(async move {
             tracing::info!("Starting cMix RPC server");
-            CMixServer::serve(xx_router, cmix_config).await.map_err(|e| WorldTreeError::CMixError(e))?;
+            CMixServer::serve(xx_router, cmix_config)
+                .await
+                .map_err(|e| WorldTreeError::CMixError(e))?;
             Ok(())
         });
 
@@ -152,31 +157,17 @@ pub async fn compute_root<M: Middleware + 'static>(
 
 pub async fn xx_demo_handler<M: Middleware>(
     state: Arc<WorldTree<M>>,
-    request: IncomingRequest
+    request: IncomingRequest,
 ) -> Result<Vec<u8>, String> {
-    let sender: String = request.sender_key.iter().map(|b| format!("{b:02x}")).collect();
-    tracing::info!(
-        sender,
-        timestamp = request.timestamp,
-        "Received message via cMix",
-    );
-    let req: InclusionProofRequest = serde_json::from_slice(&request.text).map_err(|e| e.to_string())?;
+    tracing::info!("Received message via cMix",);
+    let req: InclusionProofRequest =
+        serde_json::from_slice(&request.request).map_err(|e| e.to_string())?;
     tracing::debug!(?req, "Request decoded");
-    let proof = state.inclusion_proof(req.identity_commitment, None).await.map_err(|e| e.to_string())?;
+    let proof = state
+        .inclusion_proof(req.identity_commitment, None)
+        .await
+        .map_err(|e| e.to_string())?;
     let res = serde_json::to_vec(&proof).map_err(|e| e.to_string())?;
     tracing::debug!(response_len = res.len(), "cmix response");
     Ok(res)
-
-    //let text = String::from_utf8_lossy(&request.text);
-    //let sender: String = request.sender_key.iter().map(|b| format!("{b:02x}")).collect();
-    //tracing::info!(
-    //    sender,
-    //    timestamp = request.timestamp,
-    //    text = ?text.as_ref(),
-    //    "Received message via cMix",
-    //);
-
-    //let mut resp = Vec::from(b"Hi from world-tree! Echoed message: ");
-    //resp.extend_from_slice(&request.text);
-    //Ok(resp)
 }
