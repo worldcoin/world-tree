@@ -52,7 +52,7 @@ impl ServiceConfig {
             )
             .build()?;
 
-        let config = settings.try_deserialize::<Self>()?;
+        let config = serde_path_to_error::deserialize(settings)?;
 
         Ok(config)
     }

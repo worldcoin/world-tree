@@ -7,6 +7,8 @@ use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use opentelemetry;
+use opentelemetry_datadog::DatadogPropagator;
 use telemetry_batteries::metrics::statsd::StatsdBattery;
 use telemetry_batteries::tracing::datadog::DatadogBattery;
 use telemetry_batteries::tracing::TracingShutdownHandle;
@@ -36,6 +38,7 @@ pub async fn main() -> eyre::Result<()> {
     let config = ServiceConfig::load(opts.config.as_deref())?;
 
     let _tracing_shutdown_handle = if let Some(telemetry) = &config.telemetry {
+        opentelemetry::global::set_text_map_propagator(DatadogPropagator::new());
         let tracing_shutdown_handle = DatadogBattery::init(
             telemetry.traces_endpoint.as_deref(),
             &telemetry.service_name,

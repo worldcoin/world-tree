@@ -733,9 +733,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.15.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d68c57235a3a081186990eca2867354726650f42f7516ca50c28d6281fd15"
+checksum = "b236fc92302c97ed75b38da1f4917b5cdda4984745740f153a5d3059e48d725e"
 
 [[package]]
 name = "byteorder"
@@ -6550,6 +6550,7 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-middleware",
+ "bytemuck",
  "clap 4.5.4",
  "config",
  "criterion 0.5.1",
@@ -6562,6 +6563,8 @@ dependencies = [
  "hex",
  "hyper",
  "metrics 0.21.1",
+ "opentelemetry",
+ "opentelemetry-datadog",
  "rand",
  "rayon",
  "reqwest",
@@ -6569,8 +6572,10 @@ dependencies = [
  "semaphore",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "take_mut",
  "telemetry-batteries",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",
