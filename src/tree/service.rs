@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeError;
+use super::identity_tree::Root;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -49,7 +51,7 @@ where
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/computeRoot", axum::routing::post(compute_root))
-            .route("/health", axum::routing::get(health))
+            .route("/health", axum::routing::post(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
@@ -120,9 +122,13 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }
 
-#[tracing::instrument(level = "debug")]
-pub async fn health() -> StatusCode {
-    StatusCode::OK
+#[tracing::instrument(level = "debug", skip(world_tree))]
+#[allow(clippy::complexity)]
+pub async fn health<M: Middleware + 'static>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> Result<Json<HashMap<u64, Root>>, WorldTreeError<M>> {
+    let chain_state = world_tree.chain_state.read().await.clone();
+    Ok(Json(chain_state))
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]

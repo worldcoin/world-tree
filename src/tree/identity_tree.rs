@@ -9,7 +9,7 @@ use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
 use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::error::IdentityTreeError;
 use super::{Hash, LeafIndex, NodeIndex};
@@ -514,7 +514,7 @@ pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     (depth as usize, offset)
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Eq, Hash, Clone, Copy, Debug)]
 pub struct Root {
     pub hash: Hash,
     //NOTE: note that this assumes that there is only one wallet that sequences transactions
