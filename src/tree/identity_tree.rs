@@ -71,10 +71,9 @@ impl IdentityTree<MmapVec<Hash>> {
                 &Hash::ZERO,
             ) {
                 Ok(tree) => tree,
-                Err(e) => {
+                Err(_) => {
                     tracing::error!(
-                        "Failed to restore tree from cache: {:?}. Purging cache and creating new tree",
-                        e
+                        "Failed to restore tree from cache, purging cache and creating new tree"
                     );
 
                     // Remove the existing cache and create a new cache file
@@ -568,7 +567,6 @@ impl InclusionProof {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
-    use std::path::PathBuf;
 
     use eyre::{eyre, ContextCompat};
     use rand::{Rng, SeedableRng};
@@ -980,7 +978,8 @@ mod test {
 
     #[test]
     fn test_mmap_cache() -> eyre::Result<()> {
-        let path = PathBuf::from("tree_cache");
+        let temp_file = NamedTempFile::new()?;
+        let path = temp_file.path().to_path_buf();
 
         let mut identity_tree =
             IdentityTree::new_with_cache(TREE_DEPTH, path.clone())?;
@@ -1020,23 +1019,15 @@ mod test {
             identity_tree.tree.push(*leaf).unwrap();
         }
 
-        let mut cache = unsafe { MmapVec::<Hash>::restore(&path)? };
-        for item in cache.iter_mut() {
-            *item = Hash::ZERO;
-        }
+        let mut cache: MmapVec<ruint::Uint<256, 4>> =
+            unsafe { MmapVec::<Hash>::restore(&path)? };
+        cache[0] = Hash::ZERO;
 
         let restored_tree =
             IdentityTree::new_with_cache(TREE_DEPTH, path).unwrap();
 
-        assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
-
-        for leaf in leaves.iter() {
-            let proof = restored_tree
-                .inclusion_proof(*leaf, None)?
-                .expect("Could not get proof");
-
-            assert!(proof.verify(*leaf));
-        }
+        assert!(restored_tree.tree.num_leaves() == 0);
+        assert!(restored_tree.leaves.is_empty());
 
         Ok(())
     }

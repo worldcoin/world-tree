@@ -7,7 +7,6 @@ use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use opentelemetry;
 use opentelemetry_datadog::DatadogPropagator;
 use telemetry_batteries::metrics::statsd::StatsdBattery;
 use telemetry_batteries::tracing::datadog::DatadogBattery;
