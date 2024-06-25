@@ -6494,6 +6494,7 @@ dependencies = [
  "serde_path_to_error",
  "take_mut",
  "telemetry-batteries",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",

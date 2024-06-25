@@ -573,8 +573,10 @@ mod test {
     use eyre::{eyre, ContextCompat};
     use rand::{Rng, SeedableRng};
     use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+    use semaphore::generic_storage::MmapVec;
     use semaphore::merkle_tree::Branch;
     use semaphore::poseidon_tree::PoseidonHash;
+    use tempfile::NamedTempFile;
 
     use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates, Root};
     use crate::tree::identity_tree::{
@@ -990,6 +992,41 @@ mod test {
         }
 
         let restored_tree = IdentityTree::new_with_cache(TREE_DEPTH, path)?;
+
+        assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
+
+        for leaf in leaves.iter() {
+            let proof = restored_tree
+                .inclusion_proof(*leaf, None)?
+                .expect("Could not get proof");
+
+            assert!(proof.verify(*leaf));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_purge_cache() -> eyre::Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let path = temp_file.path().to_path_buf();
+
+        let mut identity_tree =
+            IdentityTree::new_with_cache(TREE_DEPTH, path.clone()).unwrap();
+
+        let leaves = generate_all_leaves();
+
+        for leaf in leaves.iter() {
+            identity_tree.tree.push(*leaf).unwrap();
+        }
+
+        let mut cache = unsafe { MmapVec::<Hash>::restore(&path)? };
+        for item in cache.iter_mut() {
+            *item = Hash::ZERO;
+        }
+
+        let restored_tree =
+            IdentityTree::new_with_cache(TREE_DEPTH, path).unwrap();
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
