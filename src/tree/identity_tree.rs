@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
@@ -42,25 +42,16 @@ impl IdentityTree<Vec<Hash>> {
 impl IdentityTree<MmapVec<Hash>> {
     pub fn new_with_cache(
         depth: usize,
-        file_path: impl AsRef<Path>,
+        file_path: PathBuf,
     ) -> Result<Self, IdentityTreeError> {
-        let file_path = file_path.as_ref();
-
         let mmap_vec: MmapVec<Hash> =
-            // SAFETY: The safety requirements of the `restore` function are such that there cannot exist another mutable
-            //         memory mapping to the same file in this process or any other.
-            //         Unfortunately since there exists no method to exclusively lock files this guarantee must be upheld by the deployment configuration.
-            //
-            //         We must assume that the deployment is configured such that this file is being exclusively accessed by by this process.
-            unsafe {
-                match MmapVec::restore(file_path)  {
-                    Ok(mmap_vec) => mmap_vec,
+            match unsafe { MmapVec::restore(&file_path) } {
+                Ok(mmap_vec) => mmap_vec,
 
-                    Err(_e) =>  {
-                        tracing::info!("Cache not found, creating new cache file");
-                        MmapVec::open_create(file_path)?
-                    },
-                }
+                Err(_e) => unsafe {
+                    tracing::info!("Cache not found, creating new cache file");
+                    MmapVec::open_create(file_path)?
+                },
             };
 
         let tree = if mmap_vec.is_empty() {
@@ -72,17 +63,11 @@ impl IdentityTree<MmapVec<Hash>> {
         } else {
             let now = Instant::now();
             tracing::info!("Restoring tree from cache");
-
-            // SAFETY: `restore_unchecked` assumes that the underlying memory representation in mmap_vec is correct and represents a valid tree
-            //         we don't explicitly verify this requirement here, instead it's checked on every inclusion proof request (by validating the path from a leaf to the root)
-            //         this way we circumvent the need for a costly verification at the start.
-            let tree = unsafe {
-                CascadingMerkleTree::<PoseidonHash, _>::restore_unchecked(
-                    mmap_vec,
-                    depth,
-                    &Hash::ZERO,
-                )?
-            };
+            let tree = CascadingMerkleTree::<PoseidonHash, _>::restore(
+                mmap_vec,
+                depth,
+                &Hash::ZERO,
+            )?;
 
             tracing::info!("Restored tree from cache in {:?}", now.elapsed());
             tree
@@ -363,13 +348,13 @@ where
             None => return Err(IdentityTreeError::LeafNotFound),
         };
 
-        let inclusion_proof = if let Some(root) = root {
+        if let Some(root) = root {
             if root.hash == self.tree.root() {
                 let proof = self.tree.proof(*leaf_idx as usize);
-                InclusionProof::new(self.tree.root(), proof)
+                Ok(Some(InclusionProof::new(self.tree.root(), proof)))
             } else {
                 let proof = self.construct_proof_from_root(*leaf_idx, root)?;
-                InclusionProof::new(root.hash, proof)
+                Ok(Some(InclusionProof::new(root.hash, proof)))
             }
         } else {
             if *leaf_idx as usize > self.tree.num_leaves() {
@@ -377,14 +362,8 @@ where
             }
 
             let proof = self.tree.proof(*leaf_idx as usize);
-            InclusionProof::new(self.tree.root(), proof)
-        };
-
-        if !inclusion_proof.verify(leaf) {
-            return Err(IdentityTreeError::InvalidProofCorruptedTree);
+            Ok(Some(InclusionProof::new(self.tree.root(), proof)))
         }
-
-        Ok(Some(inclusion_proof))
     }
 
     /// Construct an inclusion proof for a given leaf at a specified root
@@ -569,6 +548,7 @@ impl InclusionProof {
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     use eyre::{eyre, ContextCompat};
     use rand::{Rng, SeedableRng};
@@ -577,7 +557,6 @@ mod test {
     use semaphore::poseidon_tree::PoseidonHash;
 
     use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates, Root};
-    use crate::tree::error::IdentityTreeError;
     use crate::tree::identity_tree::{
         storage_idx_to_coords, storage_to_leaf_idx,
     };
@@ -589,14 +568,12 @@ mod test {
     fn infinite_leaves() -> impl Iterator<Item = Hash> {
         let mut rng = rand::rngs::SmallRng::seed_from_u64(42);
 
-        std::iter::from_fn(move || Some(random_field_elem(&mut rng)))
-    }
+        std::iter::from_fn(move || {
+            let mut limbs: [u64; 4] = rng.gen();
+            limbs[3] = 0; // nullify most significant limb to keep the values in the Field
 
-    fn random_field_elem(rng: &mut impl Rng) -> Hash {
-        let mut limbs: [u64; 4] = rng.gen();
-        limbs[3] = 0; // nullify most significant limb to keep the values in the Field
-
-        Hash::from_limbs(limbs)
+            Some(Hash::from_limbs(limbs))
+        })
     }
 
     fn generate_all_leaves() -> Vec<Hash> {
@@ -884,6 +861,8 @@ mod test {
 
         let leaves: Vec<_> = infinite_leaves().take(4).collect();
 
+        println!("leaves: {:?}", leaves);
+
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
 
@@ -979,11 +958,10 @@ mod test {
 
     #[test]
     fn test_mmap_cache() -> eyre::Result<()> {
-        let cache_dir = tempfile::tempdir()?;
-        let cache_path = cache_dir.path().join("tree_cache");
+        let path = PathBuf::from("tree_cache");
 
         let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path.clone())?;
+            IdentityTree::new_with_cache(TREE_DEPTH, path.clone())?;
 
         let leaves = generate_all_leaves();
 
@@ -991,8 +969,7 @@ mod test {
             identity_tree.tree.push(*leaf)?;
         }
 
-        let restored_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path)?;
+        let restored_tree = IdentityTree::new_with_cache(TREE_DEPTH, path)?;
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
@@ -1003,108 +980,6 @@ mod test {
 
             assert!(proof.verify(*leaf));
         }
-
-        Ok(())
-    }
-
-    #[test]
-    fn corrupted_mmap_cache() -> eyre::Result<()> {
-        let cache_dir = tempfile::tempdir()?;
-        let cache_path = cache_dir.path().join("tree_cache");
-
-        let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path.clone())?;
-
-        let leaves = generate_all_leaves();
-
-        for leaf in leaves.iter() {
-            identity_tree.tree.push(*leaf)?;
-        }
-
-        drop(identity_tree);
-
-        // Scramble the cache file
-        let mut file = std::fs::read(&cache_path)?;
-
-        // MmapVec uses the first 4 bytes for metadata (capacity)
-        // CascadingMerkleTree uses the first item (32 bytes) for the number of leaves
-        let offset = std::mem::size_of::<usize>() // metadata
-            + std::mem::size_of::<Hash>(); // the zeroth node - used to store number of leaves
-
-        let tree_nodes =
-            bytemuck::cast_slice_mut::<_, Hash>(&mut file[offset..]);
-
-        let mut rng = rand::thread_rng();
-
-        for i in 1..tree_nodes.len() {
-            tree_nodes[i] = random_field_elem(&mut rng);
-        }
-
-        std::fs::write(&cache_path, &file)?;
-
-        // Restore the tree and fetch inclusion proof
-        let restored_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path)?;
-
-        let proof_result = restored_tree.inclusion_proof(leaves[0], None);
-
-        let error =
-            proof_result.expect_err("Fetching inclusion proof should fail");
-
-        assert!(matches!(
-            error,
-            IdentityTreeError::InvalidProofCorruptedTree
-        ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn mmap_cache_single_corrupted_leaf() -> eyre::Result<()> {
-        let cache_dir = tempfile::tempdir()?;
-        let cache_path = cache_dir.path().join("tree_cache");
-
-        let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path.clone())?;
-
-        let leaves = generate_all_leaves();
-
-        for leaf in leaves.iter() {
-            identity_tree.tree.push(*leaf)?;
-        }
-
-        drop(identity_tree);
-
-        // Scramble the cache file
-        let mut contents = std::fs::read(&cache_path)?;
-
-        // MmapVec uses the first 4 bytes for metadata (capacity)
-        // CascadingMerkleTree uses the first item (32 bytes) for the number of leaves
-        let offset = std::mem::size_of::<usize>() // metadata
-            + std::mem::size_of::<Hash>(); // the zeroth node - used to store number of leaves
-
-        let tree_nodes =
-            bytemuck::cast_slice_mut::<_, Hash>(&mut contents[offset..]);
-
-        let mut rng = rand::thread_rng();
-
-        tree_nodes[3] = random_field_elem(&mut rng); // The second leaf is at the 3rd index
-
-        std::fs::write(&cache_path, &contents)?;
-
-        // Restore the tree and fetch inclusion proof
-        let restored_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, cache_path)?;
-
-        let proof_result = restored_tree.inclusion_proof(leaves[0], None);
-
-        let error =
-            proof_result.expect_err("Fetching inclusion proof should fail");
-
-        assert!(matches!(
-            error,
-            IdentityTreeError::InvalidProofCorruptedTree
-        ));
 
         Ok(())
     }

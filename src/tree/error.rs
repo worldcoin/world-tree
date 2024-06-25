@@ -49,8 +49,6 @@ pub enum IdentityTreeError {
     LeafAlreadyExists,
     #[error("Leaf does not exist in tree")]
     LeafNotFound,
-    #[error("Proof is invalid - the tree is likely corrupted")]
-    InvalidProofCorruptedTree,
     #[error(transparent)]
     MmapVecError(#[from] eyre::Report),
     #[error(transparent)]
