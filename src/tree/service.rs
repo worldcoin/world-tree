@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeError;
+use super::identity_tree::Root;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -126,15 +127,11 @@ pub struct TreeStatus {}
 #[tracing::instrument(level = "debug", skip(world_tree))]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
-) -> Result<(StatusCode, Json<HashMap<u64, Hash>>), WorldTreeError<M>> {
-    let mut tree_status = HashMap::new();
-
-    let chain_state = world_tree.chain_state.read().await.clone();
-    for (chain_id, root) in chain_state {
-        tree_status.insert(chain_id, root.hash);
-    }
-
-    Ok((StatusCode::OK, Json(tree_status)))
+) -> Result<(StatusCode, Json<HashMap<u64, Root>>), WorldTreeError<M>> {
+    Ok((
+        StatusCode::OK,
+        Json(world_tree.chain_state.read().await.clone()),
+    ))
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
