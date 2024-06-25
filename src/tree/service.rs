@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -120,9 +121,20 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }
 
-#[tracing::instrument(level = "debug")]
-pub async fn health() -> StatusCode {
-    StatusCode::OK
+pub struct TreeStatus {}
+
+#[tracing::instrument(level = "debug", skip(world_tree))]
+pub async fn health<M: Middleware + 'static>(
+    State(world_tree): State<Arc<WorldTree<M>>>,
+) -> Result<(StatusCode, Json<HashMap<u64, Hash>>), WorldTreeError<M>> {
+    let mut tree_status = HashMap::new();
+
+    let chain_state = world_tree.chain_state.read().await.clone();
+    for (chain_id, root) in chain_state {
+        tree_status.insert(chain_id, root.hash);
+    }
+
+    Ok((StatusCode::OK, Json(tree_status)))
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
