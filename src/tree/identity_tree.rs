@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -50,7 +51,7 @@ impl IdentityTree<MmapVec<Hash>> {
 
                 Err(_e) => unsafe {
                     tracing::info!("Cache not found, creating new cache file");
-                    MmapVec::open_create(file_path)?
+                    MmapVec::open_create(&file_path)?
                 },
             };
 
@@ -63,11 +64,30 @@ impl IdentityTree<MmapVec<Hash>> {
         } else {
             let now = Instant::now();
             tracing::info!("Restoring tree from cache");
-            let tree = CascadingMerkleTree::<PoseidonHash, _>::restore(
+
+            let tree = match CascadingMerkleTree::<PoseidonHash, _>::restore(
                 mmap_vec,
                 depth,
                 &Hash::ZERO,
-            )?;
+            ) {
+                Ok(tree) => tree,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to restore tree from cache: {:?}. Purging cache and creating new tree",
+                        e
+                    );
+
+                    // Remove the existing cache and create a new cache file
+                    fs::remove_file(&file_path)?;
+                    let mmap_vec = unsafe { MmapVec::open_create(file_path)? };
+
+                    CascadingMerkleTree::<PoseidonHash, _>::new(
+                        mmap_vec,
+                        depth,
+                        &Hash::ZERO,
+                    )
+                }
+            };
 
             tracing::info!("Restored tree from cache in {:?}", now.elapsed());
             tree
