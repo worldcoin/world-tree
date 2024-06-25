@@ -51,7 +51,7 @@ where
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/computeRoot", axum::routing::post(compute_root))
-            .route("/health", axum::routing::get(health))
+            .route("/health", axum::routing::post(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
@@ -122,16 +122,13 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }
 
-pub struct TreeStatus {}
-
 #[tracing::instrument(level = "debug", skip(world_tree))]
+#[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
 ) -> Result<(StatusCode, Json<HashMap<u64, Root>>), WorldTreeError<M>> {
-    Ok((
-        StatusCode::OK,
-        Json(world_tree.chain_state.read().await.clone()),
-    ))
+    let chain_state = world_tree.chain_state.read().await.clone();
+    Ok((StatusCode::OK, Json(chain_state)))
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
