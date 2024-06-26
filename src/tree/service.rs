@@ -51,7 +51,7 @@ where
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
             .route("/computeRoot", axum::routing::post(compute_root))
-            .route("/health", axum::routing::post(health))
+            .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
