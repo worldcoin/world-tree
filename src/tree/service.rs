@@ -9,6 +9,7 @@ use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
+use xxdk::service::{CMixServer, CMixServerConfig, IncomingRequest};
 
 use super::error::WorldTreeError;
 use super::identity_tree::Root;
@@ -42,6 +43,7 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
+        cmix_config: CMixServerConfig,
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
         let mut handles = vec![];
 
@@ -64,11 +66,25 @@ where
             Ok(())
         });
 
+        let xx_router = xxdk::service::Router::new(
+            xx_demo_handler,
+            self.world_tree.clone(),
+        );
+
+        let xx_server_handle = tokio::spawn(async move {
+            tracing::info!("Starting cMix RPC server");
+            CMixServer::serve(xx_router, cmix_config)
+                .await
+                .map_err(|e| WorldTreeError::CMixError(e))?;
+            Ok(())
+        });
+
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
         handles.extend(self.world_tree.spawn().await?);
 
         handles.push(server_handle);
+        handles.push(xx_server_handle);
 
         Ok(handles)
     }
@@ -143,4 +159,21 @@ pub async fn compute_root<M: Middleware + 'static>(
         .await?;
 
     Ok((StatusCode::OK, Json(updated_root)))
+}
+
+pub async fn xx_demo_handler<M: Middleware>(
+    state: Arc<WorldTree<M>>,
+    request: IncomingRequest,
+) -> Result<Vec<u8>, String> {
+    tracing::info!("Received message via cMix",);
+    let req: InclusionProofRequest =
+        serde_json::from_slice(&request.request).map_err(|e| e.to_string())?;
+    tracing::debug!(?req, "Request decoded");
+    let proof = state
+        .inclusion_proof(req.identity_commitment, None)
+        .await
+        .map_err(|e| e.to_string())?;
+    let res = serde_json::to_vec(&proof).map_err(|e| e.to_string())?;
+    tracing::debug!(response_len = res.len(), "cmix response");
+    Ok(res)
 }
