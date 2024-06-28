@@ -6,7 +6,6 @@ pub mod service;
 pub mod tree_manager;
 
 use std::collections::{BTreeMap, HashMap};
-use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -19,9 +18,8 @@ use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;
@@ -33,6 +31,10 @@ use self::tree_manager::{
 };
 use crate::abi::IBridgedWorldID;
 use crate::tree::identity_tree::flatten_leaf_updates;
+
+pub mod newtypes;
+
+pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
@@ -77,6 +79,7 @@ where
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(
         &self,
+        cancel_tx: broadcast::Sender<()>,
     ) -> Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>, WorldTreeError<M>>
     {
         let start_time = Instant::now();
@@ -96,20 +99,34 @@ where
 
         // Spawn the tree managers to listen to the canonical and bridged trees for updates
         let mut handles = vec![];
-        handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
+        handles.push(
+            self.canonical_tree_manager
+                .spawn(leaf_updates_tx, cancel_tx.subscribe()),
+        );
 
         if !self.bridged_tree_manager.is_empty() {
             for bridged_tree in self.bridged_tree_manager.iter() {
-                handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
+                handles.push(
+                    bridged_tree
+                        .spawn(bridged_root_tx.clone(), cancel_tx.subscribe()),
+                );
             }
 
             // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
             // pending updates when a new common root is bridged to all chains
-            handles.push(self.handle_bridged_updates(bridged_root_rx));
+            handles.push(self.handle_bridged_updates(
+                bridged_root_rx,
+                cancel_tx.subscribe(),
+            ));
         }
 
         // Spawn a task to handle canonical updates, appending new identity updates to `pending_updates` as they arrive
-        handles.push(self.handle_canonical_updates(leaf_updates_rx));
+        handles.push(
+            self.handle_canonical_updates(
+                leaf_updates_rx,
+                cancel_tx.subscribe(),
+            ),
+        );
 
         Ok(handles)
     }
@@ -118,14 +135,15 @@ where
     fn handle_canonical_updates(
         &self,
         leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+        cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         // If there are no bridged trees, apply canonical updates to the tree as they arrive
         if self.bridged_tree_manager.is_empty() {
-            self.apply_canonical_updates(leaf_updates_rx)
+            self.apply_canonical_updates(leaf_updates_rx, cancel_rx)
         } else {
             // Otherwise, append canonical updates to `tree_updates`
             // which will be applied to the tree once the root is bridged to all chains
-            self.append_canonical_updates(leaf_updates_rx)
+            self.append_canonical_updates(leaf_updates_rx, cancel_rx)
         }
     }
 
@@ -133,6 +151,7 @@ where
     fn append_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+        mut cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         let canonical_chain_id = self.canonical_tree_manager.chain_id;
         let identity_tree = self.identity_tree.clone();
@@ -140,9 +159,19 @@ where
 
         // If we are monitoring bridged chains, apply canonical updates to tree updates until the root is bridged to all chains
         tokio::spawn(async move {
-            while let Some((new_root, leaf_updates)) =
-                leaf_updates_rx.recv().await
-            {
+            loop {
+                let (new_root, leaf_updates) = tokio::select! {
+                    res = leaf_updates_rx.recv() => {
+                        match res {
+                            Some((new_root, leaf_updates)) => (new_root, leaf_updates),
+                            None => break,
+                        }
+                    }
+                    _ = cancel_rx.recv() => {
+                        break
+                    }
+                };
+
                 tracing::info!(
                     ?new_root,
                     "Leaf updates received, appending tree updates"
@@ -166,6 +195,7 @@ where
     fn apply_canonical_updates(
         &self,
         mut leaf_updates_rx: Receiver<(Root, LeafUpdates)>,
+        mut cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         let canonical_chain_id = self.canonical_tree_manager.chain_id;
         let identity_tree = self.identity_tree.clone();
@@ -173,9 +203,19 @@ where
             self.chain_state.clone();
 
         tokio::spawn(async move {
-            while let Some((new_root, leaf_updates)) =
-                leaf_updates_rx.recv().await
-            {
+            loop {
+                let (new_root, leaf_updates) = tokio::select! {
+                    res = leaf_updates_rx.recv() => {
+                        match res {
+                            Some((new_root, leaf_updates)) => (new_root, leaf_updates),
+                            None => break,
+                        }
+                    }
+                    _ = cancel_rx.recv() => {
+                        break
+                    }
+                };
+
                 tracing::info!(
                     ?new_root,
                     "Leaf updates received, applying to the canonical tree"
@@ -220,14 +260,25 @@ where
     fn handle_bridged_updates(
         &self,
         mut bridged_root_rx: Receiver<(u64, Hash)>,
+        mut cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         let identity_tree = self.identity_tree.clone();
         let chain_state = self.chain_state.clone();
 
         tokio::spawn(async move {
-            while let Some((chain_id, bridged_root)) =
-                bridged_root_rx.recv().await
-            {
+            loop {
+                let (chain_id, bridged_root) = tokio::select! {
+                    res = bridged_root_rx.recv() => {
+                        match res {
+                            Some((chain_id, bridged_root)) => (chain_id, bridged_root),
+                            None => break,
+                        }
+                    }
+                    _ = cancel_rx.recv() => {
+                        break
+                    }
+                };
+
                 tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
                 let mut identity_tree = identity_tree.write().await;
@@ -365,6 +416,7 @@ where
             .next()
             .await
             .map_err(WorldTreeError::MiddlewareError)?;
+
         if all_logs.is_empty() {
             return Err(WorldTreeError::CanonicalLogsNotFound);
         }
@@ -651,62 +703,3 @@ where
         Ok(updated_root)
     }
 }
-
-macro_rules! primitive_newtype {
-    (pub struct $outer:ident($tname:ty)) => {
-        #[derive(
-            Debug,
-            Clone,
-            Copy,
-            Serialize,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Deserialize,
-        )]
-        pub struct $outer(pub $tname);
-
-        impl std::fmt::Display for $outer {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
-
-        impl Deref for $outer {
-            type Target = $tname;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        impl DerefMut for $outer {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.0
-            }
-        }
-        impl From<$tname> for $outer {
-            fn from(value: $tname) -> Self {
-                $outer(value)
-            }
-        }
-
-        impl From<$outer> for $tname {
-            fn from(value: $outer) -> Self {
-                value.0
-            }
-        }
-
-        impl From<&$outer> for $tname {
-            fn from(value: &$outer) -> Self {
-                value.0
-            }
-        }
-    };
-}
-
-primitive_newtype!(pub struct ChainId(u64));
-primitive_newtype!(pub struct NodeIndex(u32));
-primitive_newtype!(pub struct LeafIndex(u32));

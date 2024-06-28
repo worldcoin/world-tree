@@ -534,7 +534,7 @@ impl PartialOrd for Root {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
@@ -859,10 +859,7 @@ mod test {
             );
 
         // Collect the second half of the leaves
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..]
-            .iter()
-            .cloned()
-            .collect::<Vec<Hash>>();
+        let leaf_updates = leaves[(NUM_LEAVES / 2)..].to_vec();
 
         let updated_root = identity_tree.compute_root(&leaf_updates, None)?;
         let expected_root = expected_tree.root();
