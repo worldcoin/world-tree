@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Start Anvil in the background
-anvil --host 0.0.0.0 &
+anvil --chain-id 31338 --block-time 2 --host 0.0.0.0 &
 
 ANVIL_PID=$!
 PRIV_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80

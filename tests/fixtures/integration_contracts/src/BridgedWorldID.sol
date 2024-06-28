@@ -11,6 +11,8 @@ contract BridgedWorldID {
     }
 
     function receiveRoot(uint256 newRoot) external {
+        _latestRoot = newRoot;
+
         emit RootAdded(newRoot, uint128(block.timestamp));
     }
 }

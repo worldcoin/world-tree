@@ -20,7 +20,7 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
-use world_tree::abi::IWorldIDIdentityManager;
+use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::init_world_tree;
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
@@ -40,11 +40,11 @@ async fn integration() -> eyre::Result<()> {
 
     let mainnet_container = setup_mainnet().await?;
     let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
-    let mainnet_rpc_url = format!("http://127.0.0.1:{}", mainnet_rpc_port);
+    let mainnet_rpc_url = format!("http://127.0.0.1:{mainnet_rpc_port}");
 
     let rollup_container = setup_rollup().await?;
-    let _rollup_rpc_port = rollup_container.get_host_port_ipv4(8545).await?;
-    let rollup_rpc_url = format!("http://127.0.0.1:{}", mainnet_rpc_port);
+    let rollup_rpc_port = rollup_container.get_host_port_ipv4(8545).await?;
+    let rollup_rpc_url = format!("http://127.0.0.1:{rollup_rpc_port}");
 
     let mut tree = CascadingMerkleTree::<PoseidonHash, _>::new(
         vec![],
@@ -65,7 +65,9 @@ async fn integration() -> eyre::Result<()> {
     let rollup_provider = Provider::<Http>::new(rollup_rpc_url.parse()?);
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_provider, bridged_address).await?;
+    wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
+        .await?;
+    wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
 
     let mainnet_chain_id = mainnet_provider.get_chainid().await?;
     let rollup_chain_id = rollup_provider.get_chainid().await?;
@@ -91,14 +93,12 @@ async fn integration() -> eyre::Result<()> {
         mainnet_signer.clone(),
     );
 
-    let _bridged_world_id =
-        IWorldIDIdentityManager::new(bridged_address, rollup_signer.clone());
+    let bridged_world_id =
+        IBridgedWorldID::new(bridged_address, rollup_signer.clone());
 
     tree.extend_from_slice(&first_batch);
 
     let first_batch_root = tree.root();
-
-    tracing::info!("Latest root = {:?}", world_id_manager.latest_root().await?);
 
     // We need some initial test data to start
     world_id_manager
@@ -112,7 +112,12 @@ async fn integration() -> eyre::Result<()> {
         .send()
         .await?;
 
-    tracing::info!("Latest root = {:?}", world_id_manager.latest_root().await?);
+    bridged_world_id
+        .receive_root(f2ethers(first_batch_root))
+        .send()
+        .await?;
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
 
     tracing::info!("Setting up world-tree service");
     let (world_tree_socket_addr, cancel_tx, handles) =
@@ -147,15 +152,98 @@ async fn integration() -> eyre::Result<()> {
 
     let client = TestClient::new(format!("http://{world_tree_socket_addr}"));
 
-    let ip = client.inclusion_proof(&first_batch[0]).await?;
-    tracing::info!(?ip, "Got first inclusion proof!");
+    let ip = client
+        .inclusion_proof(&first_batch[0])
+        .await?
+        .context("Missing inclusion proof")?;
+    tracing::debug!(?ip, "Got first inclusion proof!");
 
     assert_eq!(
         ip.root, first_batch_root,
         "First inclusion proof root should batch to first batch"
     );
 
-    tokio::time::sleep(Duration::from_secs_f32(1.0)).await;
+    let ip_for_mainnet = client
+        .inclusion_proof_by_chain_id(&first_batch[0], mainnet_chain_id.as_u64())
+        .await?
+        .context("Missing inclusion proof")?;
+
+    tracing::debug!(?ip_for_mainnet, "Got first inclusion proof for mainnet!");
+
+    assert_eq!(
+        ip_for_mainnet.root, first_batch_root,
+        "First inclusion proof root should batch to first batch"
+    );
+
+    let ip_for_bridged = client
+        .inclusion_proof_by_chain_id(&first_batch[0], rollup_chain_id.as_u64())
+        .await?
+        .context("Missing inclusion proof")?;
+
+    tracing::debug!(?ip_for_bridged, "Got first inclusion proof for bridged!");
+
+    assert_eq!(
+        ip_for_bridged.root, first_batch_root,
+        "First inclusion proof bridged should batch to first batch"
+    );
+
+    let second_batch = random_leaves(5);
+    tree.extend_from_slice(&second_batch);
+    let second_batch_root = tree.root();
+
+    world_id_manager
+        .register_identities(
+            [U256::zero(); 8],
+            f2ethers(first_batch_root), // pre root,
+            first_batch.len() as u32,   // start index
+            second_batch.iter().cloned().map(f2ethers).collect(), // commitments
+            f2ethers(second_batch_root), // post root
+        )
+        .send()
+        .await?;
+
+    // Just to be on the safe side
+    // TODO: Do repeated requests until we get the correct one or extend number of retries
+    tokio::time::sleep(Duration::from_secs(8)).await;
+
+    let ip = client
+        .inclusion_proof(&second_batch[0])
+        .await?
+        .context("Missing inclusion proof")?;
+
+    tracing::debug!(?ip, "Got second inclusion proof!");
+
+    assert_eq!(
+        ip.root, second_batch_root,
+        "Second inclusion proof root should batch to second batch"
+    );
+
+    let ip_for_mainnet = client
+        .inclusion_proof_by_chain_id(
+            &second_batch[0],
+            mainnet_chain_id.as_u64(),
+        )
+        .await?
+        .context("Missing inclusion proof")?;
+
+    tracing::debug!(?ip_for_mainnet, "Got second inclusion proof for mainnet!");
+
+    assert_eq!(
+        ip_for_mainnet.root, second_batch_root,
+        "Second inclusion proof root should batch to second batch"
+    );
+
+    let ip_for_bridged = client
+        .inclusion_proof_by_chain_id(&second_batch[0], rollup_chain_id.as_u64())
+        .await?
+        .context("Missing inclusion proof")?;
+
+    tracing::debug!(?ip_for_bridged, "Got second inclusion proof for bridged!");
+
+    assert_eq!(
+        ip_for_bridged.root, first_batch_root,
+        "Batch is not bridged yet - should still return first root"
+    );
 
     tracing::info!("Cancelling world-tree service");
     cancel_tx.send(())?;

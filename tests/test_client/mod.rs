@@ -1,3 +1,4 @@
+use hyper::StatusCode;
 use semaphore::Field;
 use world_tree::tree::identity_tree::InclusionProof;
 use world_tree::tree::service::InclusionProofRequest;
@@ -18,8 +19,37 @@ impl TestClient {
     pub async fn inclusion_proof(
         &self,
         commitment: &Field,
-    ) -> eyre::Result<InclusionProof> {
+    ) -> eyre::Result<Option<InclusionProof>> {
         let url = format!("{}/inclusionProof", self.world_tree_host);
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&InclusionProofRequest {
+                identity_commitment: *commitment,
+            })
+            .send()
+            .await?;
+
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        } else {
+            response.error_for_status_ref()?;
+        }
+
+
+        Ok(response.json().await?)
+    }
+
+    pub async fn inclusion_proof_by_chain_id(
+        &self,
+        commitment: &Field,
+        chain_id: u64,
+    ) -> eyre::Result<Option<InclusionProof>> {
+        let url = format!(
+            "{}/inclusionProof?chainId={chain_id}",
+            self.world_tree_host
+        );
 
         let response = self
             .client
@@ -34,22 +64,4 @@ impl TestClient {
 
         Ok(response.json().await?)
     }
-
-    // pub async fn inclusion_proof_by_chain_id(
-    //     &self,
-    //     commitment: &Field,
-    // ) -> eyre::Result<InclusionProof> {
-    //     let url = format!("{}/inclusionProof", self.world_tree_host);
-
-    //     let response = self
-    //         .client
-    //         .post(&url)
-    //         .json(&serde_json::json!({ "identity_commitment": commitment }))
-    //         .send()
-    //         .await?;
-
-    //     response.error_for_status_ref()?;
-
-    //     Ok(response.json().await?)
-    // }
 }
