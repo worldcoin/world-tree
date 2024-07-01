@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 contract WorldIDIdentityManager {
+    // Initial root for depth 20
     uint256 _latestRoot = 0x2134e76ac5d21aab186c2be1dd8f84ee880a1e46eaf712f9d371b6df22191f3e;
 
     event TreeChanged(

@@ -32,6 +32,34 @@ const TREE_DEPTH: usize = 20;
 
 mod test_client;
 
+// Attempts a given block multiple times
+// panics if the block fails (evaluates to an error) more than 10 times
+macro_rules! attempt_async {
+    ($e:expr) => {
+        {
+            const MAX_ATTEMPTS: usize = 10;
+            let mut attempt = 0;
+
+            loop {
+                let res = $e.await;
+
+                if attempt >= MAX_ATTEMPTS {
+                    panic!("Too many attempts");
+                }
+
+                match res {
+                    Ok(res) => break res,
+                    Err(err) => {
+                        attempt += 1;
+                        tracing::warn!(attempt, %err, "Attempt failed");
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                }
+            }
+        }
+    };
+}
+
 #[tokio::test]
 async fn integration() -> eyre::Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
@@ -156,7 +184,7 @@ async fn integration() -> eyre::Result<()> {
         .inclusion_proof(&first_batch[0])
         .await?
         .context("Missing inclusion proof")?;
-    tracing::debug!(?ip, "Got first inclusion proof!");
+    tracing::debug!(?ip, "Got first inclusion proof");
 
     assert_eq!(
         ip.root, first_batch_root,
@@ -168,7 +196,7 @@ async fn integration() -> eyre::Result<()> {
         .await?
         .context("Missing inclusion proof")?;
 
-    tracing::debug!(?ip_for_mainnet, "Got first inclusion proof for mainnet!");
+    tracing::debug!(?ip_for_mainnet, "Got first inclusion proof for mainnet");
 
     assert_eq!(
         ip_for_mainnet.root, first_batch_root,
@@ -180,7 +208,7 @@ async fn integration() -> eyre::Result<()> {
         .await?
         .context("Missing inclusion proof")?;
 
-    tracing::debug!(?ip_for_bridged, "Got first inclusion proof for bridged!");
+    tracing::debug!(?ip_for_bridged, "Got first inclusion proof for bridged");
 
     assert_eq!(
         ip_for_bridged.root, first_batch_root,
@@ -191,6 +219,7 @@ async fn integration() -> eyre::Result<()> {
     tree.extend_from_slice(&second_batch);
     let second_batch_root = tree.root();
 
+    // Publish the second batch
     world_id_manager
         .register_identities(
             [U256::zero(); 8],
@@ -202,47 +231,86 @@ async fn integration() -> eyre::Result<()> {
         .send()
         .await?;
 
-    // Just to be on the safe side
-    // TODO: Do repeated requests until we get the correct one or extend number of retries
-    tokio::time::sleep(Duration::from_secs(8)).await;
+    // Repeated attempts until the new root & batch is available on mainnet
+    let ip_for_mainnet = attempt_async! {
+        async {
+            client
+                .inclusion_proof_by_chain_id(
+                    &second_batch[0],
+                    mainnet_chain_id.as_u64(),
+                )
+                .await
+                .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
+        }
+    };
 
-    let ip = client
-        .inclusion_proof(&second_batch[0])
-        .await?
-        .context("Missing inclusion proof")?;
-
-    tracing::debug!(?ip, "Got second inclusion proof!");
-
-    assert_eq!(
-        ip.root, second_batch_root,
-        "Second inclusion proof root should batch to second batch"
-    );
-
-    let ip_for_mainnet = client
-        .inclusion_proof_by_chain_id(
-            &second_batch[0],
-            mainnet_chain_id.as_u64(),
-        )
-        .await?
-        .context("Missing inclusion proof")?;
-
-    tracing::debug!(?ip_for_mainnet, "Got second inclusion proof for mainnet!");
+    tracing::debug!(?ip_for_mainnet, "Got second inclusion proof for mainnet");
 
     assert_eq!(
         ip_for_mainnet.root, second_batch_root,
         "Second inclusion proof root should batch to second batch"
     );
 
-    let ip_for_bridged = client
-        .inclusion_proof_by_chain_id(&second_batch[0], rollup_chain_id.as_u64())
+    let ip = client.inclusion_proof(&second_batch[0]).await?;
+
+    assert!(ip.is_none(), "The inclusion proof endpoint should return only roots finalized on chains (unless chain id is specified)");
+
+    let ip = client
+        .inclusion_proof(&first_batch[0])
         .await?
         .context("Missing inclusion proof")?;
 
-    tracing::debug!(?ip_for_bridged, "Got second inclusion proof for bridged!");
+    assert_eq!(
+        ip.root, first_batch_root,
+        "We should still be able to fetch the first batch proofs"
+    );
+
+    let ip_for_bridged = client
+        .inclusion_proof_by_chain_id(&second_batch[0], rollup_chain_id.as_u64())
+        .await?;
+
+    assert!(
+        ip_for_bridged.is_none(),
+        "The bridged network did not receive the batch yet"
+    );
+
+    // Bridge the second batch
+    bridged_world_id
+        .receive_root(f2ethers(second_batch_root))
+        .send()
+        .await?;
+
+    // Repeated attempts until the new root & batch is available on rollup
+    let ip_for_bridged = attempt_async! {
+        async {
+            client
+                .inclusion_proof_by_chain_id(
+                    &second_batch[0],
+                    rollup_chain_id.as_u64(),
+                )
+                .await
+                .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
+        }
+    };
+
+    tracing::debug!(?ip_for_bridged, "Got second inclusion proof for bridged");
 
     assert_eq!(
-        ip_for_bridged.root, first_batch_root,
-        "Batch is not bridged yet - should still return first root"
+        ip_for_bridged.root, second_batch_root,
+        "Second inclusion proof root should batch to second batch"
+    );
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
+
+    let ip = client
+        .inclusion_proof(&second_batch[0])
+        .await?
+        .context("Missing inclusion proof")?;
+
+    assert_eq!(
+        ip.root,
+        second_batch_root,
+        "The second batch is now bridged and should be merged into the canonical tree"
     );
 
     tracing::info!("Cancelling world-tree service");
