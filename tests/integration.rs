@@ -324,17 +324,22 @@ async fn integration() -> eyre::Result<()> {
         handle.abort();
     }
 
+    tracing::info!("Shutting down mainnet container...");
+    mainnet_container.stop().await?;
+    tracing::info!("Shutting down rollup container...");
+    rollup_container.stop().await?;
+
     Ok(())
 }
 
 async fn setup_world_tree(
     config: &ServiceConfig,
 ) -> eyre::Result<
-    (Vec<
+    Vec<
         JoinHandle<
             Result<(), WorldTreeError<Provider<ThrottledJsonRpcClient<Http>>>>,
         >,
-    >),
+    >,
 > {
     let world_tree = init_world_tree(config).await?;
 
