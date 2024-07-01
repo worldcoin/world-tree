@@ -137,7 +137,7 @@ impl TreeVersion for CanonicalTree {
                     .await?;
 
                     for update in identity_updates {
-                        tracing::info!(?chain_id, new_root = ?update.0.hash, "Canonical root updated");
+                        tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send(update).await?;
                     }
 
@@ -199,11 +199,7 @@ impl TreeVersion for BridgedTree {
                             RootAddedFilter::decode_log(&RawLog::from(log))?;
                         let new_root = Hash::from_limbs(data.root.0);
 
-                        tracing::info!(
-                            ?chain_id,
-                            ?new_root,
-                            "Bridged root updated"
-                        );
+                        tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send((chain_id, new_root)).await?;
                     }
                     ok(false)
