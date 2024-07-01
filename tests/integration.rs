@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -149,6 +149,9 @@ async fn integration() -> eyre::Result<()> {
 
     tracing::info!("Setting up world-tree service");
 
+    let listener = TcpListener::bind("0.0.0.0:0")?;
+    let world_tree_port = listener.local_addr()?.port();
+
     let service_config = ServiceConfig {
         tree_depth: TREE_DEPTH,
         canonical_tree: TreeConfig {
@@ -173,13 +176,13 @@ async fn integration() -> eyre::Result<()> {
                 throttle: 150,
             },
         }],
-        socket_address: ([127, 0, 0, 1], 0).into(),
+        socket_address: ([127, 0, 0, 1], world_tree_port).into(),
         telemetry: None,
     };
 
     let handles = setup_world_tree(&service_config).await?;
     let client =
-        TestClient::new(format!("http://{}", service_config.socket_address));
+        TestClient::new(format!("http://127.0.0.1:{}", world_tree_port));
 
     let ip = client
         .inclusion_proof(&first_batch[0])
