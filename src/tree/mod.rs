@@ -19,7 +19,7 @@ use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::instrument;

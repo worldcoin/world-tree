@@ -9,7 +9,7 @@ use ethers::providers::Middleware;
 use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::broadcast;
+
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
