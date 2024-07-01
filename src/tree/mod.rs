@@ -292,36 +292,25 @@ where
                     nonce: *root_nonce,
                 };
 
-                // Get the oldest root across all chains
+                // Update chain state with the new root
                 let mut chain_state = chain_state.write().await;
-                let oldest_root = chain_state
+                chain_state.insert(chain_id, new_root);
+
+                let greatest_common_root = chain_state
                     .values()
                     .min()
                     .expect("No roots in chain state");
 
-                // Collect all chain ids where the root is the oldest root
-                let oldest_chain_ids: Vec<u64> = chain_state
-                    .iter()
-                    .filter(|&(_, v)| v == oldest_root)
-                    .map(|(&k, _)| k)
-                    .collect();
-
-                // If only one chain contains the oldest root the root update is for the oldest chain
-                // apply the updates to the oldest root
-                if oldest_chain_ids.len() == 1
-                    && chain_id == oldest_chain_ids[0]
-                {
+                // If the current tree root is less than the greatest common root, apply updates up to the common root across all chains
+                if identity_tree.tree.root() < greatest_common_root.hash {
                     tracing::info!(
-                        ?chain_id,
-                        ?oldest_root,
+                        ?greatest_common_root,
                         "Applying updates to the canonical tree"
                     );
 
-                    identity_tree.apply_updates_to_root(oldest_root);
+                    // Apply updates up to the common root
+                    identity_tree.apply_updates_to_root(greatest_common_root);
                 }
-
-                // Update chain state with the new root
-                chain_state.insert(chain_id, new_root);
             }
 
             Err(WorldTreeError::BridgedRootChannelClosed)
