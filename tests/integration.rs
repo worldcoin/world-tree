@@ -148,37 +148,38 @@ async fn integration() -> eyre::Result<()> {
     tokio::time::sleep(Duration::from_secs(4)).await;
 
     tracing::info!("Setting up world-tree service");
-    let (world_tree_socket_addr, cancel_tx, handles) =
-        setup_world_tree(&ServiceConfig {
-            tree_depth: TREE_DEPTH,
-            canonical_tree: TreeConfig {
-                address: id_manager_address,
-                window_size: 10,
-                creation_block: 0,
-                provider: ProviderConfig {
-                    rpc_endpoint: mainnet_rpc_url.parse()?,
-                    throttle: 150,
-                },
-            },
-            cache: CacheConfig {
-                cache_file: cache_file.path().to_path_buf(),
-                purge_cache: true,
-            },
-            bridged_trees: vec![TreeConfig {
-                address: bridged_address,
-                window_size: 10,
-                creation_block: 0,
-                provider: ProviderConfig {
-                    rpc_endpoint: rollup_rpc_url.parse()?,
-                    throttle: 150,
-                },
-            }],
-            socket_address: ([127, 0, 0, 1], 0).into(),
-            telemetry: None,
-        })
-        .await?;
 
-    let client = TestClient::new(format!("http://{world_tree_socket_addr}"));
+    let service_config = ServiceConfig {
+        tree_depth: TREE_DEPTH,
+        canonical_tree: TreeConfig {
+            address: id_manager_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: mainnet_rpc_url.parse()?,
+                throttle: 150,
+            },
+        },
+        cache: CacheConfig {
+            cache_file: cache_file.path().to_path_buf(),
+            purge_cache: true,
+        },
+        bridged_trees: vec![TreeConfig {
+            address: bridged_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: rollup_rpc_url.parse()?,
+                throttle: 150,
+            },
+        }],
+        socket_address: ([127, 0, 0, 1], 0).into(),
+        telemetry: None,
+    };
+
+    let handles = setup_world_tree(&service_config).await?;
+    let client =
+        TestClient::new(format!("http://{}", service_config.socket_address));
 
     let ip = client
         .inclusion_proof(&first_batch[0])
@@ -314,12 +315,10 @@ async fn integration() -> eyre::Result<()> {
     );
 
     tracing::info!("Cancelling world-tree service");
-    cancel_tx.send(())?;
 
     tracing::info!("Waiting for world-tree service to shutdown...");
     for handle in handles {
-        // Ignore errors - channels might close causing recv errors at exit
-        let _ = handle.await?;
+        handle.abort();
     }
 
     Ok(())
@@ -327,24 +326,19 @@ async fn integration() -> eyre::Result<()> {
 
 async fn setup_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<(
-    SocketAddr,
-    broadcast::Sender<()>,
-    Vec<
+) -> eyre::Result<
+    (Vec<
         JoinHandle<
             Result<(), WorldTreeError<Provider<ThrottledJsonRpcClient<Http>>>>,
         >,
-    >,
-)> {
+    >),
+> {
     let world_tree = init_world_tree(config).await?;
 
     let service = InclusionProofService::new(world_tree);
-    let cancel_tx = service.cancel_tx.clone();
+    let handles = service.serve(config.socket_address).await?;
 
-    let (socket_addr, handles) =
-        service.bind_serve(config.socket_address).await?;
-
-    Ok((socket_addr, cancel_tx, handles))
+    Ok(handles)
 }
 
 async fn setup_mainnet() -> eyre::Result<ContainerAsync<GenericImage>> {

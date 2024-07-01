@@ -3,3 +3,4 @@
 ips.toml
 .env
 tree-cache
+bin/world_tree.toml

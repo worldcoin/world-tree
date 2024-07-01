@@ -31,7 +31,6 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-        cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>>;
 
     fn tree_changed_signature() -> H256;
@@ -87,9 +86,8 @@ where
     pub fn spawn(
         &self,
         tx: Sender<T::ChannelData>,
-        cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
-        T::spawn(tx, self.block_scanner.clone(), cancel_rx)
+        T::spawn(tx, self.block_scanner.clone())
     }
 }
 
@@ -101,7 +99,6 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-        mut cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
@@ -110,16 +107,9 @@ impl TreeVersion for CanonicalTree {
                 .await
                 .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
-
             loop {
-                let res = async {
-                    let logs = tokio::select! {
-                        logs = block_scanner.next() => logs?,
-                        _ = cancel_rx.recv() => {
-                            tracing::info!("Received cancel signal");
-                            return ok(true)
-                        },
-                    };
+                async {
+                    let logs = block_scanner.next().await?;
 
                     if logs.is_empty() {
                         tokio::time::sleep(Duration::from_secs(
@@ -127,7 +117,7 @@ impl TreeVersion for CanonicalTree {
                         ))
                         .await;
 
-                        return ok(false);
+                        return ok(());
                     }
 
                     let identity_updates = extract_identity_updates(
@@ -137,21 +127,14 @@ impl TreeVersion for CanonicalTree {
                     .await?;
 
                     for update in identity_updates {
-                        tracing::info!(?chain_id, ?new_root, "Root updated");
+                        tracing::info!(?chain_id, new_root = ?update.0.hash, "Root updated");
                         tx.send(update).await?;
                     }
-
-                    ok(false)
+                    ok(())
                 }
                 .await
                 .log();
-
-                if res == Some(true) {
-                    break;
-                }
             }
-
-            Ok(())
         })
     }
 
@@ -167,7 +150,6 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-        mut cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         tokio::spawn(async move {
             let chain_id = block_scanner
@@ -178,19 +160,15 @@ impl TreeVersion for BridgedTree {
                 .as_u64();
 
             loop {
-                let res = async {
-                    let logs = tokio::select! {
-                        logs = block_scanner.next() => logs?,
-                        _ = cancel_rx.recv() => return ok(true),
-                    };
-
+                async {
+                    let logs = block_scanner.next().await?;
                     if logs.is_empty() {
                         tokio::time::sleep(Duration::from_secs(
                             BLOCK_SCANNER_SLEEP_TIME,
                         ))
                         .await;
 
-                        return ok(false);
+                        return ok(());
                     }
 
                     for log in logs {
@@ -202,17 +180,11 @@ impl TreeVersion for BridgedTree {
                         tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send((chain_id, new_root)).await?;
                     }
-                    ok(false)
+                    ok(())
                 }
                 .await
                 .log();
-
-                if res == Some(true) {
-                    break;
-                }
             }
-
-            Ok(())
         })
     }
 

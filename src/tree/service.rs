@@ -20,7 +20,6 @@ use super::{ChainId, Hash, InclusionProof, WorldTree};
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree<M>>,
-    pub cancel_tx: broadcast::Sender<()>,
 }
 
 impl<M> InclusionProofService<M>
@@ -28,12 +27,7 @@ where
     M: Middleware,
 {
     pub fn new(world_tree: Arc<WorldTree<M>>) -> Self {
-        let (cancel_tx, _) = broadcast::channel(1);
-
-        Self {
-            world_tree,
-            cancel_tx,
-        }
+        Self { world_tree }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
@@ -50,29 +44,6 @@ where
         self,
         addr: SocketAddr,
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
-        let (_local_addr, handles) = self.bind_serve(addr).await?;
-
-        Ok(handles)
-    }
-
-    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
-    /// This function spawns a task to sync and maintain the state of the world tree across all monitored chains.
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - Socket address to bind the server to
-    ///
-    /// # Returns
-    ///
-    /// The socket address the server is bound to.
-    /// Vector of `JoinHandle`s for the spawned tasks.
-    pub async fn bind_serve(
-        self,
-        addr: SocketAddr,
-    ) -> eyre::Result<(
-        SocketAddr,
-        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
-    )> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -85,17 +56,10 @@ where
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
-        let bound_server = axum::Server::bind(&addr);
-        let local_addr = bound_server.local_addr();
-
-        let mut cancel_rx = self.cancel_tx.subscribe();
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            bound_server
+            axum::Server::bind(&addr)
                 .serve(router.into_make_service())
-                .with_graceful_shutdown(async move {
-                    cancel_rx.recv().await.ok();
-                })
                 .await?;
 
             Ok(())
@@ -103,11 +67,11 @@ where
 
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn(self.cancel_tx.clone()).await?);
+        handles.extend(self.world_tree.spawn().await?);
 
         handles.push(server_handle);
 
-        Ok((local_addr, handles))
+        Ok(handles)
     }
 }
 
