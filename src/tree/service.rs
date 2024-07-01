@@ -8,7 +8,6 @@ use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
-
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeError;

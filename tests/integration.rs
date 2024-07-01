@@ -1,4 +1,4 @@
-use std::net::{TcpListener};
+use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,7 +18,6 @@ use test_client::TestClient;
 use testcontainers::core::{ContainerPort, Mount};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
-
 use tokio::task::JoinHandle;
 use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::init_world_tree;
