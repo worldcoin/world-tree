@@ -54,7 +54,7 @@ where
         //       of the bridged networks. However we don't have 100% guarantee that the canonical network
         //       events will always arrive before the bridged network events.
         //       So to maintain liveliness we reallign on every update.
-        reallign_trees(&mut identity_tree, &mut chain_state).await;
+        realign_trees(&mut identity_tree, &mut chain_state).await;
     }
 
     Err(WorldTreeError::LeafChannelClosed)
@@ -90,7 +90,7 @@ where
         // Update chain state with the new root
         chain_state.insert(chain_id, bridged_root);
 
-        reallign_trees(&mut identity_tree, &mut chain_state).await;
+        realign_trees(&mut identity_tree, &mut chain_state).await;
     }
 
     Err(WorldTreeError::BridgedRootChannelClosed)
@@ -100,7 +100,7 @@ where
 ///
 /// This function figures out the root that has been seen across all observed networks
 /// And applies all the updates up to that root to the canonical tree.
-async fn reallign_trees(
+async fn realign_trees(
     identity_tree: &mut IdentityTree<MmapVec<Hash>>,
     chain_state: &mut HashMap<u64, Hash>,
 ) {
