@@ -4,8 +4,6 @@ use ethers::providers::Middleware;
 use hyper::StatusCode;
 use thiserror::Error;
 
-use super::Hash;
-
 #[derive(Error, Debug)]
 pub enum WorldTreeError<M>
 where

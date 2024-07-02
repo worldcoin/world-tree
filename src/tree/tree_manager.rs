@@ -263,7 +263,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     }
 
     // Process each transaction, constructing identity updates for each root
-    for (nonce, transaction) in sorted_transactions {
+    for (_nonce, transaction) in sorted_transactions {
         let calldata = &transaction.input;
 
         let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();

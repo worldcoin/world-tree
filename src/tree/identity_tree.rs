@@ -180,7 +180,12 @@ where
 
         if pre_root != latest_root {
             // This can occur if the tree has been restored from cache, but we're replaying chain events
-            tracing::warn!(?latest_root, ?pre_root, ?post_root, "Attempted to insert root out of order");
+            tracing::warn!(
+                ?latest_root,
+                ?pre_root,
+                ?post_root,
+                "Attempted to insert root out of order"
+            );
             return Ok(());
         }
 
@@ -314,7 +319,7 @@ where
             .expect("Tried applying updates to a non-existent root");
 
         // Drain the updates up to and including the root
-        let mut drained = self.tree_updates.drain(..=idx_of_root);
+        let drained = self.tree_updates.drain(..=idx_of_root);
         let (_root, update) = drained.last().unwrap();
 
         // Filter out updates that are not leaves
@@ -680,25 +685,30 @@ mod test {
 
     #[test]
     fn test_append_updates() -> eyre::Result<()> {
+        tracing_subscriber::fmt::init();
+
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
         let mut tree: CascadingMerkleTree<PoseidonHash> =
             CascadingMerkleTree::new(vec![], TREE_DEPTH, &Hash::ZERO);
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
-        for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
+        let first_half = leaves[0..NUM_LEAVES / 2].to_vec();
+        let second_half = leaves[NUM_LEAVES / 2..].to_vec();
+
+        for (idx, leaf) in first_half.iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
         }
 
+        tree.extend_from_slice(&first_half);
         let pre_root = tree.root();
-        tree.extend_from_slice(&leaves);
 
-        // Append the new leaves to the tree
+        tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
         // Collect the second half of the leaves
         let offset = NUM_LEAVES / 2;
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..NUM_LEAVES]
+        let leaf_updates = second_half
             .iter()
             .enumerate()
             .map(|(idx, value)| (((idx + offset) as u32).into(), *value))
@@ -735,18 +745,22 @@ mod test {
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
+        let first_half = leaves[0..NUM_LEAVES / 2].to_vec();
+        let second_half = leaves[NUM_LEAVES / 2..].to_vec();
 
-        for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
+        for (idx, leaf) in first_half.iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
+            assert_eq!(tree.num_leaves(), idx);
+            tree.push(*leaf)?;
         }
 
         // Generate the updated tree with all of the leaves
         let pre_root = tree.root();
-        tree.extend_from_slice(&leaves);
+        tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
         // Collect the second half of the leaves
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..]
+        let leaf_updates = second_half
             .iter()
             .enumerate()
             .map(|(idx, value)| {
@@ -820,12 +834,16 @@ mod test {
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
 
-        let initial_root = CascadingMerkleTree::<PoseidonHash>::new(
-            vec![],
-            TREE_DEPTH,
-            &Hash::ZERO,
-        )
-        .root();
+        let initial_root = {
+            let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
+                vec![],
+                TREE_DEPTH,
+                &Hash::ZERO,
+            );
+
+            tree.push(leaves[0])?;
+            tree.root()
+        };
 
         // Simulate and create updates
         let (root_012, updates) = {

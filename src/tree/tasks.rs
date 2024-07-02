@@ -49,6 +49,12 @@ where
 
         // Update the root for the canonical chain
         chain_state.insert(canonical_chain_id, update.post_root);
+
+        // NOTE: In practice reallignment should only happen when we receive events on one
+        //       of the bridged networks. However we don't have 100% guarantee that the canonical network
+        //       events will always arrive before the bridged network events.
+        //       So to maintain liveliness we reallign on every update.
+        reallign_trees(&mut identity_tree, &mut chain_state).await;
     }
 
     Err(WorldTreeError::LeafChannelClosed)
@@ -84,27 +90,58 @@ where
         // Update chain state with the new root
         chain_state.insert(chain_id, bridged_root);
 
-        let greatest_common_root =
-            chain_state.values().min().expect("No roots in chain state");
-
-        // If the current tree root is less than the greatest common root, apply updates up to the common root across all chains
-        if identity_tree.tree.root() < *greatest_common_root {
-            tracing::info!(
-                ?greatest_common_root,
-                "Applying updates to the canonical tree"
-            );
-
-            // Apply updates up to the common root
-            identity_tree.apply_updates_to_root(greatest_common_root);
-        }
+        reallign_trees(&mut identity_tree, &mut chain_state).await;
     }
 
     Err(WorldTreeError::BridgedRootChannelClosed)
 }
 
-/// Realigns the trees across all chains to the greatest common root
+/// Realligns all the observed chains.
+///
+/// This function figures out the root that has been seen across all observed networks
+/// And applies all the updates up to that root to the canonical tree.
 async fn reallign_trees(
     identity_tree: &mut IdentityTree<MmapVec<Hash>>,
     chain_state: &mut HashMap<u64, Hash>,
 ) {
+    let mut chain_state_idxs = vec![];
+
+    for (chain_id, root) in chain_state.iter() {
+        let idx = identity_tree
+            .tree_updates
+            .iter()
+            .position(|(hash, _updates)| hash == root);
+
+        //
+        if let Some(idx) = idx {
+            chain_state_idxs.push(idx);
+        } else {
+            // This can occur in 2 cases:
+            // 1. The bridged network event arrived before the canonical event
+            //    this is very unlikely to happen in prod, but technically possible (RPC outage, etc.)
+            // 2. A bridged network is still at the cascading tree root
+            //
+            // in both cases, we cannot reallign the trees
+            tracing::warn!("Root {root:?} seen on chain {chain_id} not found in tree updates - cannot reallign");
+            return;
+        }
+    }
+
+    let Some(latest_common_root_idx) = chain_state_idxs.iter().min().copied()
+    else {
+        // If we don't find any common roots then there's nothing to reallign
+        return;
+    };
+
+    let latest_common_root = *identity_tree
+        .tree_updates
+        .get(latest_common_root_idx)
+        .map(|(hash, _updates)| hash)
+        .expect("Greatest common root not found");
+
+    // Apply updates up to the greatest common root
+    identity_tree.apply_updates_to_root(&latest_common_root);
+
+    // Remove updates that have been applied
+    identity_tree.tree_updates.drain(..latest_common_root_idx);
 }
