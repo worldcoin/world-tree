@@ -7,7 +7,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{broadcast, RwLock};
 
 use super::error::WorldTreeError;
-use super::identity_tree::{IdentityTree, LeafUpdates, Root};
+use super::identity_tree::IdentityTree;
 use super::tree_manager::CanonicalChainUpdate;
 use super::Hash;
 
@@ -35,18 +35,20 @@ where
         };
 
         tracing::info!(
-            ?new_root,
+            new_root = ?update.post_root,
             "Leaf updates received, appending tree updates"
         );
         let mut identity_tree = identity_tree.write().await;
+        let mut chain_state = chain_state.write().await;
 
-        identity_tree.append_updates(new_root, leaf_updates)?;
+        identity_tree.append_updates(
+            update.pre_root,
+            update.post_root,
+            update.leaf_updates,
+        )?;
 
         // Update the root for the canonical chain
-        chain_state
-            .write()
-            .await
-            .insert(canonical_chain_id, new_root);
+        chain_state.insert(canonical_chain_id, update.post_root);
     }
 
     Err(WorldTreeError::LeafChannelClosed)
@@ -77,25 +79,16 @@ where
         tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
         let mut identity_tree = identity_tree.write().await;
-        // We can use expect here because the root will always be in tree updates before the root is bridged to other chains
-        let root_nonce = identity_tree
-            .roots
-            .get(&bridged_root)
-            .expect("Could not get root update");
-        let new_root = Root {
-            hash: bridged_root,
-            nonce: *root_nonce,
-        };
+        let mut chain_state = chain_state.write().await;
 
         // Update chain state with the new root
-        let mut chain_state = chain_state.write().await;
-        chain_state.insert(chain_id, new_root);
+        chain_state.insert(chain_id, bridged_root);
 
         let greatest_common_root =
             chain_state.values().min().expect("No roots in chain state");
 
         // If the current tree root is less than the greatest common root, apply updates up to the common root across all chains
-        if identity_tree.tree.root() < greatest_common_root.hash {
+        if identity_tree.tree.root() < *greatest_common_root {
             tracing::info!(
                 ?greatest_common_root,
                 "Applying updates to the canonical tree"
@@ -110,6 +103,8 @@ where
 }
 
 /// Realigns the trees across all chains to the greatest common root
-async fn reallign_trees() {
-
+async fn reallign_trees(
+    identity_tree: &mut IdentityTree<MmapVec<Hash>>,
+    chain_state: &mut HashMap<u64, Hash>,
+) {
 }

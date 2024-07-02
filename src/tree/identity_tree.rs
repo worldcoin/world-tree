@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use rayon::iter::Either;
+use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::{GenericStorage, MmapVec};
 use semaphore::merkle_tree::{Branch, Hasher};
@@ -179,10 +179,9 @@ where
             };
 
         if pre_root != latest_root {
-            return Err(IdentityTreeError::RootOutOfOrder {
-                expected_root: latest_root,
-                actual_root: pre_root,
-            });
+            // This can occur if the tree has been restored from cache, but we're replaying chain events
+            tracing::warn!(?latest_root, ?pre_root, ?post_root, "Attempted to insert root out of order");
+            return Ok(());
         }
 
         self.update_leaf_index_mapping(&leaf_updates);
@@ -268,7 +267,7 @@ where
         }
 
         // Reads a node from the list of updates or from the tree
-        let read_node = |node_idx: u32| {
+        let read_node = |node_idx: u32, updates: &StorageUpdates| {
             if let Some(node) = updates.get(&node_idx.into()) {
                 *node
             } else {
@@ -288,8 +287,8 @@ where
 
             let (left_child_idx, right_child_idx) = children_of(node_idx);
 
-            let left = read_node(left_child_idx);
-            let right = read_node(right_child_idx);
+            let left = read_node(left_child_idx, &updates);
+            let right = read_node(right_child_idx, &updates);
 
             let hash = PoseidonHash::hash_node(&left, &right);
 
@@ -316,7 +315,7 @@ where
 
         // Drain the updates up to and including the root
         let mut drained = self.tree_updates.drain(..=idx_of_root);
-        let (root, update) = drained.last().unwrap();
+        let (_root, update) = drained.last().unwrap();
 
         // Filter out updates that are not leaves
         let mut leaf_updates = update
@@ -329,8 +328,6 @@ where
             .collect::<Vec<_>>();
 
         leaf_updates.sort_by_key(|(idx, _)| *idx);
-
-        use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
         // Partition the leaf updates into insertions and deletions
         let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
@@ -391,7 +388,7 @@ where
         root: &Hash,
     ) -> Result<Proof, IdentityTreeError> {
         // Get the updates at the specified root
-        let (update_root, updates) = self
+        let (_update_root, updates) = self
             .tree_updates
             .iter()
             .find(|(update_root, _update)| update_root == root)

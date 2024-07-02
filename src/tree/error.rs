@@ -45,11 +45,6 @@ where
 pub enum IdentityTreeError {
     #[error("Root not found")]
     RootNotFound,
-    #[error("Expected pre root to be {expected_root}, but got {actual_root}")]
-    RootOutOfOrder {
-        expected_root: Hash,
-        actual_root: Hash,
-    },
     #[error("Leaf already exists")]
     LeafAlreadyExists,
     #[error("Leaf does not exist in tree")]

@@ -12,7 +12,6 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeError;
-use super::identity_tree::Root;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -163,7 +162,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
 #[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
-) -> Result<Json<HashMap<u64, Root>>, WorldTreeError<M>> {
+) -> Result<Json<HashMap<u64, Hash>>, WorldTreeError<M>> {
     let chain_state = world_tree.chain_state.read().await.clone();
     Ok(Json(chain_state))
 }
