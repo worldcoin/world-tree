@@ -102,9 +102,6 @@ async fn full_flow() -> eyre::Result<()> {
         .send()
         .await?;
 
-    // Wait before bridging
-    tokio::time::sleep(Duration::from_secs(2)).await;
-
     bridged_world_id
         .receive_root(f2ethers(first_batch_root))
         .send()
