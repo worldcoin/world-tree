@@ -37,7 +37,6 @@ impl TestClient {
             response.error_for_status_ref()?;
         }
 
-
         Ok(response.json().await?)
     }
 
