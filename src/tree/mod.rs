@@ -407,7 +407,7 @@ where
             .map_err(WorldTreeError::MiddlewareError)?;
 
         if all_logs.is_empty() {
-            return Err(WorldTreeError::CanonicalLogsNotFound);
+            return Ok(vec![]);
         }
 
         // If the tree is populated, only process logs that are newer than the latest root
