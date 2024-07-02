@@ -4,6 +4,8 @@ use ethers::providers::Middleware;
 use hyper::StatusCode;
 use thiserror::Error;
 
+use super::Hash;
+
 #[derive(Error, Debug)]
 pub enum WorldTreeError<M>
 where
@@ -43,6 +45,11 @@ where
 pub enum IdentityTreeError {
     #[error("Root not found")]
     RootNotFound,
+    #[error("Expected pre root to be {expected_root}, but got {actual_root}")]
+    RootOutOfOrder {
+        expected_root: Hash,
+        actual_root: Hash,
+    },
     #[error("Leaf already exists")]
     LeafAlreadyExists,
     #[error("Leaf does not exist in tree")]
