@@ -47,7 +47,7 @@ pub struct WorldTree<M: Middleware + 'static> {
     /// Responsible for listening to state changes to the tree on mainnet
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     /// Responsible for listening to state changes state changes to bridged WorldIDs
-    pub bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+    pub bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
     /// Mapping of chain Id -> root hash, representing the latest root for each chain
     pub chain_state: Arc<RwLock<HashMap<u64, Root>>>,
     /// Flag to indicate if the tree is synced to the latest block on startup. Once the tree is initially synced to the chain tip, this field is set to true
@@ -61,7 +61,7 @@ where
     pub fn new(
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
-        bridged_tree_manager: Vec<TreeManager<M, BridgedTree>>,
+        bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
         cache: &PathBuf,
     ) -> Result<Self, WorldTreeError<M>> {
         let identity_tree =
@@ -70,7 +70,7 @@ where
         Ok(Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
-            bridged_tree_manager,
+            bridged_tree_managers,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
             synced: AtomicBool::new(false),
         })
@@ -104,8 +104,8 @@ where
                 .spawn(leaf_updates_tx, cancel_tx.subscribe()),
         );
 
-        if !self.bridged_tree_manager.is_empty() {
-            for bridged_tree in self.bridged_tree_manager.iter() {
+        if !self.bridged_tree_managers.is_empty() {
+            for bridged_tree in self.bridged_tree_managers.iter() {
                 handles.push(
                     bridged_tree
                         .spawn(bridged_root_tx.clone(), cancel_tx.subscribe()),
@@ -138,7 +138,7 @@ where
         cancel_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
         // If there are no bridged trees, apply canonical updates to the tree as they arrive
-        if self.bridged_tree_manager.is_empty() {
+        if self.bridged_tree_managers.is_empty() {
             self.apply_canonical_updates(leaf_updates_rx, cancel_rx)
         } else {
             // Otherwise, append canonical updates to `tree_updates`
@@ -324,7 +324,7 @@ where
     ) -> Result<HashMap<Hash, Vec<u64>>, WorldTreeError<M>> {
         // Get the latest root for all bridged chains and set the last synced block to the current block
         let futures =
-            self.bridged_tree_manager
+            self.bridged_tree_managers
                 .iter()
                 .map(|tree_manager| async move {
                     let bridged_world_id = IBridgedWorldID::new(
@@ -491,7 +491,7 @@ where
                     .expect("No bridged roots match the latest canonical root");
 
                 // Ensure that all bridged chains have the same root
-                if chain_ids.len() != self.bridged_tree_manager.len() {
+                if chain_ids.len() != self.bridged_tree_managers.len() {
                     return Err(WorldTreeError::IncongruentRoots);
                 }
 
