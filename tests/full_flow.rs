@@ -102,6 +102,9 @@ async fn full_flow() -> eyre::Result<()> {
         .send()
         .await?;
 
+    // Wait before bridging
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
     bridged_world_id
         .receive_root(f2ethers(first_batch_root))
         .send()
@@ -142,10 +145,15 @@ async fn full_flow() -> eyre::Result<()> {
 
     let client = TestClient::new(format!("http://{world_tree_socket_addr}"));
 
-    let ip = client
-        .inclusion_proof(&first_batch[0])
-        .await?
-        .context("Missing inclusion proof")?;
+    let ip = attempt_async! {
+        async {
+            client
+                .inclusion_proof(&first_batch[0])
+                .await
+                .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
+        }
+    };
+
     tracing::debug!(?ip, "Got first inclusion proof");
 
     assert_eq!(
