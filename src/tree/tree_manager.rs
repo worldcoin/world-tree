@@ -137,6 +137,7 @@ impl TreeVersion for CanonicalTree {
                     .await?;
 
                     for update in identity_updates {
+                        let new_root = &update.1;
                         tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send(update).await?;
                     }
