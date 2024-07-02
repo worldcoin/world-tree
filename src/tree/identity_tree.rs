@@ -369,6 +369,12 @@ where
 
         if let Some(root) = root {
             if root.hash == self.tree.root() {
+                // FIXME: This code is duplicate of what's in the else branch of the
+                //        outer if statement
+                if *leaf_idx as usize >= self.tree.num_leaves() {
+                    return Ok(None);
+                }
+
                 let proof = self.tree.proof(*leaf_idx as usize);
                 Ok(Some(InclusionProof::new(self.tree.root(), proof)))
             } else {
@@ -376,7 +382,7 @@ where
                 Ok(Some(InclusionProof::new(root.hash, proof)))
             }
         } else {
-            if *leaf_idx as usize > self.tree.num_leaves() {
+            if *leaf_idx as usize >= self.tree.num_leaves() {
                 return Ok(None);
             }
 
@@ -484,6 +490,7 @@ pub fn flatten_leaf_updates(
     updates
 }
 
+#[derive(Debug, Clone)]
 pub enum LeafUpdates {
     Insert(Leaves),
     Delete(Leaves),
@@ -534,7 +541,7 @@ impl PartialOrd for Root {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InclusionProof {
     pub root: Field,
@@ -859,10 +866,7 @@ mod test {
             );
 
         // Collect the second half of the leaves
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..]
-            .iter()
-            .cloned()
-            .collect::<Vec<Hash>>();
+        let leaf_updates = leaves[(NUM_LEAVES / 2)..].to_vec();
 
         let updated_root = identity_tree.compute_root(&leaf_updates, None)?;
         let expected_root = expected_tree.root();

@@ -9,8 +9,6 @@ pub enum WorldTreeError<M>
 where
     M: Middleware + 'static,
 {
-    #[error("No canonical logs found")]
-    CanonicalLogsNotFound,
     #[error("Roots are different when expected to be the same")]
     IncongruentRoots,
     #[error("Leaf channel closed")]
