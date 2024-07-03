@@ -39,7 +39,7 @@ where
 }
 
 /// Helper function to create an `Ok` result.
-/// This is useful inside closuures where the compiler
+/// This is useful inside closures where the compiler
 /// can't infer the type of the result.
 pub fn ok<T>(t: T) -> Result<T> {
     Result::Ok(t)
