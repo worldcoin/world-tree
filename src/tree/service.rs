@@ -49,29 +49,6 @@ where
         self,
         addr: SocketAddr,
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
-        let (_local_addr, handles) = self.bind_serve(addr).await?;
-
-        Ok(handles)
-    }
-
-    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
-    /// This function spawns a task to sync and maintain the state of the world tree across all monitored chains.
-    ///
-    /// # Arguments
-    ///
-    /// * `addr` - Socket address to bind the server to
-    ///
-    /// # Returns
-    ///
-    /// The socket address the server is bound to.
-    /// Vector of `JoinHandle`s for the spawned tasks.
-    pub async fn bind_serve(
-        self,
-        addr: SocketAddr,
-    ) -> eyre::Result<(
-        SocketAddr,
-        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
-    )> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -85,8 +62,6 @@ where
             .with_state(self.world_tree.clone());
 
         let bound_server = axum::Server::bind(&addr);
-        let local_addr = bound_server.local_addr();
-
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
             bound_server.serve(router.into_make_service()).await?;
@@ -100,7 +75,7 @@ where
 
         handles.push(server_handle);
 
-        Ok((local_addr, handles))
+        Ok(handles)
     }
 }
 
