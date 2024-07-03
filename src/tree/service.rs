@@ -8,10 +8,10 @@ use axum::{middleware, Json};
 use axum_middleware::logging;
 use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeError;
-use super::identity_tree::Root;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -19,6 +19,7 @@ use super::{ChainId, Hash, InclusionProof, WorldTree};
 pub struct InclusionProofService<M: Middleware + 'static> {
     /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree<M>>,
+    pub cancel_tx: broadcast::Sender<()>,
 }
 
 impl<M> InclusionProofService<M>
@@ -26,7 +27,12 @@ where
     M: Middleware,
 {
     pub fn new(world_tree: Arc<WorldTree<M>>) -> Self {
-        Self { world_tree }
+        let (cancel_tx, _) = broadcast::channel(1);
+
+        Self {
+            world_tree,
+            cancel_tx,
+        }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
@@ -43,6 +49,29 @@ where
         self,
         addr: SocketAddr,
     ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
+        let (_local_addr, handles) = self.bind_serve(addr).await?;
+
+        Ok(handles)
+    }
+
+    /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
+    /// This function spawns a task to sync and maintain the state of the world tree across all monitored chains.
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - Socket address to bind the server to
+    ///
+    /// # Returns
+    ///
+    /// The socket address the server is bound to.
+    /// Vector of `JoinHandle`s for the spawned tasks.
+    pub async fn bind_serve(
+        self,
+        addr: SocketAddr,
+    ) -> eyre::Result<(
+        SocketAddr,
+        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
+    )> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -55,10 +84,17 @@ where
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
+        let bound_server = axum::Server::bind(&addr);
+        let local_addr = bound_server.local_addr();
+
+        let mut cancel_rx = self.cancel_tx.subscribe();
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            axum::Server::bind(&addr)
+            bound_server
                 .serve(router.into_make_service())
+                .with_graceful_shutdown(async move {
+                    cancel_rx.recv().await.ok();
+                })
                 .await?;
 
             Ok(())
@@ -66,11 +102,11 @@ where
 
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn().await?);
+        handles.extend(self.world_tree.spawn(self.cancel_tx.clone()).await?);
 
         handles.push(server_handle);
 
-        Ok(handles)
+        Ok((local_addr, handles))
     }
 }
 
@@ -126,7 +162,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
 #[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
-) -> Result<Json<HashMap<u64, Root>>, WorldTreeError<M>> {
+) -> Result<Json<HashMap<u64, Hash>>, WorldTreeError<M>> {
     let chain_state = world_tree.chain_state.read().await.clone();
     Ok(Json(chain_state))
 }

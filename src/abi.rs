@@ -15,6 +15,6 @@ abigen!(
         function latestRoot() public view virtual returns (uint256)
         function receiveRoot(uint256 newRoot) external
     ]"#,
-    event_derives(serde::Deserialize, serde::Serialize)
 
+    event_derives(serde::Deserialize, serde::Serialize)
 );
