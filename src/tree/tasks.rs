@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock};
 
 use super::error::WorldTreeError;
 use super::identity_tree::IdentityTree;

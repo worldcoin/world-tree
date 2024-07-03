@@ -17,7 +17,7 @@ use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock};
 use tokio::task::JoinHandle;
 
 use self::error::WorldTreeError;
