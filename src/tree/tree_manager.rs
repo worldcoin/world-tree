@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
 use super::error::WorldTreeError;
-use super::identity_tree::{LeafUpdates, Root};
+use super::identity_tree::LeafUpdates;
 use super::{Hash, LeafIndex};
 use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
@@ -95,8 +95,16 @@ where
 
 #[derive(Default)]
 pub struct CanonicalTree;
+
+#[derive(Debug, Clone)]
+pub struct CanonicalChainUpdate {
+    pub pre_root: Hash,
+    pub post_root: Hash,
+    pub leaf_updates: LeafUpdates,
+}
+
 impl TreeVersion for CanonicalTree {
-    type ChannelData = (Root, LeafUpdates);
+    type ChannelData = CanonicalChainUpdate;
 
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
@@ -137,7 +145,7 @@ impl TreeVersion for CanonicalTree {
                     .await?;
 
                     for update in identity_updates {
-                        let new_root = &update.1;
+                        let new_root = &update.post_root;
                         tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send(update).await?;
                     }
@@ -226,8 +234,8 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: &[Log],
     middleware: Arc<M>,
-) -> Result<BTreeMap<Root, LeafUpdates>, WorldTreeError<M>> {
-    let mut tree_updates = BTreeMap::new();
+) -> Result<Vec<CanonicalChainUpdate>, WorldTreeError<M>> {
+    let mut tree_updates = Vec::new();
 
     let mut tasks = FuturesUnordered::new();
 
@@ -255,7 +263,7 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     }
 
     // Process each transaction, constructing identity updates for each root
-    for (nonce, transaction) in sorted_transactions {
+    for (_nonce, transaction) in sorted_transactions {
         let calldata = &transaction.input;
 
         let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();
@@ -283,12 +291,17 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
                 );
             }
 
-            let root = Root {
-                hash: Hash::from_limbs(register_identities_call.post_root.0),
-                nonce: nonce.as_u64() as usize,
-            };
-            tracing::debug!(?root, "Canonical tree updated");
-            tree_updates.insert(root, LeafUpdates::Insert(identity_updates));
+            let pre_root =
+                Hash::from_limbs(register_identities_call.pre_root.0);
+            let post_root =
+                Hash::from_limbs(register_identities_call.post_root.0);
+
+            tracing::debug!(?pre_root, ?post_root, "Canonical tree updated");
+            tree_updates.push(CanonicalChainUpdate {
+                pre_root,
+                post_root,
+                leaf_updates: LeafUpdates::Insert(identity_updates),
+            });
         } else if function_selector == DeleteIdentitiesCall::selector() {
             tracing::debug!("Decoding deleteIdentities calldata");
 
@@ -304,12 +317,16 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
                 identity_updates.insert(i.into(), Hash::ZERO);
             }
 
-            let root = Root {
-                hash: Hash::from_limbs(delete_identities_call.post_root.0),
-                nonce: nonce.as_u64() as usize,
-            };
-            tracing::debug!(?root, "Canonical tree updated");
-            tree_updates.insert(root, LeafUpdates::Delete(identity_updates));
+            let pre_root = Hash::from_limbs(delete_identities_call.pre_root.0);
+            let post_root =
+                Hash::from_limbs(delete_identities_call.post_root.0);
+
+            tracing::debug!(?pre_root, ?post_root, "Canonical tree updated");
+            tree_updates.push(CanonicalChainUpdate {
+                pre_root,
+                post_root,
+                leaf_updates: LeafUpdates::Delete(identity_updates),
+            });
         }
     }
 

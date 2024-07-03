@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -20,10 +20,15 @@ pub type Leaves = HashMap<LeafIndex, Hash>;
 pub type StorageUpdates = HashMap<NodeIndex, Hash>;
 
 pub struct IdentityTree<S> {
+    /// Densely allocated (and in some cases cached on disk) merkle tree
     pub tree: CascadingMerkleTree<PoseidonHash, S>,
-    pub tree_updates: BTreeMap<Root, StorageUpdates>,
-    // Hashmap of root hash to nonce
-    pub roots: HashMap<Hash, usize>,
+
+    /// Temporary storage of tree updates for a given root
+    /// the updates are stored here until they are applied to all observed chains
+    /// at which point they will be removed from this map and applied to the canonical tree
+    pub tree_updates: Vec<(Hash, StorageUpdates)>,
+
+    /// Mapping of leaf hash to leaf index
     pub leaves: HashMap<Hash, u32>,
 }
 
@@ -33,8 +38,7 @@ impl IdentityTree<Vec<Hash>> {
 
         Self {
             tree,
-            tree_updates: BTreeMap::new(),
-            roots: HashMap::new(),
+            tree_updates: Vec::new(),
             leaves: HashMap::new(),
         }
     }
@@ -108,8 +112,7 @@ impl IdentityTree<MmapVec<Hash>> {
         Ok(Self {
             tree,
             leaves,
-            tree_updates: BTreeMap::new(),
-            roots: HashMap::new(),
+            tree_updates: Vec::new(),
         })
     }
 }
@@ -162,19 +165,40 @@ where
     // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
     pub fn append_updates(
         &mut self,
-        root: Root,
+        pre_root: Hash,
+        post_root: Hash,
         leaf_updates: LeafUpdates,
     ) -> Result<(), IdentityTreeError> {
-        self.update_leaves(&leaf_updates);
+        let latest_root =
+            if let Some((last_root, _updates)) = self.tree_updates.last() {
+                // We already have pending updates
+                *last_root
+            } else {
+                // New root to an empty tree or all chains are synced
+                self.tree.root()
+            };
+
+        if pre_root != latest_root {
+            // This can occur if the tree has been restored from cache, but we're replaying chain events
+            tracing::warn!(
+                ?latest_root,
+                ?pre_root,
+                ?post_root,
+                "Attempted to insert root out of order"
+            );
+            return Ok(());
+        }
+
+        self.update_leaf_index_mapping(&leaf_updates);
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
-        self.tree_updates.insert(root, updates);
-        self.roots.insert(root.hash, root.nonce);
+
+        self.tree_updates.push((post_root, updates));
 
         Ok(())
     }
 
-    fn update_leaves(&mut self, leaf_updates: &LeafUpdates) {
+    fn update_leaf_index_mapping(&mut self, leaf_updates: &LeafUpdates) {
         match &leaf_updates {
             LeafUpdates::Insert(updates) => {
                 for (idx, val) in updates.iter() {
@@ -211,13 +235,17 @@ where
     fn construct_storage_updates(
         &self,
         leaf_updates: LeafUpdates,
-        root: Option<&Root>,
+        root: Option<&Hash>,
     ) -> Result<StorageUpdates, IdentityTreeError> {
         // Get the previous update to flatten existing storage nodes into the newly updated nodes
         // If a specific root is specified, get the update at that root
-        let prev_update = if let Some(root) = root {
-            if let Some(update) = self.tree_updates.get(root) {
-                update.clone()
+        let mut updates = if let Some(root) = root {
+            if let Some(update) = self
+                .tree_updates
+                .iter()
+                .find(|(update_root, _updates)| update_root == root)
+            {
+                update.1.clone()
             } else {
                 return Err(IdentityTreeError::RootNotFound);
             }
@@ -230,8 +258,8 @@ where
             }
         };
 
-        let mut updates = HashMap::new();
         let mut node_queue = VecDeque::new();
+        let mut nodes_updated = HashSet::new();
 
         // Convert leaf indices into storage indices and insert into updates
         let leaves: Leaves = leaf_updates.into();
@@ -240,45 +268,32 @@ where
             updates.insert(storage_idx.into(), hash);
 
             // Queue the parent index
-            node_queue.push_front((storage_idx - 1) / 2);
+            node_queue.push_front(parent_of(storage_idx));
         }
 
+        // Reads a node from the list of updates or from the tree
+        let read_node = |node_idx: u32, updates: &StorageUpdates| {
+            if let Some(node) = updates.get(&node_idx.into()) {
+                *node
+            } else {
+                let (depth, offset) = storage_idx_to_coords(node_idx as usize);
+                self.tree.get_node(depth, offset)
+            }
+        };
+
         while let Some(node_idx) = node_queue.pop_back() {
-            // Check if the node index is already in the updates hashmap, indicating it has already been calculated
-            if updates.contains_key(&node_idx.into()) {
+            // Check if the node has already been updated
+            // this can happen if e.g. we updated 2 leaves that share the same parent
+            if nodes_updated.contains(&node_idx) {
                 continue;
+            } else {
+                nodes_updated.insert(node_idx);
             }
 
-            let left_child_idx = node_idx * 2 + 1;
-            let right_child_idx = node_idx * 2 + 2;
+            let (left_child_idx, right_child_idx) = children_of(node_idx);
 
-            // Get the left child, with precedence given to the updates
-            let left = updates
-                .get(&left_child_idx.into())
-                .copied()
-                // If the left child is not in the updates, check the previous update
-                .or_else(|| prev_update.get(&left_child_idx.into()).copied())
-                // Otherwise, get the node from the tree
-                .or_else(|| {
-                    let (depth, offset) =
-                        storage_idx_to_coords(left_child_idx as usize);
-                    Some(self.tree.get_node(depth, offset))
-                })
-                .expect("Could not find node in tree");
-
-            // Get the right child, with precedence given to the updates
-            let right = updates
-                .get(&right_child_idx.into())
-                .copied()
-                // If the right child is not in the updates, check the previous update
-                .or_else(|| prev_update.get(&right_child_idx.into()).copied())
-                // Otherwise, get the node from the tree
-                .or_else(|| {
-                    let (depth, offset) =
-                        storage_idx_to_coords(right_child_idx as usize);
-                    Some(self.tree.get_node(depth, offset))
-                })
-                .expect("Could not find node in tree");
+            let left = read_node(left_child_idx, &updates);
+            let right = read_node(right_child_idx, &updates);
 
             let hash = PoseidonHash::hash_node(&left, &right);
 
@@ -288,70 +303,56 @@ where
             if node_idx == 0 {
                 break;
             } else {
-                node_queue.push_front((node_idx - 1) / 2);
+                node_queue.push_front(parent_of(node_idx));
             };
-        }
-
-        // Flatten any remaining updates from the previous update
-        for (node_idx, hash) in prev_update {
-            updates.entry(node_idx).or_insert(hash);
         }
 
         Ok(updates)
     }
 
     // Applies updates up to the specified root, inclusive
-    pub fn apply_updates_to_root(&mut self, root: &Root) {
-        // Get the update at the specified root and apply to the tree
-        if let Some(update) = self.tree_updates.remove(root) {
-            self.roots.remove(&root.hash);
+    pub fn apply_updates_to_root(&mut self, root: &Hash) {
+        let idx_of_root = self
+            .tree_updates
+            .iter()
+            .position(|(update_root, _update)| update_root == root)
+            .expect("Tried applying updates to a non-existent root");
 
-            // Filter out updates that are not leaves
-            let mut leaf_updates = update
-                .into_iter()
-                .filter_map(|(idx, value)| {
-                    if *idx >= 1 << self.tree.depth() {
-                        let leaf_idx =
-                            storage_to_leaf_idx(*idx, self.tree.depth());
-                        Some((leaf_idx, value))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
+        // Drain the updates up to and including the root
+        let drained = self.tree_updates.drain(..=idx_of_root);
+        let (_root, update) = drained.last().unwrap();
 
-            leaf_updates.sort_by_key(|(idx, _)| *idx);
+        // Filter out updates that are not leaves
+        let mut leaf_updates = update
+            .into_iter()
+            .filter_map(|(idx, value)| {
+                let leaf_idx = node_to_leaf_idx(idx.0, self.tree.depth())?;
 
-            // Partition the leaf updates into insertions and deletions
-            let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
-                .into_par_iter()
-                .partition_map(|(leaf_idx, value)| {
-                    if value != Hash::ZERO {
-                        Either::Left(value)
-                    } else {
-                        Either::Right(leaf_idx as usize)
-                    }
-                });
+                Some((leaf_idx, value))
+            })
+            .collect::<Vec<_>>();
 
-            // Insert/delete leaves in the canonical tree
-            // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
-            self.tree.extend_from_slice(&insertions);
+        leaf_updates.sort_by_key(|(idx, _)| *idx);
 
-            for leaf_idx in deletions {
-                self.tree.set_leaf(leaf_idx, Hash::ZERO);
-            }
+        // Partition the leaf updates into insertions and deletions
+        let (insertions, deletions): (Vec<Hash>, Vec<usize>) = leaf_updates
+            .into_par_iter()
+            .partition_map(|(leaf_idx, value)| {
+                if value != Hash::ZERO {
+                    Either::Left(value)
+                } else {
+                    Either::Right(leaf_idx as usize)
+                }
+            });
+
+        // Insert/delete leaves in the canonical tree
+        // Note that the leaves are inserted/removed from the leaves hashmap when the updates are first applied to tree_updates
+        self.tree.extend_from_slice(&insertions);
+
+        // TODO: Implement bulk deletions
+        for leaf_idx in deletions {
+            self.tree.set_leaf(leaf_idx, Hash::ZERO);
         }
-
-        // Split off tree updates at the new root
-        // Since the root was already removed from the updates, we can use split_off to separate the updates non inclusive of the root
-        let current_tree_updates = self.tree_updates.split_off(root);
-
-        // Clean up any roots that are no longer needed
-        for root in self.tree_updates.keys() {
-            self.roots.remove(&root.hash);
-        }
-
-        self.tree_updates = current_tree_updates;
     }
 
     /// Construct an inclusion proof for a given leaf
@@ -360,47 +361,42 @@ where
     pub fn inclusion_proof(
         &self,
         leaf: Hash,
-        root: Option<&Root>,
+        root: Option<&Hash>,
     ) -> Result<Option<InclusionProof>, IdentityTreeError> {
         let leaf_idx = match self.leaves.get(&leaf) {
             Some(idx) => idx,
             None => return Err(IdentityTreeError::LeafNotFound),
         };
 
-        if let Some(root) = root {
-            if root.hash == self.tree.root() {
-                // FIXME: This code is duplicate of what's in the else branch of the
-                //        outer if statement
+        match root {
+            // TODO: This doesn't work for old roots which have been flattened into the cascading tree
+            Some(root) if *root != self.tree.root() => {
+                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
+                Ok(Some(InclusionProof::new(*root, proof)))
+            }
+            _ => {
                 if *leaf_idx as usize >= self.tree.num_leaves() {
                     return Ok(None);
                 }
 
                 let proof = self.tree.proof(*leaf_idx as usize);
                 Ok(Some(InclusionProof::new(self.tree.root(), proof)))
-            } else {
-                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
-                Ok(Some(InclusionProof::new(root.hash, proof)))
             }
-        } else {
-            if *leaf_idx as usize >= self.tree.num_leaves() {
-                return Ok(None);
-            }
-
-            let proof = self.tree.proof(*leaf_idx as usize);
-            Ok(Some(InclusionProof::new(self.tree.root(), proof)))
         }
     }
 
     /// Construct an inclusion proof for a given leaf at a specified root
+    /// using the pending updates
     pub fn construct_proof_from_root(
         &self,
         leaf_idx: u32,
-        root: &Root,
+        root: &Hash,
     ) -> Result<Proof, IdentityTreeError> {
         // Get the updates at the specified root
-        let updates = self
+        let (_update_root, updates) = self
             .tree_updates
-            .get(root)
+            .iter()
+            .find(|(update_root, _update)| update_root == root)
             .ok_or(IdentityTreeError::RootNotFound)?;
 
         // Convert the leaf index to a storage index for easier indexing
@@ -410,11 +406,7 @@ where
 
         // Traverse the tree from the leaf to the root, constructing the proof along the way with precedence for the updated node values
         while node_idx > 0 {
-            let sibling_idx = if node_idx % 2 == 0 {
-                node_idx - 1
-            } else {
-                node_idx + 1
-            };
+            let sibling_idx = sibling_of(node_idx);
 
             // Check if the sibling is in the updates, otherwise get the node from the tree
             let sibling = updates
@@ -434,7 +426,7 @@ where
                 Branch::Left(sibling)
             });
 
-            node_idx = (node_idx - 1) / 2;
+            node_idx = parent_of(node_idx);
         }
 
         Ok(semaphore::merkle_tree::Proof(proof))
@@ -444,7 +436,7 @@ where
     pub fn compute_root(
         &self,
         leaves: &[Hash],
-        root: Option<&Root>,
+        root: Option<&Hash>,
     ) -> Result<Hash, IdentityTreeError> {
         let next_leaf_index = self.tree.num_leaves();
 
@@ -469,27 +461,6 @@ where
     }
 }
 
-/// Flattens leaf updates into a single vector of leaf indices and hashes with precedence given to the latest updates
-pub fn flatten_leaf_updates(
-    leaf_updates: BTreeMap<Root, LeafUpdates>,
-) -> Vec<(LeafIndex, Hash)> {
-    let mut flattened_updates = HashMap::new();
-
-    // Iterate in reverse over the sub-tree to ensure the latest updates are applied first
-    for (_, leaves) in leaf_updates.into_iter().rev() {
-        let updates: Leaves = leaves.into();
-
-        for (index, hash) in updates.into_iter() {
-            flattened_updates.entry(index).or_insert(hash);
-        }
-    }
-
-    let mut updates = flattened_updates.into_iter().collect::<Vec<_>>();
-    updates.sort_by_key(|(idx, _)| *idx);
-
-    updates
-}
-
 #[derive(Debug, Clone)]
 pub enum LeafUpdates {
     Insert(Leaves),
@@ -510,35 +481,36 @@ pub fn leaf_to_storage_idx(leaf_idx: u32, tree_depth: usize) -> u32 {
     leaf_0 + leaf_idx
 }
 
-pub fn storage_to_leaf_idx(storage_idx: u32, tree_depth: usize) -> u32 {
+pub fn parent_of(node_idx: u32) -> u32 {
+    (node_idx - 1) / 2
+}
+
+pub fn sibling_of(node_idx: u32) -> u32 {
+    if node_idx % 2 == 0 {
+        node_idx - 1
+    } else {
+        node_idx + 1
+    }
+}
+
+pub fn children_of(node_idx: u32) -> (u32, u32) {
+    (node_idx * 2 + 1, node_idx * 2 + 2)
+}
+
+pub fn node_to_leaf_idx(node_idx: u32, tree_depth: usize) -> Option<u32> {
     let leaf_0 = (1 << tree_depth) - 1;
-    storage_idx - leaf_0
+
+    if node_idx < leaf_0 {
+        None
+    } else {
+        Some(node_idx - leaf_0)
+    }
 }
 
 pub fn storage_idx_to_coords(index: usize) -> (usize, usize) {
     let depth = (index + 1).ilog2();
     let offset = index - (2usize.pow(depth) - 1);
     (depth as usize, offset)
-}
-
-#[derive(PartialEq, Serialize, Deserialize, Eq, Hash, Clone, Copy, Debug)]
-pub struct Root {
-    pub hash: Hash,
-    //NOTE: note that this assumes that there is only one wallet that sequences transactions
-    // we should update to a syncing mechanism that can account for multiple sequencers
-    pub nonce: usize,
-}
-
-impl Ord for Root {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.nonce.cmp(&other.nonce)
-    }
-}
-
-impl PartialOrd for Root {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -583,10 +555,8 @@ mod test {
     use semaphore::poseidon_tree::PoseidonHash;
     use tempfile::NamedTempFile;
 
-    use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates, Root};
-    use crate::tree::identity_tree::{
-        storage_idx_to_coords, storage_to_leaf_idx,
-    };
+    use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates};
+    use crate::tree::identity_tree::{node_to_leaf_idx, storage_idx_to_coords};
     use crate::tree::{Hash, LeafIndex};
 
     const TREE_DEPTH: usize = 2;
@@ -608,27 +578,6 @@ mod test {
     }
 
     #[test]
-    fn test_ord_root() {
-        let root_1 = Root {
-            hash: Hash::from(1),
-            nonce: 1,
-        };
-
-        let root_2 = Root {
-            hash: Hash::from(2),
-            nonce: 2,
-        };
-
-        let root_3 = Root {
-            hash: Hash::from(3),
-            nonce: 1,
-        };
-
-        assert!(root_1 < root_2);
-        assert!(root_2 > root_3);
-    }
-
-    #[test]
     fn test_leaf_to_storage_idx() {
         for i in 0..1 << TREE_DEPTH {
             let storage_idx = leaf_to_storage_idx(i, TREE_DEPTH);
@@ -641,7 +590,7 @@ mod test {
     fn test_storage_to_leaf_idx() {
         for i in 0..1 << TREE_DEPTH {
             let storage_idx = leaf_to_storage_idx(i, TREE_DEPTH);
-            let leaf_idx = storage_to_leaf_idx(storage_idx, TREE_DEPTH);
+            let leaf_idx = node_to_leaf_idx(storage_idx, TREE_DEPTH).unwrap();
             assert_eq!(leaf_idx, i);
         }
     }
@@ -736,32 +685,30 @@ mod test {
 
     #[test]
     fn test_append_updates() -> eyre::Result<()> {
+        tracing_subscriber::fmt::init();
+
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+        let mut tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], TREE_DEPTH, &Hash::ZERO);
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
-        for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
+        let first_half = leaves[0..NUM_LEAVES / 2].to_vec();
+        let second_half = leaves[NUM_LEAVES / 2..].to_vec();
+
+        for (idx, leaf) in first_half.iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
         }
 
-        // Generate the updated tree with all of the leaves
-        let updated_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                vec![],
-                TREE_DEPTH,
-                &Hash::ZERO,
-                &leaves,
-            );
+        tree.extend_from_slice(&first_half);
+        let pre_root = tree.root();
 
-        // Append the new leaves to the tree
-        let new_root = Root {
-            hash: updated_tree.root(),
-            nonce: 1,
-        };
+        tree.extend_from_slice(&second_half);
+        let post_root = tree.root();
 
         // Collect the second half of the leaves
         let offset = NUM_LEAVES / 2;
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..NUM_LEAVES]
+        let leaf_updates = second_half
             .iter()
             .enumerate()
             .map(|(idx, value)| (((idx + offset) as u32).into(), *value))
@@ -770,8 +717,11 @@ mod test {
         // Cache the expected root as the tree root should not change from the appended updates
         let expected_root = identity_tree.tree.root();
 
-        identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
+        identity_tree.append_updates(
+            pre_root,
+            post_root,
+            LeafUpdates::Insert(leaf_updates),
+        )?;
 
         // Ensure that the root is correct and the updates are stored
         assert_eq!(identity_tree.tree.root(), expected_root);
@@ -779,9 +729,9 @@ mod test {
 
         //TODO: assert expected updates
 
-        identity_tree.apply_updates_to_root(&new_root);
+        identity_tree.apply_updates_to_root(&post_root);
 
-        assert_eq!(identity_tree.tree.root(), updated_tree.root());
+        assert_eq!(identity_tree.tree.root(), tree.root());
         assert_eq!(identity_tree.tree_updates.len(), 0);
 
         Ok(())
@@ -790,33 +740,27 @@ mod test {
     #[test]
     fn test_apply_updates_to_root() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
+        let mut tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], TREE_DEPTH, &Hash::ZERO);
 
         // Generate the first half of the leaves and insert into the tree
         let leaves = generate_all_leaves();
+        let first_half = leaves[0..NUM_LEAVES / 2].to_vec();
+        let second_half = leaves[NUM_LEAVES / 2..].to_vec();
 
-        for (idx, leaf) in leaves[0..NUM_LEAVES / 2].iter().enumerate() {
+        for (idx, leaf) in first_half.iter().enumerate() {
             identity_tree.insert(idx as u32, *leaf)?;
+            assert_eq!(tree.num_leaves(), idx);
+            tree.push(*leaf)?;
         }
 
         // Generate the updated tree with all of the leaves
-        let expected_tree: CascadingMerkleTree<PoseidonHash> =
-            CascadingMerkleTree::new_with_leaves(
-                vec![],
-                TREE_DEPTH,
-                &Hash::ZERO,
-                &leaves,
-            );
-
-        let expected_root = expected_tree.root();
-
-        // Append the new leaves to the tree
-        let new_root = Root {
-            hash: expected_root,
-            nonce: 1,
-        };
+        let pre_root = tree.root();
+        tree.extend_from_slice(&second_half);
+        let post_root = tree.root();
 
         // Collect the second half of the leaves
-        let leaf_updates = leaves[(NUM_LEAVES / 2)..]
+        let leaf_updates = second_half
             .iter()
             .enumerate()
             .map(|(idx, value)| {
@@ -824,13 +768,16 @@ mod test {
             })
             .collect::<HashMap<LeafIndex, Hash>>();
 
-        identity_tree
-            .append_updates(new_root, LeafUpdates::Insert(leaf_updates))?;
+        identity_tree.append_updates(
+            pre_root,
+            post_root,
+            LeafUpdates::Insert(leaf_updates),
+        )?;
 
         // Apply updates to the tree
-        identity_tree.apply_updates_to_root(&new_root);
+        identity_tree.apply_updates_to_root(&post_root);
 
-        assert_eq!(identity_tree.tree.root(), expected_root);
+        assert_eq!(identity_tree.tree.root(), post_root);
         assert_eq!(identity_tree.tree_updates.len(), 0);
 
         for (leaf_idx, leaf) in leaves.iter().enumerate() {
@@ -838,8 +785,8 @@ mod test {
                 .inclusion_proof(*leaf, None)?
                 .ok_or(eyre!("Proof not found"))?;
 
-            assert_eq!(proof.root, expected_root);
-            assert_eq!(proof.proof, expected_tree.proof(leaf_idx));
+            assert_eq!(proof.root, post_root);
+            assert_eq!(proof.proof, tree.proof(leaf_idx));
         }
 
         Ok(())
@@ -877,9 +824,6 @@ mod test {
     }
 
     #[test]
-    fn test_flatten_leaf_updates() {}
-
-    #[test]
     fn test_inclusion_proof() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
@@ -889,6 +833,17 @@ mod test {
 
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
+
+        let initial_root = {
+            let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
+                vec![],
+                TREE_DEPTH,
+                &Hash::ZERO,
+            );
+
+            tree.push(leaves[0])?;
+            tree.root()
+        };
 
         // Simulate and create updates
         let (root_012, updates) = {
@@ -908,15 +863,10 @@ mod test {
                     .collect::<HashMap<LeafIndex, Hash>>(),
             );
 
-            let root = Root {
-                hash: tree.root(),
-                nonce: 1,
-            };
-
-            (root, updates)
+            (tree.root(), updates)
         };
 
-        identity_tree.append_updates(root_012, updates)?;
+        identity_tree.append_updates(initial_root, root_012, updates)?;
 
         // Simulate and create updates
         let (root_0123, updates) = {
@@ -937,15 +887,10 @@ mod test {
                     .collect::<HashMap<LeafIndex, Hash>>(),
             );
 
-            let root = Root {
-                hash: tree.root(),
-                nonce: 2,
-            };
-
-            (root, updates)
+            (tree.root(), updates)
         };
 
-        identity_tree.append_updates(root_0123, updates)?;
+        identity_tree.append_updates(root_012, root_0123, updates)?;
 
         let proof = identity_tree
             .inclusion_proof(leaves[3], Some(&root_0123))?
@@ -976,9 +921,6 @@ mod test {
 
         Ok(())
     }
-
-    #[test]
-    fn test_construct_proof_from_root() {}
 
     #[test]
     fn test_mmap_cache() -> eyre::Result<()> {
