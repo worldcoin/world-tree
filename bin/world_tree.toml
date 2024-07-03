@@ -16,7 +16,7 @@ address = "0xf7134CE138832c1456F2a91D64621eE90c2bddEa"
 # Creation block of the WorldIdIdentityManager contract
 creation_block = 17636832
 # RPC endpoint
-provider.rpc_endpoint = "https://eth-mainnet.g.alchemy.com/v2/JVsc_pPRnVj5rHuoQZFMV4ETAVulp9Ry"
+provider.rpc_endpoint = ""
 # Requests per second throttle
 provider.throttle = 150
 # Blockscanner window size; the maximum number of blocks to query at a time
@@ -33,25 +33,25 @@ address = "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
 # Creation block of the BridgedWorldId contract
 creation_block = 109906421
 # RPC endpoint
-provider.rpc_endpoint = "https://opt-mainnet.g.alchemy.com/v2/JVsc_pPRnVj5rHuoQZFMV4ETAVulp9Ry"
+provider.rpc_endpoint = ""
 # Requests per second throttle
 provider.throttle = 150
 # Blockscanner window size; the maximum number of blocks to query at a time
 window_size = 10000
 
 
-# # Polygon
-# [bridged_trees.polygon]
-# # Address of the BridgedWorldId contract
-# address = "0xa6d85F3b3bE6Ff6DC52C3aaBe9A35d0ce252b79F"
-# # Creation block of the BridgedWorldId contract
-# creation_block = 47860919
-# # RPC endpoint
-# provider.rpc_endpoint = ""
-# # Requests per second throttle
-# provider.throttle = 150
-# # Blockscanner window size; the maximum number of blocks to query at a time
-# window_size = 10000
+# Polygon
+[bridged_trees.polygon]
+# Address of the BridgedWorldId contract
+address = "0xa6d85F3b3bE6Ff6DC52C3aaBe9A35d0ce252b79F"
+# Creation block of the BridgedWorldId contract
+creation_block = 47860919
+# RPC endpoint
+provider.rpc_endpoint = ""
+# Requests per second throttle
+provider.throttle = 150
+# Blockscanner window size; the maximum number of blocks to query at a time
+window_size = 10000
 
 
 # [telemetry]
