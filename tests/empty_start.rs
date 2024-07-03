@@ -157,7 +157,6 @@ async fn empty_start() -> eyre::Result<()> {
 
     tracing::info!("Waiting for world-tree service to shutdown...");
     for handle in handles {
-        // handle.abort();
         // Ignore errors - channels might close causing recv errors at exit
         let _ = handle.await?;
     }
