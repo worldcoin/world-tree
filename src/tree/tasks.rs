@@ -141,7 +141,4 @@ async fn realign_trees(
 
     // Apply updates up to the greatest common root
     identity_tree.apply_updates_to_root(&latest_common_root);
-
-    // Remove updates that have been applied
-    identity_tree.tree_updates.drain(..latest_common_root_idx);
 }
