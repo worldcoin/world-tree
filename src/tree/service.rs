@@ -87,22 +87,16 @@ where
         let bound_server = axum::Server::bind(&addr);
         let local_addr = bound_server.local_addr();
 
-        let mut cancel_rx = self.cancel_tx.subscribe();
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            bound_server
-                .serve(router.into_make_service())
-                .with_graceful_shutdown(async move {
-                    cancel_rx.recv().await.ok();
-                })
-                .await?;
+            bound_server.serve(router.into_make_service()).await?;
 
             Ok(())
         });
 
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn(self.cancel_tx.clone()).await?);
+        handles.extend(self.world_tree.spawn().await?);
 
         handles.push(server_handle);
 

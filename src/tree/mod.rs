@@ -69,7 +69,6 @@ where
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(
         &self,
-        cancel_tx: broadcast::Sender<()>,
     ) -> Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>, WorldTreeError<M>>
     {
         let (leaf_updates_tx, leaf_updates_rx) =
@@ -79,17 +78,11 @@ where
 
         // Spawn the tree managers to listen to the canonical and bridged trees for updates
         let mut handles = vec![];
-        handles.push(
-            self.canonical_tree_manager
-                .spawn(leaf_updates_tx, cancel_tx.subscribe()),
-        );
+        handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
 
         if !self.bridged_tree_managers.is_empty() {
             for bridged_tree in self.bridged_tree_managers.iter() {
-                handles.push(
-                    bridged_tree
-                        .spawn(bridged_root_tx.clone(), cancel_tx.subscribe()),
-                );
+                handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
             }
 
             // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
@@ -98,7 +91,6 @@ where
                 self.identity_tree.clone(),
                 self.chain_state.clone(),
                 bridged_root_rx,
-                cancel_tx.subscribe(),
             )));
         }
 
@@ -108,7 +100,6 @@ where
             self.identity_tree.clone(),
             self.chain_state.clone(),
             leaf_updates_rx,
-            cancel_tx.subscribe(),
         )));
 
         Ok(handles)
