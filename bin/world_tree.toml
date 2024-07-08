@@ -53,6 +53,19 @@ provider.throttle = 150
 # Blockscanner window size; the maximum number of blocks to query at a time
 window_size = 10000
 
+[cmix]
+# Path to the xx network definition file
+ndf_path = "mainnet-ndf.json"
+# Path to the network state folder
+storage_dir = "xxstate"
+# A secret you may choose, to encrypt the state folder
+secret = "ALocalSecret"
+# The base64-encoded reception ID to listen on. You can leave this empty and
+# read the generated ID from the logs.
+reception_id = ""
+# A base64-encoded private key. It is recommended to leave this empty and use
+# the generated public key from the logs for clients.
+private_key = ""
 
 # [telemetry]
 # service_name = "world-tree"

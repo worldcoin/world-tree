@@ -48,7 +48,7 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = "0.3.18"
 url = "2.5.0"
-xxdk = { git = "https://git.xx.network/elixxir/libxxdk", rev = "44b9bf5e31a53eee1daf2b68af568a82340aee96" }
+xxdk = { git = "https://git.xx.network/elixxir/libxxdk", rev = "401c8be73a46a5118995803c87c819127cc83b08" }
 
 [dev-dependencies]
 bytemuck = "1.16.1"
