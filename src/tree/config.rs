@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use ethers::types::Address;
 use serde::{Deserialize, Serialize};
 use url::Url;
+#[cfg(xxdk)]
 use xxdk::service::CMixServerConfig;
 
 pub const CONFIG_PREFIX: &str = "WLD";
@@ -24,6 +25,7 @@ pub struct ServiceConfig {
     #[serde(default)]
     pub telemetry: Option<TelemetryConfig>,
     /// Configuration for the cMix server
+    #[cfg(xxdk)]
     pub cmix: CMixServerConfig,
 }
 
