@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::RwLock;
 
 use super::error::WorldTreeError;
 use super::identity_tree::IdentityTree;
@@ -16,84 +16,58 @@ pub async fn handle_canonical_updates<M>(
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
     mut leaf_updates_rx: Receiver<CanonicalChainUpdate>,
-    mut cancel_rx: broadcast::Receiver<()>,
 ) -> Result<(), WorldTreeError<M>>
 where
     M: Middleware + 'static,
 {
     loop {
-        let update = tokio::select! {
-            res = leaf_updates_rx.recv() => {
-                match res {
-                    Some(update) => update,
-                    None => break,
-                }
-            }
-            _ = cancel_rx.recv() => {
-                break
-            }
-        };
+        if let Some(update) = leaf_updates_rx.recv().await {
+            tracing::info!(
+                new_root = ?update.post_root,
+                "Leaf updates received, appending tree updates"
+            );
+            let mut identity_tree = identity_tree.write().await;
+            let mut chain_state = chain_state.write().await;
 
-        tracing::info!(
-            new_root = ?update.post_root,
-            "Leaf updates received, appending tree updates"
-        );
-        let mut identity_tree = identity_tree.write().await;
-        let mut chain_state = chain_state.write().await;
+            identity_tree.append_updates(
+                update.pre_root,
+                update.post_root,
+                update.leaf_updates,
+            )?;
 
-        identity_tree.append_updates(
-            update.pre_root,
-            update.post_root,
-            update.leaf_updates,
-        )?;
+            // Update the root for the canonical chain
+            chain_state.insert(canonical_chain_id, update.post_root);
 
-        // Update the root for the canonical chain
-        chain_state.insert(canonical_chain_id, update.post_root);
-
-        // NOTE: In practice reallignment should only happen when we receive events on one
-        //       of the bridged networks. However we don't have 100% guarantee that the canonical network
-        //       events will always arrive before the bridged network events.
-        //       So to maintain liveliness we reallign on every update.
-        realign_trees(&mut identity_tree, &mut chain_state).await;
+            // NOTE: In practice reallignment should only happen when we receive events on one
+            //       of the bridged networks. However we don't have 100% guarantee that the canonical network
+            //       events will always arrive before the bridged network events.
+            //       So to maintain liveliness we reallign on every update.
+            realign_trees(&mut identity_tree, &mut chain_state).await;
+        }
     }
-
-    Err(WorldTreeError::LeafChannelClosed)
 }
 
 pub async fn handle_bridged_updates<M>(
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
     mut bridged_root_rx: Receiver<(u64, Hash)>,
-    mut cancel_rx: broadcast::Receiver<()>,
 ) -> Result<(), WorldTreeError<M>>
 where
     M: Middleware + 'static,
 {
     loop {
-        let (chain_id, bridged_root) = tokio::select! {
-            res = bridged_root_rx.recv() => {
-                match res {
-                    Some((chain_id, bridged_root)) => (chain_id, bridged_root),
-                    None => break,
-                }
-            }
-            _ = cancel_rx.recv() => {
-                break
-            }
-        };
+        if let Some((chain_id, bridged_root)) = bridged_root_rx.recv().await {
+            tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
-        tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
+            let mut identity_tree = identity_tree.write().await;
+            let mut chain_state = chain_state.write().await;
 
-        let mut identity_tree = identity_tree.write().await;
-        let mut chain_state = chain_state.write().await;
+            // Update chain state with the new root
+            chain_state.insert(chain_id, bridged_root);
 
-        // Update chain state with the new root
-        chain_state.insert(chain_id, bridged_root);
-
-        realign_trees(&mut identity_tree, &mut chain_state).await;
+            realign_trees(&mut identity_tree, &mut chain_state).await;
+        }
     }
-
-    Err(WorldTreeError::BridgedRootChannelClosed)
 }
 
 /// Realligns all the observed chains.

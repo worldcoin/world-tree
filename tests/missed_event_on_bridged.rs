@@ -1,3 +1,4 @@
+use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -92,37 +93,41 @@ async fn missing_event_on_bridged() -> eyre::Result<()> {
         IBridgedWorldID::new(bridged_address, rollup_signer.clone());
 
     tracing::info!("Setting up world-tree service");
-    let (world_tree_socket_addr, cancel_tx, handles) =
-        setup_world_tree(&ServiceConfig {
-            tree_depth: TREE_DEPTH,
-            canonical_tree: TreeConfig {
-                address: id_manager_address,
-                window_size: 10,
-                creation_block: 0,
-                provider: ProviderConfig {
-                    rpc_endpoint: mainnet_rpc_url.parse()?,
-                    throttle: 150,
-                },
-            },
-            cache: CacheConfig {
-                cache_file: cache_file.path().to_path_buf(),
-                purge_cache: true,
-            },
-            bridged_trees: vec![TreeConfig {
-                address: bridged_address,
-                window_size: 10,
-                creation_block: 0,
-                provider: ProviderConfig {
-                    rpc_endpoint: rollup_rpc_url.parse()?,
-                    throttle: 150,
-                },
-            }],
-            socket_address: ([127, 0, 0, 1], 0).into(),
-            telemetry: None,
-        })
-        .await?;
 
-    let client = TestClient::new(format!("http://{world_tree_socket_addr}"));
+    let listener = TcpListener::bind("0.0.0.0:0")?;
+    let world_tree_port = listener.local_addr()?.port();
+
+    let service_config = ServiceConfig {
+        tree_depth: TREE_DEPTH,
+        canonical_tree: TreeConfig {
+            address: id_manager_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: mainnet_rpc_url.parse()?,
+                throttle: 150,
+            },
+        },
+        cache: CacheConfig {
+            cache_file: cache_file.path().to_path_buf(),
+            purge_cache: true,
+        },
+        bridged_trees: vec![TreeConfig {
+            address: bridged_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: rollup_rpc_url.parse()?,
+                throttle: 150,
+            },
+        }],
+        socket_address: ([127, 0, 0, 1], world_tree_port).into(),
+        telemetry: None,
+    };
+
+    let handles = setup_world_tree(&service_config).await?;
+    let client =
+        TestClient::new(format!("http://127.0.0.1:{}", world_tree_port));
 
     // Publish the first batch on mainnet
     world_id_manager
@@ -173,14 +178,15 @@ async fn missing_event_on_bridged() -> eyre::Result<()> {
     assert_eq!(ip.root, ip_bridged.root);
     assert_eq!(ip_bridged.root, second_batch_root);
 
-    tracing::info!("Cancelling world-tree service");
-    cancel_tx.send(())?;
-
     tracing::info!("Waiting for world-tree service to shutdown...");
     for handle in handles {
-        // Ignore errors - channels might close causing recv errors at exit
-        let _ = handle.await?;
+        handle.abort();
     }
+
+    tracing::info!("Shutting down mainnet container...");
+    mainnet_container.stop().await?;
+    tracing::info!("Shutting down rollup container...");
+    rollup_container.stop().await?;
 
     Ok(())
 }
