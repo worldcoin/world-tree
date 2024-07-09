@@ -71,16 +71,21 @@ pub async fn setup_world_tree(
     Ok(handles)
 }
 
-pub async fn setup_mainnet() -> eyre::Result<ContainerAsync<GenericImage>> {
-    setup_chain("runMainnet.sh").await
+pub async fn setup_mainnet(
+    port: u16,
+) -> eyre::Result<ContainerAsync<GenericImage>> {
+    setup_chain("runMainnet.sh", port).await
 }
 
-pub async fn setup_rollup() -> eyre::Result<ContainerAsync<GenericImage>> {
-    setup_chain("runRollup.sh").await
+pub async fn setup_rollup(
+    port: u16,
+) -> eyre::Result<ContainerAsync<GenericImage>> {
+    setup_chain("runRollup.sh", port).await
 }
 
 pub async fn setup_chain(
     script_file: &str,
+    port: u16,
 ) -> eyre::Result<ContainerAsync<GenericImage>> {
     let current_path = std::env::current_dir()?;
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
@@ -89,7 +94,7 @@ pub async fn setup_chain(
 
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
         .with_entrypoint("/bin/sh")
-        .with_exposed_port(ContainerPort::Tcp(8545))
+        .with_exposed_port(ContainerPort::Tcp(port))
         .with_mount(Mount::bind_mount(mount_dir, "/app"))
         .with_cmd(["-c", &format!("cd /app; ./{script_file}")])
         .start()
