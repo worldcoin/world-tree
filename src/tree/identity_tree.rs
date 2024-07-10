@@ -45,17 +45,17 @@ impl IdentityTree<Vec<Hash>> {
 }
 
 impl IdentityTree<MmapVec<Hash>> {
-    pub fn new_with_cache(
+    pub fn new_with_cache_unchecked(
         depth: usize,
         file_path: PathBuf,
     ) -> Result<Self, IdentityTreeError> {
         let mmap_vec: MmapVec<Hash> =
-            match unsafe { MmapVec::restore(&file_path) } {
+            match unsafe { MmapVec::restore_from_path(&file_path) } {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(_e) => unsafe {
                     tracing::info!("Cache not found, creating new cache file");
-                    MmapVec::open_create(&file_path)?
+                    MmapVec::create_from_path(&file_path)?
                 },
             };
 
@@ -69,28 +69,30 @@ impl IdentityTree<MmapVec<Hash>> {
             let now = Instant::now();
             tracing::info!("Restoring tree from cache");
 
-            let tree = match CascadingMerkleTree::<PoseidonHash, _>::restore(
-                mmap_vec,
-                depth,
-                &Hash::ZERO,
-            ) {
-                Ok(tree) => tree,
-                Err(_) => {
-                    tracing::error!(
+            let tree =
+                match CascadingMerkleTree::<PoseidonHash, _>::restore_unchecked(
+                    mmap_vec,
+                    depth,
+                    &Hash::ZERO,
+                ) {
+                    Ok(tree) => tree,
+                    Err(_) => {
+                        tracing::error!(
                         "Failed to restore tree from cache, purging cache and creating new tree"
                     );
 
-                    // Remove the existing cache and create a new cache file
-                    fs::remove_file(&file_path)?;
-                    let mmap_vec = unsafe { MmapVec::open_create(file_path)? };
+                        // Remove the existing cache and create a new cache file
+                        fs::remove_file(&file_path)?;
+                        let mmap_vec =
+                            unsafe { MmapVec::create_from_path(file_path)? };
 
-                    CascadingMerkleTree::<PoseidonHash, _>::new(
-                        mmap_vec,
-                        depth,
-                        &Hash::ZERO,
-                    )
-                }
-            };
+                        CascadingMerkleTree::<PoseidonHash, _>::new(
+                            mmap_vec,
+                            depth,
+                            &Hash::ZERO,
+                        )
+                    }
+                };
 
             tracing::info!("Restored tree from cache in {:?}", now.elapsed());
             tree
@@ -928,7 +930,7 @@ mod test {
         let path = temp_file.path().to_path_buf();
 
         let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, path.clone())?;
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path.clone())?;
 
         let leaves = generate_all_leaves();
 
@@ -936,7 +938,8 @@ mod test {
             identity_tree.tree.push(*leaf)?;
         }
 
-        let restored_tree = IdentityTree::new_with_cache(TREE_DEPTH, path)?;
+        let restored_tree =
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path)?;
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
@@ -957,7 +960,8 @@ mod test {
         let path = temp_file.path().to_path_buf();
 
         let mut identity_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, path.clone()).unwrap();
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path.clone())
+                .unwrap();
 
         let leaves = generate_all_leaves();
 
@@ -966,11 +970,11 @@ mod test {
         }
 
         let mut cache: MmapVec<ruint::Uint<256, 4>> =
-            unsafe { MmapVec::<Hash>::restore(&path)? };
+            unsafe { MmapVec::<Hash>::restore_from_path(&path)? };
         cache[0] = Hash::ZERO;
 
         let restored_tree =
-            IdentityTree::new_with_cache(TREE_DEPTH, path).unwrap();
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path).unwrap();
 
         assert!(restored_tree.tree.num_leaves() == 0);
         assert!(restored_tree.leaves.is_empty());

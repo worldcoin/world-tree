@@ -19,6 +19,7 @@ use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 use self::error::WorldTreeError;
 use self::identity_tree::{IdentityTree, InclusionProof};
@@ -55,15 +56,31 @@ where
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
         cache: &PathBuf,
     ) -> Result<Self, WorldTreeError<M>> {
-        let identity_tree =
-            IdentityTree::new_with_cache(tree_depth, cache.to_owned())?;
+        let identity_tree = IdentityTree::new_with_cache_unchecked(
+            tree_depth,
+            cache.to_owned(),
+        )?;
 
-        Ok(Self {
+        let world_tree = Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_managers,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
-        })
+        };
+
+        let tree = world_tree.identity_tree.clone();
+
+        tokio::task::spawn_blocking(move || {
+            info!("Validating tree");
+            let start = std::time::Instant::now();
+            tree.blocking_read()
+                .tree
+                .validate()
+                .expect("Tree validation failed");
+            info!("Tree validation completed in {:?}", start.elapsed());
+        });
+
+        Ok(world_tree)
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
