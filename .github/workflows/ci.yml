@@ -5,13 +5,11 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened,synchronize,reopened]
+    types: [opened, synchronize, reopened]
     branches:
       - main
 
 env:
-  RUST_VERSION: "1.74"
-  NIGHTLY_VERSION: nightly-2024-01-23
   CARGO_TERM_COLOR: always
   # Skip incremental build and debug info generation in CI
   CARGO_INCREMENTAL: 0
