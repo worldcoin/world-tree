@@ -1,5 +1,4 @@
 use eyre::Result;
-use futures::Future;
 use tracing::error;
 
 pub(crate) trait Log {
@@ -18,23 +17,6 @@ impl<O> Log for Result<O> {
                 None
             }
         }
-    }
-}
-
-pub(crate) trait LogFuture {
-    type Output;
-
-    async fn log(self) -> Option<Self::Output>;
-}
-
-impl<T, O> LogFuture for T
-where
-    T: Future<Output = Result<O>>,
-{
-    type Output = O;
-
-    async fn log(self) -> Option<O> {
-        self.await.log()
     }
 }
 
