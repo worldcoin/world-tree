@@ -16,7 +16,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use world_tree::tree::config::ServiceConfig;
 use world_tree::tree::service::InclusionProofService;
-#[cfg(xxdk)]
+#[cfg(feature = "xxdk")]
 use world_tree::tree::service::CmixInclusionProofService;
 use world_tree::tree::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
 use world_tree::tree::WorldTree;
@@ -77,7 +77,7 @@ pub async fn main() -> eyre::Result<()> {
         .serve(config.socket_address)
         .await?;
 
-    #[cfg(xxdk)]
+    #[cfg(feature = "xxdk")]
     handles.push(
         CmixInclusionProofService::new(world_tree)
             .serve(config.cmix)

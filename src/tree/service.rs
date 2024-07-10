@@ -12,10 +12,10 @@ use tokio::task::JoinHandle;
 use super::error::WorldTreeError;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
-#[cfg(xxdk)]
+#[cfg(feature = "xxdk")]
 pub use cmix::CmixInclusionProofService;
 
-#[cfg(xxdk)]
+#[cfg(feature = "xxdk")]
 mod cmix;
 
 
