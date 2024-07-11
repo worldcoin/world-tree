@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::Instant;
 
 use rayon::iter::{Either, IntoParallelIterator, ParallelIterator};
@@ -47,15 +47,15 @@ impl IdentityTree<Vec<Hash>> {
 impl IdentityTree<MmapVec<Hash>> {
     pub fn new_with_cache_unchecked(
         depth: usize,
-        file_path: PathBuf,
+        file_path: &Path,
     ) -> Result<Self, IdentityTreeError> {
         let mmap_vec: MmapVec<Hash> =
-            match unsafe { MmapVec::restore_from_path(&file_path) } {
+            match unsafe { MmapVec::restore_from_path(file_path) } {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(e) => unsafe {
                     tracing::error!("Cache restore error: {:?}", e);
-                    MmapVec::create_from_path(&file_path)?
+                    MmapVec::create_from_path(file_path)?
                 },
             };
 
@@ -76,13 +76,13 @@ impl IdentityTree<MmapVec<Hash>> {
                     &Hash::ZERO,
                 ) {
                     Ok(tree) => tree,
-                    Err(_) => {
+                    Err(e) => {
                         tracing::error!(
-                        "Failed to restore tree from cache, purging cache and creating new tree"
+                        "Error to restoring tree from cache {e:?}, purging cache and creating new tree" 
                     );
 
                         // Remove the existing cache and create a new cache file
-                        fs::remove_file(&file_path)?;
+                        fs::remove_file(file_path)?;
                         let mmap_vec =
                             unsafe { MmapVec::create_from_path(file_path)? };
 
@@ -930,7 +930,7 @@ mod test {
         let path = temp_file.path().to_path_buf();
 
         let mut identity_tree =
-            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path.clone())?;
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, &path)?;
 
         let leaves = generate_all_leaves();
 
@@ -939,7 +939,7 @@ mod test {
         }
 
         let restored_tree =
-            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path)?;
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, &path)?;
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
@@ -960,8 +960,7 @@ mod test {
         let path = temp_file.path().to_path_buf();
 
         let mut identity_tree =
-            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path.clone())
-                .unwrap();
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, &path).unwrap();
 
         let leaves = generate_all_leaves();
 
@@ -974,7 +973,7 @@ mod test {
         cache[0] = Hash::ZERO;
 
         let restored_tree =
-            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, path).unwrap();
+            IdentityTree::new_with_cache_unchecked(TREE_DEPTH, &path).unwrap();
 
         assert!(restored_tree.tree.num_leaves() == 0);
         assert!(restored_tree.leaves.is_empty());

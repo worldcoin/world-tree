@@ -9,8 +9,9 @@ pub mod tree_manager;
 mod tasks;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
+use std::{panic, process};
 
 use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
@@ -46,6 +47,12 @@ pub struct WorldTree<M: Middleware + 'static> {
     pub chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
 }
 
+fn delete_cache_and_exit(cache: &Path) -> ! {
+    tracing::info!("Deleting cache and exiting");
+    std::fs::remove_file(cache).unwrap();
+    process::exit(1);
+}
+
 impl<M> WorldTree<M>
 where
     M: Middleware + 'static,
@@ -54,12 +61,25 @@ where
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
-        cache: &PathBuf,
+        cache: &Path,
     ) -> Result<Self, WorldTreeError<M>> {
-        let identity_tree = IdentityTree::new_with_cache_unchecked(
-            tree_depth,
-            cache.to_owned(),
-        )?;
+        // This can panic if the cached file is invalid
+        let identity_tree = match panic::catch_unwind(|| {
+            IdentityTree::new_with_cache_unchecked(tree_depth, cache)
+        }) {
+            Ok(Ok(t)) => t,
+            Ok(Err(e)) => {
+                tracing::error!("Loading tree from cache errored: {:?}", e);
+                delete_cache_and_exit(cache)
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Loading tree from cache panicked: {:?}",
+                    e.downcast_ref::<String>()
+                );
+                delete_cache_and_exit(cache)
+            }
+        };
 
         let world_tree = Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
@@ -69,14 +89,15 @@ where
         };
 
         let tree = world_tree.identity_tree.clone();
+        let cache = cache.to_owned();
 
         tokio::task::spawn_blocking(move || {
             info!("Validating tree");
             let start = std::time::Instant::now();
-            tree.blocking_read()
-                .tree
-                .validate()
-                .expect("Tree validation failed");
+            if let Err(e) = tree.blocking_read().tree.validate() {
+                tracing::error!("Tree validation failed: {e:?}");
+                delete_cache_and_exit(&cache);
+            }
             info!("Tree validation completed in {:?}", start.elapsed());
         });
 
