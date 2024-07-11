@@ -42,18 +42,11 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Install cargo-sort
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-sort
-          version: latest
       - name: Check formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      - name: Check Cargo.toml formatting
-        run: cargo sort --check --check-format
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
