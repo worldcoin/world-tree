@@ -51,7 +51,7 @@ url = "2.5.0"
 
 [dependencies.xxdk]
 git = "https://git.xx.network/elixxir/libxxdk"
-rev = "401c8be73a46a5118995803c87c819127cc83b08"
+rev = "012a945af5f728311abb84399ad3c5d8887a5262"
 optional = true
 
 [dev-dependencies]

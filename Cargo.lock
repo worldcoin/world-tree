@@ -4867,9 +4867,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.116"
+version = "1.0.120"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e17db7126d17feb94eb3fad46bf1a96b034e8aacbc2e775fe81505f8b0b2813"
+checksum = "4e0d21c9a8cae1235ad58a00c11cb40d4b1e5c784f1ef2c537876ed6ffd8b7c5"
 dependencies = [
  "itoa",
  "ryu",
@@ -6616,12 +6616,13 @@ dependencies = [
 [[package]]
 name = "xxdk"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=401c8be73a46a5118995803c87c819127cc83b08#401c8be73a46a5118995803c87c819127cc83b08"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=012a945af5f728311abb84399ad3c5d8887a5262#012a945af5f728311abb84399ad3c5d8887a5262"
 dependencies = [
  "base64 0.22.1",
  "lazy_static",
  "libc",
  "serde",
+ "serde_json",
  "tokio",
  "tower",
  "tracing",
@@ -6631,7 +6632,7 @@ dependencies = [
 [[package]]
 name = "xxdk-sys"
 version = "0.1.0"
-source = "git+https://git.xx.network/elixxir/libxxdk?rev=401c8be73a46a5118995803c87c819127cc83b08#401c8be73a46a5118995803c87c819127cc83b08"
+source = "git+https://git.xx.network/elixxir/libxxdk?rev=012a945af5f728311abb84399ad3c5d8887a5262#012a945af5f728311abb84399ad3c5d8887a5262"
 dependencies = [
  "bindgen",
  "cgo",
