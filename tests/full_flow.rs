@@ -143,9 +143,9 @@ async fn full_flow() -> eyre::Result<()> {
         telemetry: None,
     };
 
-    let (local_addr, handles) = setup_world_tree(&service_config).await?;
+    let handles = setup_world_tree(&service_config).await?;
     let client =
-        TestClient::new(format!("http://127.0.0.1:{}", local_addr.port()));
+        TestClient::new(format!("http://127.0.0.1:{}", world_tree_port));
 
     let ip = attempt_async! {
         async {

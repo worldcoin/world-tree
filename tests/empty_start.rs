@@ -118,9 +118,9 @@ async fn empty_start() -> eyre::Result<()> {
         telemetry: None,
     };
 
-    let (local_addr, handles) = setup_world_tree(&service_config).await?;
+    let handles = setup_world_tree(&service_config).await?;
     let client =
-        TestClient::new(format!("http://127.0.0.1:{}", local_addr.port()));
+        TestClient::new(format!("http://127.0.0.1:{}", world_tree_port));
 
     let first_batch = random_leaves(5);
     tree.extend_from_slice(&first_batch);

@@ -65,7 +65,7 @@ pub async fn main() -> eyre::Result<()> {
     let world_tree = init_world_tree(&config).await?;
 
     let service = InclusionProofService::new(world_tree);
-    let (_, handles) = service.serve(config.socket_address).await?;
+    let handles = service.serve(config.socket_address).await?;
 
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
