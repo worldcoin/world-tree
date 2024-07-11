@@ -10,8 +10,8 @@ mod tasks;
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::process;
 use std::sync::Arc;
-use std::{panic, process};
 
 use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
@@ -47,12 +47,6 @@ pub struct WorldTree<M: Middleware + 'static> {
     pub chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
 }
 
-fn delete_cache_and_exit(cache: &Path) -> ! {
-    tracing::info!("Deleting cache and exiting");
-    std::fs::remove_file(cache).unwrap();
-    process::exit(1);
-}
-
 impl<M> WorldTree<M>
 where
     M: Middleware + 'static,
@@ -63,23 +57,8 @@ where
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
         cache: &Path,
     ) -> Result<Self, WorldTreeError<M>> {
-        // This can panic if the cached file is invalid
-        let identity_tree = match panic::catch_unwind(|| {
-            IdentityTree::new_with_cache_unchecked(tree_depth, cache)
-        }) {
-            Ok(Ok(t)) => t,
-            Ok(Err(e)) => {
-                tracing::error!("Loading tree from cache errored: {:?}", e);
-                delete_cache_and_exit(cache)
-            }
-            Err(e) => {
-                tracing::error!(
-                    "Loading tree from cache panicked: {:?}",
-                    e.downcast_ref::<String>()
-                );
-                delete_cache_and_exit(cache)
-            }
-        };
+        let identity_tree =
+            IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
         let world_tree = Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
@@ -96,7 +75,9 @@ where
             let start = std::time::Instant::now();
             if let Err(e) = tree.blocking_read().tree.validate() {
                 tracing::error!("Tree validation failed: {e:?}");
-                delete_cache_and_exit(&cache);
+                tracing::info!("Deleting cache and exiting");
+                std::fs::remove_file(cache).unwrap();
+                process::exit(1);
             }
             info!("Tree validation completed in {:?}", start.elapsed());
         });

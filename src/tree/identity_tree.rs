@@ -45,6 +45,8 @@ impl IdentityTree<Vec<Hash>> {
 }
 
 impl IdentityTree<MmapVec<Hash>> {
+    /// Returnes a new IdentityTree from a chached file.
+    /// The underlying Merkle Tree is unverified
     pub fn new_with_cache_unchecked(
         depth: usize,
         file_path: &Path,

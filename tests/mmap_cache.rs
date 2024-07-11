@@ -14,8 +14,10 @@ mod common;
 
 use common::*;
 
-/// Check that an invalid cache results in the process exiting
+/// Check that an invalid cache results in the process exiting.
+/// We expect the process here to exit(1).
 /// I don't think we can effectively test the exit code in a test
+/// so I'm just ignoreing it.
 #[ignore]
 #[tokio::test]
 async fn mmap_cache() -> eyre::Result<()> {
@@ -27,7 +29,7 @@ async fn mmap_cache() -> eyre::Result<()> {
         // length
         4, 0, 0, 0, 0, 0, 0, 0, //
         // num leaves
-        3, 0, 0, 0, 0, 0, 0, 0, //
+        2, 0, 0, 0, 0, 0, 0, 0, //
         0, 0, 0, 0, 0, 0, 0, 0, //
         0, 0, 0, 0, 0, 0, 0, 0, //
         0, 0, 0, 0, 0, 0, 0, 0, //
