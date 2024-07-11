@@ -55,20 +55,19 @@ macro_rules! attempt_async {
 
 pub async fn setup_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<
+) -> eyre::Result<(
+    SocketAddr,
     Vec<
         JoinHandle<
             Result<(), WorldTreeError<Provider<ThrottledJsonRpcClient<Http>>>>,
         >,
     >,
-> {
+)> {
     let world_tree = init_world_tree(config).await?;
 
     let service = InclusionProofService::new(world_tree);
 
-    let handles = service.serve(config.socket_address).await?;
-
-    Ok(handles)
+    service.serve(config.socket_address).await
 }
 
 pub async fn setup_mainnet() -> eyre::Result<ContainerAsync<GenericImage>> {
