@@ -125,9 +125,9 @@ async fn missing_event_on_bridged() -> eyre::Result<()> {
         telemetry: None,
     };
 
-    let handles = setup_world_tree(&service_config).await?;
+    let (local_addr, handles) = setup_world_tree(&service_config).await?;
     let client =
-        TestClient::new(format!("http://127.0.0.1:{}", world_tree_port));
+        TestClient::new(format!("http://127.0.0.1:{}", local_addr.port()));
 
     // Publish the first batch on mainnet
     world_id_manager

@@ -48,7 +48,10 @@ where
     pub async fn serve(
         self,
         addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
+    ) -> eyre::Result<(
+        SocketAddr,
+        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
+    )> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -62,6 +65,7 @@ where
             .with_state(self.world_tree.clone());
 
         let bound_server = axum::Server::bind(&addr);
+        let local_addr = bound_server.local_addr();
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
             bound_server.serve(router.into_make_service()).await?;
@@ -75,7 +79,7 @@ where
 
         handles.push(server_handle);
 
-        Ok(handles)
+        Ok((local_addr, handles))
     }
 }
 
