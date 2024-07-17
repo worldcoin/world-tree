@@ -47,8 +47,11 @@ where
     /// Vector of `JoinHandle`s for the spawned tasks.
     pub async fn serve(
         self,
-        addr: SocketAddr,
-    ) -> eyre::Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>> {
+        addr: Option<SocketAddr>,
+    ) -> eyre::Result<(
+        SocketAddr,
+        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
+    )> {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -61,7 +64,14 @@ where
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
 
-        let bound_server = axum::Server::bind(&addr);
+        let tcp_listener = match addr {
+            Some(addr) => std::net::TcpListener::bind(addr)?,
+            None => std::net::TcpListener::bind("0.0.0.0:0")?,
+        };
+
+        let bound_server = axum::Server::from_tcp(tcp_listener)?;
+        let local_addr = bound_server.local_addr();
+
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
             bound_server.serve(router.into_make_service()).await?;
@@ -75,7 +85,7 @@ where
 
         handles.push(server_handle);
 
-        Ok(handles)
+        Ok((local_addr, handles))
     }
 }
 

@@ -5,17 +5,16 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened,synchronize,reopened]
+    types: [opened, synchronize, reopened]
     branches:
       - main
 
 env:
-  RUST_VERSION: "1.74"
-  NIGHTLY_VERSION: nightly-2024-01-23
   CARGO_TERM_COLOR: always
   # Skip incremental build and debug info generation in CI
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: full
 
 jobs:
   lint:
@@ -28,7 +27,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.NIGHTLY_VERSION }}
+          toolchain: stable
           override: true
           components: rustfmt, clippy
       - name: Install protobuf-compiler
@@ -38,24 +37,17 @@ jobs:
         continue-on-error: false
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ env.RUST_VERSION }}-${{ env.NIGHTLY_VERSION }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ env.RUST_VERSION }}-${{ env.NIGHTLY_VERSION }}-cargo-lint-
-      - name: Install cargo-sort
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-sort
-          version: latest
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Check formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      - name: Check Cargo.toml formatting
-        run: cargo sort --check --check-format
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -76,8 +68,9 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ env.NIGHTLY_VERSION }}
+          toolchain: stable
           override: true
+          components: rustfmt, clippy
       - name: Install protobuf-compiler
         run: sudo apt-get install -y protobuf-compiler
       - name: Cache
@@ -85,12 +78,12 @@ jobs:
         continue-on-error: false
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ env.RUST_VERSION }}-${{ env.NIGHTLY_VERSION }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ env.RUST_VERSION }}-${{ env.NIGHTLY_VERSION }}-cargo-test-
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:

@@ -9,7 +9,8 @@ pub mod tree_manager;
 mod tasks;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
+use std::process;
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
@@ -19,6 +20,7 @@ use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 use self::error::WorldTreeError;
 use self::identity_tree::{IdentityTree, InclusionProof};
@@ -53,17 +55,34 @@ where
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
-        cache: &PathBuf,
+        cache: &Path,
     ) -> Result<Self, WorldTreeError<M>> {
         let identity_tree =
-            IdentityTree::new_with_cache(tree_depth, cache.to_owned())?;
+            IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
-        Ok(Self {
+        let world_tree = Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_managers,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
-        })
+        };
+
+        let tree = world_tree.identity_tree.clone();
+        let cache = cache.to_owned();
+
+        tokio::task::spawn_blocking(move || {
+            info!("Validating tree");
+            let start = std::time::Instant::now();
+            if let Err(e) = tree.blocking_read().tree.validate() {
+                tracing::error!("Tree validation failed: {e:?}");
+                tracing::info!("Deleting cache and exiting");
+                std::fs::remove_file(cache).unwrap();
+                process::exit(1);
+            }
+            info!("Tree validation completed in {:?}", start.elapsed());
+        });
+
+        Ok(world_tree)
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains

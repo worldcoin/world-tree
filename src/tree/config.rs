@@ -19,7 +19,7 @@ pub struct ServiceConfig {
     pub bridged_trees: Vec<TreeConfig>,
     /// Socket at which to serve the service
     #[serde(default = "default::socket_address")]
-    pub socket_address: SocketAddr,
+    pub socket_address: Option<SocketAddr>,
     #[serde(default)]
     pub telemetry: Option<TelemetryConfig>,
 }
@@ -96,8 +96,8 @@ pub struct MetricsConfig {
 mod default {
     use super::*;
 
-    pub fn socket_address() -> SocketAddr {
-        ([0, 0, 0, 0], 8080).into()
+    pub fn socket_address() -> Option<SocketAddr> {
+        Some(([0, 0, 0, 0], 8080).into())
     }
 
     pub fn window_size() -> u64 {
