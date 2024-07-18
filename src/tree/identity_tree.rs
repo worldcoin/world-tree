@@ -80,7 +80,7 @@ impl IdentityTree<MmapVec<Hash>> {
                     Ok(tree) => tree,
                     Err(e) => {
                         tracing::error!(
-                        "Error to restoring tree from cache {e:?}, purging cache and creating new tree" 
+                        "Error to restoring tree from cache {e:?}, purging cache and creating new tree"
                     );
 
                         // Remove the existing cache and create a new cache file
@@ -182,6 +182,8 @@ where
                 self.tree.root()
             };
 
+        self.update_leaf_index_mapping(&leaf_updates);
+
         if pre_root != latest_root {
             // This can occur if the tree has been restored from cache, but we're replaying chain events
             tracing::warn!(
@@ -192,8 +194,6 @@ where
             );
             return Ok(());
         }
-
-        self.update_leaf_index_mapping(&leaf_updates);
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
 
