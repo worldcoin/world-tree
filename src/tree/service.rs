@@ -137,13 +137,25 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     Ok((StatusCode::OK, Json(inclusion_proof)))
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct HealthResponse {
+    pub chain_state: HashMap<u64, Hash>,
+    pub canonical_root: Hash,
+}
+
 #[tracing::instrument(level = "debug", skip(world_tree))]
 #[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
-) -> Result<Json<HashMap<u64, Hash>>, WorldTreeError<M>> {
+) -> Result<Json<HealthResponse>, WorldTreeError<M>> {
     let chain_state = world_tree.chain_state.read().await.clone();
-    Ok(Json(chain_state))
+    let identity_tree = world_tree.identity_tree.read().await;
+    let cascading_tree_root = identity_tree.tree.root();
+
+    Ok(Json(HealthResponse {
+        chain_state,
+        canonical_root: cascading_tree_root,
+    }))
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
