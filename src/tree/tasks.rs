@@ -26,8 +26,8 @@ where
                 new_root = ?update.post_root,
                 "Leaf updates received, appending tree updates"
             );
-            let mut identity_tree = identity_tree.write().await;
             let mut chain_state = chain_state.write().await;
+            let mut identity_tree = identity_tree.write().await;
 
             identity_tree.append_updates(
                 update.pre_root,
@@ -59,8 +59,8 @@ where
         if let Some((chain_id, bridged_root)) = bridged_root_rx.recv().await {
             tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
-            let mut identity_tree = identity_tree.write().await;
             let mut chain_state = chain_state.write().await;
+            let mut identity_tree = identity_tree.write().await;
 
             // Update chain state with the new root
             chain_state.insert(chain_id, bridged_root);
