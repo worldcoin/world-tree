@@ -21,6 +21,10 @@ struct Opts {
     /// Path to the configuration file
     #[clap(short, long)]
     config: Option<PathBuf>,
+
+    /// Set to disable colors in the logs
+    #[clap(long)]
+    no_ansi: bool,
 }
 
 #[tokio::main]
@@ -53,7 +57,12 @@ pub async fn main() -> eyre::Result<()> {
         tracing_shutdown_handle
     } else {
         tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().pretty().compact())
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(!opts.no_ansi)
+                    .pretty()
+                    .compact(),
+            )
             .with(tracing_subscriber::EnvFilter::from_default_env())
             .init();
 
