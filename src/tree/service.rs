@@ -66,7 +66,7 @@ where
 
         let tcp_listener = match addr {
             Some(addr) => std::net::TcpListener::bind(addr)?,
-            None => std::net::TcpListener::bind("0.0.0.0:0")?,
+            None => std::net::TcpListener::bind("127.0.0.1:0")?,
         };
 
         let bound_server = axum::Server::from_tcp(tcp_listener)?;
