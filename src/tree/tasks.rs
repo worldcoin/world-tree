@@ -26,7 +26,6 @@ where
                 new_root = ?update.post_root,
                 "Leaf updates received, appending tree updates"
             );
-            let mut chain_state = chain_state.write().await;
             let mut identity_tree = identity_tree.write().await;
 
             identity_tree.append_updates(
@@ -35,6 +34,8 @@ where
                 update.leaf_updates,
             )?;
 
+            let mut chain_state = chain_state.write().await;
+
             // Update the root for the canonical chain
             chain_state.insert(canonical_chain_id, update.post_root);
 
@@ -42,6 +43,7 @@ where
             //       of the bridged networks. However we don't have 100% guarantee that the canonical network
             //       events will always arrive before the bridged network events.
             //       So to maintain liveliness we reallign on every update.
+
             realign_trees(&mut identity_tree, &mut chain_state).await;
         }
     }
@@ -74,6 +76,7 @@ where
 ///
 /// This function figures out the root that has been seen across all observed networks
 /// And applies all the updates up to that root to the canonical tree.
+
 async fn realign_trees(
     identity_tree: &mut IdentityTree<MmapVec<Hash>>,
     chain_state: &mut HashMap<u64, Hash>,
@@ -86,7 +89,6 @@ async fn realign_trees(
             .iter()
             .position(|(hash, _updates)| hash == root);
 
-        //
         if let Some(idx) = idx {
             chain_state_idxs.push(idx);
         } else {
@@ -101,18 +103,19 @@ async fn realign_trees(
         }
     }
 
-    let Some(latest_common_root_idx) = chain_state_idxs.iter().min().copied()
-    else {
-        // If we don't find any common roots then there's nothing to reallign
-        return;
-    };
+    let min_idx = chain_state_idxs
+        .iter()
+        .min()
+        .expect("There are no tree updates");
 
-    let latest_common_root = *identity_tree
-        .tree_updates
-        .get(latest_common_root_idx)
-        .map(|(hash, _updates)| hash)
-        .expect("Greatest common root not found");
+    if *min_idx != 0 {
+        let latest_common_root = *identity_tree
+            .tree_updates
+            .get(*min_idx)
+            .map(|(hash, _updates)| hash)
+            .expect("Greatest common root not found");
 
-    // Apply updates up to the greatest common root
-    identity_tree.apply_updates_to_root(&latest_common_root);
+        // Apply updates up to the greatest common root
+        identity_tree.apply_updates_to_root(&latest_common_root);
+    }
 }

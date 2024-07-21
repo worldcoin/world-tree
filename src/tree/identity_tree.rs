@@ -327,6 +327,8 @@ where
         let (_root, update) = drained.last().unwrap();
 
         // Filter out updates that are not leaves
+
+        // TODO: double check the calculation is correct for the cascading merkle tree, otherwise this will not work
         let mut leaf_updates = update
             .into_iter()
             .filter_map(|(idx, value)| {
