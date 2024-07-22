@@ -108,6 +108,8 @@ async fn realign_trees(
         .min()
         .expect("There are no tree updates");
 
+    tracing::info!(?min_idx);
+
     if *min_idx != 0 {
         let latest_common_root = *identity_tree
             .tree_updates
@@ -115,6 +117,7 @@ async fn realign_trees(
             .map(|(hash, _updates)| hash)
             .expect("Greatest common root not found");
 
+        tracing::info!(?latest_common_root, "Realligning trees");
         // Apply updates up to the greatest common root
         identity_tree.apply_updates_to_root(&latest_common_root);
     }

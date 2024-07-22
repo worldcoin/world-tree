@@ -11,9 +11,11 @@ mod tasks;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use ethers::providers::Middleware;
+use ethers::types::Log;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
@@ -85,6 +87,56 @@ where
         Ok(world_tree)
     }
 
+    pub async fn sync_to_head(&self) {}
+
+    async fn get_canonical_logs(&self) -> eyre::Result<Vec<Log>> {
+        let identity_tree = self.identity_tree.read().await;
+
+        // Get the latest root from the tree after restoring from cache
+        let latest_root = identity_tree.tree.root();
+
+        // Initialize the block range to scan
+        let mut to_block = self
+            .canonical_tree_manager
+            .block_scanner
+            .middleware
+            .get_block_number()
+            .await?
+            .as_u64();
+        let mut from_block =
+            to_block - self.canonical_tree_manager.block_scanner.window_size;
+
+        let mut new_canonical_logs = vec![];
+
+        // Loop through the block range in reverse starting from the chain tip until we find the latest root
+        'outer: loop {
+            let logs = self
+                .canonical_tree_manager
+                .block_scanner
+                .get_range(from_block, to_block)
+                .await?;
+
+            for log in logs.into_iter() {
+                let post_root = Hash::from_be_bytes(log.topics[3].0);
+                if post_root == latest_root {
+                    break 'outer;
+                }
+                new_canonical_logs.push(log);
+
+                to_block = from_block - 1;
+                from_block = from_block
+                    - self.canonical_tree_manager.block_scanner.window_size;
+            }
+        }
+
+        self.canonical_tree_manager
+            .block_scanner
+            .next_block
+            .store(to_block + 1, Ordering::SeqCst);
+
+        return Ok(new_canonical_logs);
+    }
+
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(
         &self,
@@ -94,6 +146,9 @@ where
             tokio::sync::mpsc::channel(100);
         let (bridged_root_tx, bridged_root_rx) =
             tokio::sync::mpsc::channel(100);
+
+        // NOTE: we could sync to head and build the tree here to make startup way faster
+        // NOTE: this would also remove all the warning logs and make it eaiser to track that the tree is working correctly
 
         // Spawn the tree managers to listen to the canonical and bridged trees for updates
         let mut handles = vec![];

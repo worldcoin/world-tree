@@ -13,7 +13,7 @@ pub struct BlockScanner<M: Middleware + 'static> {
     /// The block from which to start parsing a given event
     pub next_block: AtomicU64,
     /// The maximum block range to parse
-    window_size: u64,
+    pub window_size: u64,
     /// Filter specifying the address and topics to match on when scanning
     filter: Filter,
     chain_id: u64,
@@ -30,7 +30,7 @@ where
         current_block: u64,
         filter: Filter,
     ) -> Result<Self, M::Error> {
-        let chain_id = middleware.get_chainid().await?.as_u64();
+        let chain_id: u64 = middleware.get_chainid().await?.as_u64();
         Ok(Self {
             middleware,
             next_block: AtomicU64::new(current_block),
@@ -38,6 +38,24 @@ where
             filter,
             chain_id,
         })
+    }
+
+    pub async fn get_range(
+        &self,
+        from_block: u64,
+        to_block: u64,
+    ) -> Result<Vec<Log>, M::Error> {
+        let filter = self
+            .filter
+            .clone()
+            .from_block(BlockNumber::Number(from_block.into()))
+            .to_block(BlockNumber::Number(to_block.into()));
+
+        let middleware = self.middleware.clone();
+
+        let logs = middleware.get_logs(&filter).await?;
+
+        Ok(logs)
     }
 
     /// Retrieves events matching the specified address and topics from the last synced block to the latest block, stepping by `window_size`.
