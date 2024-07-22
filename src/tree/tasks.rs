@@ -103,22 +103,18 @@ async fn realign_trees(
         }
     }
 
-    let min_idx = chain_state_idxs
-        .iter()
-        .min()
-        .expect("There are no tree updates");
+    let Some(latest_common_root_idx) = chain_state_idxs.iter().min().copied()
+    else {
+        // If we don't find any common roots then there's nothing to reallign
+        return;
+    };
 
-    tracing::info!(?min_idx);
+    let latest_common_root = *identity_tree
+        .tree_updates
+        .get(latest_common_root_idx)
+        .map(|(hash, _updates)| hash)
+        .expect("Greatest common root not found");
 
-    if *min_idx != 0 {
-        let latest_common_root = *identity_tree
-            .tree_updates
-            .get(*min_idx)
-            .map(|(hash, _updates)| hash)
-            .expect("Greatest common root not found");
-
-        tracing::info!(?latest_common_root, "Realligning trees");
-        // Apply updates up to the greatest common root
-        identity_tree.apply_updates_to_root(&latest_common_root);
-    }
+    // Apply updates up to the greatest common root
+    identity_tree.apply_updates_to_root(&latest_common_root);
 }
