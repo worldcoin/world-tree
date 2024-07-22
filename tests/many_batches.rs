@@ -7,6 +7,7 @@ use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{Address, U256};
 use eyre::ContextCompat;
+use rand::Rng;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
@@ -123,36 +124,71 @@ async fn many_batches() -> eyre::Result<()> {
     let client =
         TestClient::new(format!("http://127.0.0.1:{}", local_addr.port()));
 
-    // Each batch is (Root, Vec<Leaf>)
+    // Each batch is (Pre Root, Vec<Leaf>, Post Root)
     let mut batches = vec![];
 
-    for i in 0..NUM_BATCHES {
+    for _i in 0..NUM_BATCHES {
         let leaves = random_leaves(BATCH_SIZE);
-        let prev_root = tree.root();
+        let pre_root = tree.root();
         tree.extend_from_slice(&leaves);
-        let root = tree.root();
-        batches.push((root, leaves.clone()));
+        let post_root = tree.root();
+        batches.push((pre_root, leaves.clone(), post_root));
 
-        tracing::info!(?prev_root, ?root, "Publishing batch");
-
-        world_id_manager
-            .register_identities(
-                [U256::zero(); 8],
-                f2ethers(prev_root),     // pre root,
-                (BATCH_SIZE * i) as u32, // start index
-                leaves.iter().cloned().map(f2ethers).collect(), // commitments
-                f2ethers(root),          // post root
-            )
-            .send()
-            .await?;
-
-        // Receive root on bridged network first
-        bridged_world_id.receive_root(f2ethers(root)).send().await?;
-
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tracing::info!(?pre_root, ?post_root, "Batch prepared");
     }
 
-    for (_batch_root, batch_leaves) in &batches {
+    let submit_batches_on_mainnet = async {
+        let mut rng = rand::thread_rng();
+
+        for (i, (pre_root, leaves, post_root)) in batches.iter().enumerate() {
+            tracing::info!(?pre_root, ?post_root, "Publishing batch");
+
+            world_id_manager
+                .register_identities(
+                    [U256::zero(); 8],
+                    f2ethers(*pre_root),     // pre root,
+                    (BATCH_SIZE * i) as u32, // start index
+                    leaves.iter().cloned().map(f2ethers).collect(), // commitments
+                    f2ethers(*post_root),                           // post root
+                )
+                .send()
+                .await?;
+
+            let wait_offset: f32 = rng.gen();
+            tokio::time::sleep(Duration::from_secs_f32(4.0 + wait_offset))
+                .await;
+        }
+
+        eyre::Result::<()>::Ok(())
+    };
+
+    let submit_batches_on_bridged = async {
+        let mut rng = rand::thread_rng();
+
+        for (pre_root, _leaves, post_root) in batches.iter() {
+            tracing::info!(?pre_root, ?post_root, "Bridging batch");
+
+            // Receive root on bridged network first
+            bridged_world_id
+                .receive_root(f2ethers(*post_root))
+                .send()
+                .await?;
+
+            let wait_offset: f32 = rng.gen();
+            tokio::time::sleep(Duration::from_secs_f32(4.0 + wait_offset))
+                .await;
+        }
+
+        eyre::Result::<()>::Ok(())
+    };
+
+    let (submit_batches_on_mainnet, submit_batches_on_bridged) =
+        tokio::join!(submit_batches_on_mainnet, submit_batches_on_bridged);
+
+    submit_batches_on_mainnet?;
+    submit_batches_on_bridged?;
+
+    for (_pre_root, batch_leaves, _post_root) in &batches {
         for leaf in batch_leaves {
             let ip = attempt_async! {
                 async {
