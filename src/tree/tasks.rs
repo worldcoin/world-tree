@@ -115,4 +115,6 @@ async fn realign_trees(
 
     // Apply updates up to the greatest common root
     identity_tree.apply_updates_to_root(&latest_common_root);
+
+    tracing::info!(?latest_common_root, "Trees realligned");
 }

@@ -1,0 +1,24 @@
+tree_depth = 30
+socket_address = "127.0.0.1:8080"
+
+[canonical_tree]
+address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+window_size = 10
+creation_block = 0
+
+[canonical_tree.provider]
+rpc_endpoint = "http://localhost:8545/"
+throttle = 150
+
+[cache]
+cache_file = "cache.mmap"
+purge_cache = true
+
+[bridged_trees.0]
+address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+window_size = 10
+creation_block = 0
+
+[bridged_trees.0.provider]
+rpc_endpoint = "http://localhost:8546/"
+throttle = 150
