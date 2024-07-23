@@ -785,6 +785,8 @@ mod test {
 
             assert_eq!(proof.root, post_root);
             assert_eq!(proof.proof, tree.proof(leaf_idx));
+
+            assert!(proof.verify(*leaf));
         }
 
         Ok(())
@@ -1377,14 +1379,16 @@ mod test {
 
         println!("identities[0] = {:?}", identities[0]);
 
+        let cache_file = NamedTempFile::new()?;
+
         let mut ref_tree: CascadingMerkleTree<PoseidonHash, Vec<_>> =
             CascadingMerkleTree::new(vec![], 30, &Hash::ZERO);
 
-        let mut identity_tree = IdentityTree::new(30);
+        let mut identity_tree = IdentityTree::new_with_cache_unchecked(30, cache_file.path())?;
 
         // let initial_root = tree.root();
 
-        for batch in identities.chunks(10) {
+        for (batch_idx, batch) in identities.chunks(10).enumerate() {
             let start_index = ref_tree.num_leaves();
             let pre_root = ref_tree.root();
             ref_tree.extend_from_slice(batch);
@@ -1401,6 +1405,10 @@ mod test {
             let leaf_updates = LeafUpdates::Insert(leaf_updates);
 
             identity_tree.append_updates(pre_root, post_root, leaf_updates)?;
+
+            if batch_idx % 3 == 0 {
+                identity_tree.apply_updates_to_root(&post_root);
+            }
         }
 
         // let last_root
@@ -1417,7 +1425,8 @@ mod test {
         println!("ref_tree_root = {:?}", ref_tree_root);
         println!("id_tree_root = {:?}", id_tree_root);
 
-        panic!();
+        assert_eq!(ref_tree_root, id_tree_root);
+
         Ok(())
     }
 }
