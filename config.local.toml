@@ -1,3 +1,14 @@
+# Sample configuration for a local setup
+# Instructions on how to use it:
+# Start the mainnet and rollup anvil instances
+# > cd tests/fixtures/integration_contracts
+# > ./runRollup.sh --host 127.0.0.1 --port 8545
+# In a different terminal
+# > ./runMainnet.sh --host 127.0.0.1 --port 8545
+# Start the world-tree service
+# (in root dir)
+# > cargo run -- --config config.local.toml
+
 tree_depth = 30
 socket_address = "127.0.0.1:8080"
 
