@@ -121,11 +121,13 @@ async fn many_batches() -> eyre::Result<()> {
     };
 
     let (local_addr, handles) = setup_world_tree(&service_config).await?;
-    let client = TestClient::new(local_addr.to_string());
+    let client =
+        TestClient::new(format!("http://127.0.0.1:{}", local_addr.port()));
 
     // Each batch is (Pre Root, Vec<Leaf>, Post Root)
     let mut batches = vec![];
 
+    tracing::info!("Prepare batches");
     for _i in 0..NUM_BATCHES {
         let leaves = random_leaves(BATCH_SIZE);
         let pre_root = tree.root();
@@ -134,7 +136,7 @@ async fn many_batches() -> eyre::Result<()> {
         batches.push((pre_root, leaves.clone(), post_root));
 
         tracing::info!(?pre_root, ?post_root, "Batch prepared");
-        tracing::warn!(?leaves, "Batch");
+        tracing::debug!(?pre_root, ?post_root, ?leaves, "Batch");
     }
 
     let (batch_idx_tx, mut batch_idx_rx) = tokio::sync::mpsc::channel(1);
