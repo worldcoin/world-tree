@@ -34,14 +34,13 @@ async fn many_batches() -> eyre::Result<()> {
 
     println!("cache_file: {}", cache_file.path().display());
 
-    // let mainnet_container = setup_mainnet().await?;
-    // let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
-    let mainnet_rpc_url = format!("http://127.0.0.1:8545");
+    let mainnet_container = setup_mainnet().await?;
+    let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
+    let mainnet_rpc_url = format!("http://127.0.0.1:{mainnet_rpc_port}");
 
-    // let rollup_container = setup_rollup().await?;
-    // let rollup_rpc_port = rollup_container.get_host_port_ipv4(8545).await?;
-    // let rollup_rpc_url = format!("http://127.0.0.1:{rollup_rpc_port}");
-    let rollup_rpc_url = format!("http://127.0.0.1:8546");
+    let rollup_container = setup_rollup().await?;
+    let rollup_rpc_port = rollup_container.get_host_port_ipv4(8545).await?;
+    let rollup_rpc_url = format!("http://127.0.0.1:{rollup_rpc_port}");
 
     let mut tree = CascadingMerkleTree::<PoseidonHash, _>::new(
         vec![],
@@ -93,36 +92,36 @@ async fn many_batches() -> eyre::Result<()> {
 
     tracing::info!("Setting up world-tree service");
 
-    // let service_config = ServiceConfig {
-    //     tree_depth: TREE_DEPTH,
-    //     canonical_tree: TreeConfig {
-    //         address: id_manager_address,
-    //         window_size: 10,
-    //         creation_block: 0,
-    //         provider: ProviderConfig {
-    //             rpc_endpoint: mainnet_rpc_url.parse()?,
-    //             throttle: 150,
-    //         },
-    //     },
-    //     cache: CacheConfig {
-    //         cache_file: cache_file.path().to_path_buf(),
-    //         purge_cache: true,
-    //     },
-    //     bridged_trees: vec![TreeConfig {
-    //         address: bridged_address,
-    //         window_size: 10,
-    //         creation_block: 0,
-    //         provider: ProviderConfig {
-    //             rpc_endpoint: rollup_rpc_url.parse()?,
-    //             throttle: 150,
-    //         },
-    //     }],
-    //     socket_address: None,
-    //     telemetry: None,
-    // };
+    let service_config = ServiceConfig {
+        tree_depth: TREE_DEPTH,
+        canonical_tree: TreeConfig {
+            address: id_manager_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: mainnet_rpc_url.parse()?,
+                throttle: 150,
+            },
+        },
+        cache: CacheConfig {
+            cache_file: cache_file.path().to_path_buf(),
+            purge_cache: true,
+        },
+        bridged_trees: vec![TreeConfig {
+            address: bridged_address,
+            window_size: 10,
+            creation_block: 0,
+            provider: ProviderConfig {
+                rpc_endpoint: rollup_rpc_url.parse()?,
+                throttle: 150,
+            },
+        }],
+        socket_address: None,
+        telemetry: None,
+    };
 
-    // let (local_addr, handles) = setup_world_tree(&service_config).await?;
-    let client = TestClient::new(format!("http://127.0.0.1:{}", 8080));
+    let (local_addr, handles) = setup_world_tree(&service_config).await?;
+    let client = TestClient::new(local_addr.to_string());
 
     // Each batch is (Pre Root, Vec<Leaf>, Post Root)
     let mut batches = vec![];
@@ -137,6 +136,8 @@ async fn many_batches() -> eyre::Result<()> {
         tracing::info!(?pre_root, ?post_root, "Batch prepared");
         tracing::warn!(?leaves, "Batch");
     }
+
+    let (batch_idx_tx, mut batch_idx_rx) = tokio::sync::mpsc::channel(1);
 
     let submit_batches_on_mainnet = async {
         let mut rng = rand::thread_rng();
@@ -158,8 +159,13 @@ async fn many_batches() -> eyre::Result<()> {
             let wait_offset: f32 = rng.gen();
             tokio::time::sleep(Duration::from_secs_f32(2.0 + wait_offset))
                 .await;
+
+            batch_idx_tx.send(i).await?;
         }
 
+        drop(batch_idx_tx);
+
+        tracing::info!("All batches submitted");
         eyre::Result::<()>::Ok(())
     };
 
@@ -180,39 +186,54 @@ async fn many_batches() -> eyre::Result<()> {
                 .await;
         }
 
+        tracing::info!("All batches bridged");
         eyre::Result::<()>::Ok(())
     };
 
-    let (submit_batches_on_mainnet, submit_batches_on_bridged) =
-        tokio::join!(submit_batches_on_mainnet, submit_batches_on_bridged);
+    let check_batches = async {
+        while let Some(batch_idx) = batch_idx_rx.recv().await {
+            let (pre_root, batch_leaves, post_root) = &batches[batch_idx];
+
+            tracing::info!(?pre_root, ?post_root, "Checking batch");
+
+            for leaf in batch_leaves {
+                let ip = attempt_async! {
+                    async {
+                        tracing::info!(?leaf, "Fetching inclusion proof for leaf");
+                        client
+                            .inclusion_proof(leaf)
+                            .await
+                            .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
+                    }
+                };
+
+                assert!(ip.verify(*leaf));
+            }
+        }
+
+        tracing::info!("All batches verified");
+        eyre::Result::<()>::Ok(())
+    };
+
+    let (submit_batches_on_mainnet, submit_batches_on_bridged, check_batches) = tokio::join!(
+        submit_batches_on_mainnet,
+        submit_batches_on_bridged,
+        check_batches
+    );
 
     submit_batches_on_mainnet?;
     submit_batches_on_bridged?;
-
-    for (_pre_root, batch_leaves, _post_root) in &batches {
-        for leaf in batch_leaves {
-            let ip = attempt_async! {
-                async {
-                    client
-                        .inclusion_proof(leaf)
-                        .await
-                        .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
-                }
-            };
-
-            assert!(ip.verify(*leaf));
-        }
-    }
+    check_batches?;
 
     tracing::info!("Waiting for world-tree service to shutdown...");
-    // for handle in handles {
-    //     handle.abort();
-    // }
+    for handle in handles {
+        handle.abort();
+    }
 
-    // tracing::info!("Shutting down mainnet container...");
-    // mainnet_container.stop().await?;
-    // tracing::info!("Shutting down rollup container...");
-    // rollup_container.stop().await?;
+    tracing::info!("Shutting down mainnet container...");
+    mainnet_container.stop().await?;
+    tracing::info!("Shutting down rollup container...");
+    rollup_container.stop().await?;
 
     Ok(())
 }
