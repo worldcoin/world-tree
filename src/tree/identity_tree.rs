@@ -283,7 +283,10 @@ where
 
         // Drain the updates up to and including the root
         let drained = self.tree_updates.drain(..=idx_of_root);
-        let (_root, update) = drained.last().unwrap();
+        // Take the last root
+        let (last_root, update) = drained.last().unwrap();
+
+        assert_eq!(last_root, *root);
 
         // Filter out updates that are not leaves
         let mut leaf_updates = update
@@ -1420,6 +1423,7 @@ mod test {
         let ref_tree_root = ref_tree.root();
         identity_tree.apply_updates_to_root(&ref_tree_root);
 
+        assert!(identity_tree.tree_updates.is_empty());
         let id_tree_root = identity_tree.tree.root();
 
         println!("ref_tree_root = {:?}", ref_tree_root);
