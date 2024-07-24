@@ -297,7 +297,10 @@ where
             .iter()
             .position(|(update_root, _update)| update_root == root)
         else {
-            tracing::warn!(?root, "Root not found in tree updates - cannot apply");
+            tracing::warn!(
+                ?root,
+                "Root not found in tree updates - cannot apply"
+            );
             return;
         };
 
