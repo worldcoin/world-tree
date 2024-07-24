@@ -30,16 +30,25 @@ pub struct IdentityTree<S> {
 
     /// Mapping of leaf hash to leaf index
     pub leaves: HashMap<Hash, u32>,
+
+    /// An ordered list of seen roots
+    pub roots: Vec<Hash>,
+
+    /// Mapping of root hash to index in the roots list
+    pub root_map: HashMap<Hash, usize>,
 }
 
 impl IdentityTree<Vec<Hash>> {
     pub fn new(depth: usize) -> Self {
         let tree = CascadingMerkleTree::new(vec![], depth, &Hash::ZERO);
+        let root = initial_root(depth, &Hash::ZERO);
 
         Self {
             tree,
             tree_updates: Vec::new(),
             leaves: HashMap::new(),
+            roots: vec![root],
+            root_map: maplit::hashmap! { root => 0 },
         }
     }
 }
@@ -113,12 +122,21 @@ impl IdentityTree<MmapVec<Hash>> {
             })
             .collect::<HashMap<Hash, u32>>();
 
+        let root = initial_root(depth, &Hash::ZERO);
+
         Ok(Self {
             tree,
             leaves,
             tree_updates: Vec::new(),
+            roots: vec![root],
+            root_map: maplit::hashmap! { root => 0 },
         })
     }
+}
+
+fn initial_root(depth: usize, empty_leaf: &Hash) -> Hash {
+    CascadingMerkleTree::<PoseidonHash, _>::new(vec![], depth, empty_leaf)
+        .root()
 }
 
 impl<S> IdentityTree<S>
@@ -132,31 +150,30 @@ where
         post_root: Hash,
         leaf_updates: LeafUpdates,
     ) -> Result<(), IdentityTreeError> {
-        let latest_root =
-            if let Some((last_root, _updates)) = self.tree_updates.last() {
-                // We already have pending updates
-                *last_root
-            } else {
-                // New root to an empty tree or all chains are synced
-                self.tree.root()
-            };
-
         self.update_leaf_index_mapping(&leaf_updates);
 
+        let latest_root = self
+            .roots
+            .last()
+            .copied()
+            .expect("There must always be at least one root");
+
         if pre_root != latest_root {
-            // This can occur if the tree has been restored from cache, but we're replaying chain events
-            tracing::warn!(
+            tracing::error!(
                 ?latest_root,
                 ?pre_root,
                 ?post_root,
                 "Attempted to insert root out of order"
             );
-            return Ok(());
+            return Err(IdentityTreeError::RootNotFound);
         }
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
 
         self.tree_updates.push((post_root, updates));
+        let new_root_idx = self.roots.len();
+        self.roots.push(post_root);
+        self.root_map.insert(post_root, new_root_idx);
 
         Ok(())
     }
@@ -275,11 +292,14 @@ where
 
     // Applies updates up to the specified root, inclusive
     pub fn apply_updates_to_root(&mut self, root: &Hash) {
-        let idx_of_root = self
+        let Some(idx_of_root) = self
             .tree_updates
             .iter()
             .position(|(update_root, _update)| update_root == root)
-            .expect("Tried applying updates to a non-existent root");
+        else {
+            tracing::warn!(?root, "Root not found in tree updates - cannot apply");
+            return;
+        };
 
         // Drain the updates up to and including the root
         let drained = self.tree_updates.drain(..=idx_of_root);
@@ -1387,7 +1407,8 @@ mod test {
         let mut ref_tree: CascadingMerkleTree<PoseidonHash, Vec<_>> =
             CascadingMerkleTree::new(vec![], 30, &Hash::ZERO);
 
-        let mut identity_tree = IdentityTree::new_with_cache_unchecked(30, cache_file.path())?;
+        let mut identity_tree =
+            IdentityTree::new_with_cache_unchecked(30, cache_file.path())?;
 
         // let initial_root = tree.root();
 
