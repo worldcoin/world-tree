@@ -546,9 +546,7 @@ mod test {
 
     use super::*;
     use crate::tree::error::IdentityTreeError;
-    use crate::tree::identity_tree::{
-        node_to_leaf_idx, storage_idx_to_coords, Leaves,
-    };
+    use crate::tree::identity_tree::{node_to_leaf_idx, storage_idx_to_coords};
     use crate::tree::{Hash, LeafIndex};
 
     const TREE_DEPTH: usize = 2;
@@ -726,9 +724,12 @@ mod test {
 
         tree.extend_from_slice(&first_half);
         let pre_root = tree.root();
-
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
+
+        // Need to update the internal root tracking
+        identity_tree.roots.push(pre_root);
+        identity_tree.root_map.insert(pre_root, 1);
 
         // Collect the second half of the leaves
         let offset = NUM_LEAVES / 2;
@@ -780,6 +781,10 @@ mod test {
 
         // Generate the updated tree with all of the leaves
         let pre_root = tree.root();
+
+        identity_tree.roots.push(pre_root);
+        identity_tree.root_map.insert(pre_root, 1);
+
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
@@ -859,6 +864,8 @@ mod test {
 
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
+        identity_tree.roots.push(identity_tree.tree.root());
+        identity_tree.root_map.insert(identity_tree.tree.root(), 1);
 
         let initial_root = {
             let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
