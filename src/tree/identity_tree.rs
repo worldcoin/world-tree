@@ -986,6 +986,82 @@ mod test {
     }
 
     #[test]
+    fn test_mmap_append_and_apply() -> eyre::Result<()> {
+        let tree_depth = 30;
+        let batch_size = 16;
+        let num_batches = 64;
+        let num_leaves = num_batches * batch_size;
+
+        let temp_file = NamedTempFile::new()?;
+        let path = temp_file.path().to_path_buf();
+
+        let mut identity_tree =
+            IdentityTree::new_with_cache_unchecked(tree_depth, &path)?;
+
+        let mut ref_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], tree_depth, &Hash::ZERO);
+
+        let leaves: Vec<_> = infinite_leaves().take(num_leaves).collect();
+        let mut batches = vec![];
+        for batch in leaves.chunks(batch_size) {
+            batches.push(batch.to_vec());
+        }
+
+        for (idx, batch) in batches.iter().enumerate() {
+            let pre_root = ref_tree.root();
+            ref_tree.extend_from_slice(batch);
+            let post_root = ref_tree.root();
+
+            let start_index = idx * batch_size;
+            let insertions = batch
+                .iter()
+                .enumerate()
+                .map(|(idx, value)| {
+                    let leaf_idx = LeafIndex((start_index + idx) as u32);
+                    (leaf_idx, *value)
+                })
+                .collect::<HashMap<LeafIndex, Hash>>();
+
+            identity_tree.append_updates(
+                pre_root,
+                post_root,
+                LeafUpdates::Insert(insertions),
+            )?;
+        }
+
+        let last_root = ref_tree.root();
+
+        identity_tree.apply_updates_to_root(&last_root);
+
+        drop(identity_tree);
+
+        let size = cross_platform_file_size(&path)?;
+
+        let meta_size = std::mem::size_of::<usize>();
+        let expected_size =
+            num_leaves * 2 * std::mem::size_of::<Hash>() + meta_size;
+
+        assert_eq!(
+            size, expected_size,
+            "Cache size should be {expected_size} but is {size}"
+        );
+
+        Ok(())
+    }
+
+    fn cross_platform_file_size(path: impl AsRef<Path>) -> eyre::Result<usize> {
+        let meta = std::fs::metadata(path.as_ref())?;
+
+        #[cfg(unix)]
+        let size = std::os::unix::fs::MetadataExt::size(&meta) as usize;
+
+        #[cfg(windows)]
+        let size = std::os::windows::fs::MetadataExt::file_size(&meta) as usize;
+
+        Ok(size)
+    }
+
+    #[test]
     fn test_auto_purge_cache() -> eyre::Result<()> {
         let temp_file = NamedTempFile::new()?;
         let path = temp_file.path().to_path_buf();
@@ -999,7 +1075,7 @@ mod test {
             identity_tree.tree.push(*leaf).unwrap();
         }
 
-        let mut cache: MmapVec<ruint::Uint<256, 4>> =
+        let mut cache: MmapVec<Hash> =
             unsafe { MmapVec::<Hash>::restore_from_path(&path)? };
         cache[0] = Hash::ZERO;
 
