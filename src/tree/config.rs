@@ -116,7 +116,7 @@ mod map_vec {
     use serde::{Deserialize, Deserializer, Serialize};
 
     pub fn serialize<T, S>(
-        values: &Vec<T>,
+        values: &[T],
         serializer: S,
     ) -> Result<S::Ok, S::Error>
     where
