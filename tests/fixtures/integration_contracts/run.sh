@@ -1,41 +1,41 @@
 #!/usr/bin/env sh
 
-# Default values for host and port
+# Default values for host, port, and chain id
 HOST="0.0.0.0"
 PORT="8545"
+CHAIN_ID="31337"
 CONTRACT=""
 
 # Function to display usage information
 usage() {
-  echo "Usage: $0 [-h host] [-p port] --contract contract_name" 1>&2
+  echo "Usage: $0 [-h host] [-p port] [-c chain_id] --contract contract_name" 1>&2
   exit 1
 }
 
 # Parse command-line options
-while getopts ":h:p:-:" opt; do
-  case "${opt}" in
-    h)
-      HOST=${OPTARG}
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h)
+      HOST="$2"
+      shift 2
       ;;
-    p)
-      PORT=${OPTARG}
+    -p)
+      PORT="$2"
+      shift 2
       ;;
-    -)
-      case "${OPTARG}" in
-        contract)
-          CONTRACT="${!OPTIND}"; OPTIND=$((OPTIND + 1))
-          ;;
-        *)
-          usage
-          ;;
-      esac
+    -c)
+      CHAIN_ID="$2"
+      shift 2
+      ;;
+    --contract)
+      CONTRACT="$2"
+      shift 2
       ;;
     *)
       usage
       ;;
   esac
 done
-shift $((OPTIND -1))
 
 # Check if contract name is provided
 if [ -z "${CONTRACT}" ]; then
@@ -44,7 +44,7 @@ if [ -z "${CONTRACT}" ]; then
 fi
 
 # Start Anvil in the background
-anvil --chain-id 31337 --block-time 2 --host ${HOST} --port ${PORT} &
+anvil --chain-id ${CHAIN_ID} --block-time 2 --host ${HOST} --port ${PORT} &
 
 ANVIL_PID=$!
 PRIV_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
