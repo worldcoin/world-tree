@@ -132,22 +132,24 @@ where
         chain_id: Option<ChainId>,
     ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
         let chain_state = self.chain_state.read().await;
+        let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            let root = chain_state
-                .get(&chain_id)
-                .ok_or(WorldTreeError::ChainIdNotFound)?;
+            let root = Self::resolve_chain_root(
+                self.canonical_tree_manager.chain_id.into(),
+                &chain_state,
+                &identity_tree,
+                chain_id,
+            )
+            .await?;
 
             Some(root)
         } else {
             None
         };
 
-        let inclusion_proof = self
-            .identity_tree
-            .read()
-            .await
-            .inclusion_proof(identity_commitment, root)?;
+        let inclusion_proof = identity_tree
+            .inclusion_proof(identity_commitment, root.as_ref())?;
 
         Ok(inclusion_proof)
     }
@@ -161,23 +163,51 @@ where
         chain_id: Option<ChainId>,
     ) -> Result<Hash, WorldTreeError<M>> {
         let chain_state = self.chain_state.read().await;
+        let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            let root = chain_state
-                .get(&chain_id)
-                .ok_or(WorldTreeError::ChainIdNotFound)?;
-
-            Some(root)
+            Some(
+                Self::resolve_chain_root(
+                    self.canonical_tree_manager.chain_id.into(),
+                    &chain_state,
+                    &identity_tree,
+                    chain_id,
+                )
+                .await?,
+            )
         } else {
             None
         };
 
-        let updated_root = self
-            .identity_tree
-            .read()
-            .await
-            .compute_root(identity_commitements, root)?;
+        let updated_root =
+            identity_tree.compute_root(identity_commitements, root.as_ref())?;
 
         Ok(updated_root)
+    }
+
+    async fn resolve_chain_root(
+        canonical_chain_id: ChainId,
+        chain_state: &HashMap<u64, Hash>,
+        identity_tree: &IdentityTree<MmapVec<Hash>>,
+        chain_id: ChainId,
+    ) -> Result<Hash, WorldTreeError<M>> {
+        let chain_root = chain_state
+            .get(&chain_id)
+            .copied()
+            .ok_or(WorldTreeError::ChainIdNotFound)?;
+
+        if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
+            Ok(identity_tree.roots[*chain_root_idx])
+        } else {
+            if canonical_chain_id == chain_id {
+                Ok(identity_tree
+                    .roots
+                    .last()
+                    .copied()
+                    .expect("There must always be at least one root"))
+            } else {
+                Ok(identity_tree.tree.root())
+            }
+        }
     }
 }
