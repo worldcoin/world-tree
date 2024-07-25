@@ -78,3 +78,46 @@ pub async fn init_world_tree(
         &config.cache.cache_file,
     )?))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+    use semaphore::generic_storage::MmapVec;
+    use semaphore::poseidon_tree::PoseidonHash;
+    use tree::Hash;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn sanity_check() -> eyre::Result<()> {
+        let storage = unsafe { MmapVec::restore_from_path("./cache.mmap")? };
+        let tree: CascadingMerkleTree<PoseidonHash, _> =
+            CascadingMerkleTree::restore_unchecked(storage, 30, &Hash::ZERO)?;
+
+        println!("tree.num_leaves() = {}", tree.num_leaves());
+
+        let mut all_leaves: Vec<_> = tree.leaves().collect();
+        all_leaves.sort();
+
+        // Count duplicates
+        let mut counts: HashMap<Hash, usize> = HashMap::new();
+        for leaf in &all_leaves {
+            *counts.entry(leaf.clone()).or_insert(0) += 1;
+        }
+
+        // Collect duplicates and sort by frequency
+        let mut duplicates: Vec<_> =
+            counts.iter().filter(|&(_, &count)| count > 1).collect();
+        duplicates.sort_by(|a, b| b.1.cmp(a.1));
+
+        // Display duplicates sorted by the most amount of duplicates descending
+        println!("Duplicates sorted by frequency:");
+        for (leaf, count) in duplicates {
+            println!("{:?}: {}", leaf, count);
+        }
+
+        Ok(())
+    }
+}
