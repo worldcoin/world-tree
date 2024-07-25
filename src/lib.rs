@@ -86,7 +86,8 @@ mod tests {
     use semaphore::cascading_merkle_tree::CascadingMerkleTree;
     use semaphore::generic_storage::MmapVec;
     use semaphore::poseidon_tree::PoseidonHash;
-    use tree::Hash;
+    use tree::identity_tree::node_to_leaf_idx;
+    use tree::{Hash, NodeIndex};
 
     use super::*;
 
@@ -119,5 +120,24 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn only_leaf_idxs() {
+        let fname = "updates/r14476_6394958320965700475475854235126049092479678984786377875350991357779760415846.json";
+
+        let content = std::fs::read(fname).unwrap();
+
+        let updates: HashMap<NodeIndex, Hash> = serde_json::from_slice(&content).unwrap();
+
+        let mut leaf_idxs: Vec<_> = updates.keys().filter_map(|node_idx| {
+            let leaf_idx = node_to_leaf_idx(node_idx.0, 30)?;
+
+            Some(leaf_idx)
+        }).collect();
+
+        leaf_idxs.sort();
+
+        println!("leaf_idxs = {:?}", leaf_idxs);
     }
 }

@@ -169,11 +169,18 @@ where
         }
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
+        let updates_serialized = serde_json::to_vec_pretty(&updates).unwrap();
 
         self.tree_updates.push((post_root, updates));
         let new_root_idx = self.roots.len();
         self.roots.push(post_root);
         self.root_map.insert(post_root, new_root_idx);
+
+        std::fs::write(
+            format!("updates/r{new_root_idx}_{post_root}.json"),
+            updates_serialized,
+        )
+        .unwrap();
 
         Ok(())
     }
@@ -342,6 +349,8 @@ where
         for leaf_idx in deletions {
             self.tree.set_leaf(leaf_idx, Hash::ZERO);
         }
+
+        assert_eq!(self.tree.root(), *root);
     }
 
     /// Construct an inclusion proof for a given leaf
