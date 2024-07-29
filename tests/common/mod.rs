@@ -101,7 +101,7 @@ pub async fn wait_until_contracts_deployed(
     provider: &Provider<Http>,
     address: Address,
 ) -> eyre::Result<()> {
-    const MAX_RETRIES: usize = 10;
+    const MAX_RETRIES: usize = 20;
     const SLEEP_DURATION: Duration = Duration::from_secs(2);
 
     for _ in 0..MAX_RETRIES {

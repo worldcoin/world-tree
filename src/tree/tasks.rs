@@ -26,8 +26,8 @@ where
                 new_root = ?update.post_root,
                 "Leaf updates received, appending tree updates"
             );
-            let mut identity_tree = identity_tree.write().await;
             let mut chain_state = chain_state.write().await;
+            let mut identity_tree = identity_tree.write().await;
 
             identity_tree.append_updates(
                 update.pre_root,
@@ -59,8 +59,8 @@ where
         if let Some((chain_id, bridged_root)) = bridged_root_rx.recv().await {
             tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
-            let mut identity_tree = identity_tree.write().await;
             let mut chain_state = chain_state.write().await;
+            let mut identity_tree = identity_tree.write().await;
 
             // Update chain state with the new root
             chain_state.insert(chain_id, bridged_root);
@@ -81,23 +81,15 @@ async fn realign_trees(
     let mut chain_state_idxs = vec![];
 
     for (chain_id, root) in chain_state.iter() {
-        let idx = identity_tree
-            .tree_updates
-            .iter()
-            .position(|(hash, _updates)| hash == root);
+        let idx = identity_tree.root_map.get(root).copied();
 
-        //
         if let Some(idx) = idx {
             chain_state_idxs.push(idx);
         } else {
-            // This can occur in 2 cases:
-            // 1. The bridged network event arrived before the canonical event
-            //    this is very unlikely to happen in prod, but technically possible (RPC outage, etc.)
-            // 2. A bridged network is still at the cascading tree root
-            //
-            // in both cases, we cannot reallign the trees
-            tracing::warn!("Root {root:?} seen on chain {chain_id} not found in tree updates - cannot reallign");
-            return;
+            // This can happen if a bridged event arrives before the canonical event
+            // this means however that the bridged chain is ahead of the canonical chain
+            // and we can realign to the canonical chain root (or root of other bridged networks)
+            tracing::warn!(?chain_id, ?root, "Root not found in identity tree");
         }
     }
 
@@ -107,12 +99,10 @@ async fn realign_trees(
         return;
     };
 
-    let latest_common_root = *identity_tree
-        .tree_updates
-        .get(latest_common_root_idx)
-        .map(|(hash, _updates)| hash)
-        .expect("Greatest common root not found");
+    let latest_common_root = identity_tree.roots[latest_common_root_idx];
 
     // Apply updates up to the greatest common root
     identity_tree.apply_updates_to_root(&latest_common_root);
+
+    tracing::info!(?latest_common_root, "Trees realligned");
 }

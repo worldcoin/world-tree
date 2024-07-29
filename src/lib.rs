@@ -62,7 +62,13 @@ pub async fn init_world_tree(
 
     if config.cache.purge_cache {
         tracing::info!("Purging tree cache");
-        fs::remove_file(&config.cache.cache_file)?;
+        if config.cache.cache_file.exists() {
+            fs::remove_file(&config.cache.cache_file)?;
+        }
+
+        // There's something wrong with CascadingMerkleTree impl
+        // in some cases it'll fail if the file doesn't exist
+        fs::write(&config.cache.cache_file, [])?;
     }
 
     Ok(Arc::new(WorldTree::new(
@@ -71,4 +77,47 @@ pub async fn init_world_tree(
         bridged_tree_managers,
         &config.cache.cache_file,
     )?))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+    use semaphore::generic_storage::MmapVec;
+    use semaphore::poseidon_tree::PoseidonHash;
+    use tree::Hash;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn sanity_check() -> eyre::Result<()> {
+        let storage = unsafe { MmapVec::restore_from_path("./cache.mmap")? };
+        let tree: CascadingMerkleTree<PoseidonHash, _> =
+            CascadingMerkleTree::restore_unchecked(storage, 30, &Hash::ZERO)?;
+
+        println!("tree.num_leaves() = {}", tree.num_leaves());
+
+        let mut all_leaves: Vec<_> = tree.leaves().collect();
+        all_leaves.sort();
+
+        // Count duplicates
+        let mut counts: HashMap<Hash, usize> = HashMap::new();
+        for leaf in &all_leaves {
+            *counts.entry(leaf.clone()).or_insert(0) += 1;
+        }
+
+        // Collect duplicates and sort by frequency
+        let mut duplicates: Vec<_> =
+            counts.iter().filter(|&(_, &count)| count > 1).collect();
+        duplicates.sort_by(|a, b| b.1.cmp(a.1));
+
+        // Display duplicates sorted by the most amount of duplicates descending
+        println!("Duplicates sorted by frequency:");
+        for (leaf, count) in duplicates {
+            println!("{:?}: {}", leaf, count);
+        }
+
+        Ok(())
+    }
 }

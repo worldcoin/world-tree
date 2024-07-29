@@ -7,7 +7,7 @@ use url::Url;
 
 pub const CONFIG_PREFIX: &str = "WLD";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceConfig {
     pub tree_depth: usize,
     /// Configuration for the canonical tree on mainnet
@@ -97,11 +97,11 @@ mod default {
     use super::*;
 
     pub fn socket_address() -> Option<SocketAddr> {
-        Some(([0, 0, 0, 0], 8080).into())
+        Some(([127, 0, 0, 1], 8080).into())
     }
 
     pub fn window_size() -> u64 {
-        5000
+        1000
     }
 
     pub fn provider_throttle() -> u32 {
@@ -113,7 +113,23 @@ mod default {
 mod map_vec {
     use std::collections::BTreeMap;
 
-    use serde::{Deserialize, Deserializer};
+    use serde::{Deserialize, Deserializer, Serialize};
+
+    pub fn serialize<T, S>(
+        values: &[T],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+        T: Serialize,
+    {
+        let map: BTreeMap<String, &T> = values
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i.to_string(), v))
+            .collect();
+        map.serialize(serializer)
+    }
 
     pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
     where
@@ -123,5 +139,76 @@ mod map_vec {
         let v: BTreeMap<String, T> = Deserialize::deserialize(deserializer)?;
 
         Ok(v.into_values().collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_serialize() {
+        const S: &str = indoc::indoc! {r#"
+            tree_depth = 10
+            socket_address = "127.0.0.1:8080"
+
+            [canonical_tree]
+            address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
+            window_size = 10
+            creation_block = 0
+
+            [canonical_tree.provider]
+            rpc_endpoint = "http://localhost:8545/"
+            throttle = 150
+
+            [cache]
+            cache_file = "cache.mmap"
+            purge_cache = true
+
+            [bridged_trees.0]
+            address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
+            window_size = 10
+            creation_block = 0
+
+            [bridged_trees.0.provider]
+            rpc_endpoint = "http://localhost:8546/"
+            throttle = 150
+        "#};
+
+        let config = ServiceConfig {
+            tree_depth: 10,
+            canonical_tree: TreeConfig {
+                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
+                    .parse()
+                    .unwrap(),
+                window_size: 10,
+                creation_block: 0,
+                provider: ProviderConfig {
+                    rpc_endpoint: "http://localhost:8545".parse().unwrap(),
+                    throttle: 150,
+                },
+            },
+            cache: CacheConfig {
+                cache_file: PathBuf::from("cache.mmap"),
+                purge_cache: true,
+            },
+            bridged_trees: vec![TreeConfig {
+                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
+                    .parse()
+                    .unwrap(),
+                window_size: 10,
+                creation_block: 0,
+                provider: ProviderConfig {
+                    rpc_endpoint: "http://localhost:8546".parse().unwrap(),
+                    throttle: 150,
+                },
+            }],
+            socket_address: Some(([127, 0, 0, 1], 8080).into()),
+            telemetry: None,
+        };
+
+        let serialized = toml::to_string(&config).unwrap();
+
+        assert_eq!(serialized.trim(), S.trim());
     }
 }

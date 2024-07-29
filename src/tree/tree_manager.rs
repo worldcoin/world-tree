@@ -115,11 +115,13 @@ impl TreeVersion for CanonicalTree {
                 .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
 
+            tracing::info!(?chain_id, "Starting canonical tree manager");
+
             loop {
                 async {
-                    let logs = block_scanner.next().await?;
+                    let (num_blocks, logs) = block_scanner.next().await?;
 
-                    if logs.is_empty() {
+                    if num_blocks == 0 {
                         tokio::time::sleep(Duration::from_secs(
                             BLOCK_SCANNER_SLEEP_TIME,
                         ))
@@ -169,10 +171,12 @@ impl TreeVersion for BridgedTree {
                 .map_err(WorldTreeError::MiddlewareError)?
                 .as_u64();
 
+            tracing::info!(?chain_id, "Starting bridged tree manager");
+
             loop {
                 async {
-                    let logs = block_scanner.next().await?;
-                    if logs.is_empty() {
+                    let (num_blocks, logs) = block_scanner.next().await?;
+                    if num_blocks == 0 {
                         tokio::time::sleep(Duration::from_secs(
                             BLOCK_SCANNER_SLEEP_TIME,
                         ))
