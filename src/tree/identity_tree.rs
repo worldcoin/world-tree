@@ -169,18 +169,11 @@ where
         }
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
-        let updates_serialized = serde_json::to_vec_pretty(&updates).unwrap();
 
         self.tree_updates.push((post_root, updates));
         let new_root_idx = self.roots.len();
         self.roots.push(post_root);
         self.root_map.insert(post_root, new_root_idx);
-
-        std::fs::write(
-            format!("updates/r{new_root_idx}_{post_root}.json"),
-            updates_serialized,
-        )
-        .unwrap();
 
         Ok(())
     }
@@ -311,13 +304,25 @@ where
             return;
         };
 
-        // Drain the updates up to and including the root
-        let drained = self.tree_updates.drain(..=idx_of_root);
+        // We must drain all roots - to recalculate the pending ones
+        let mut drained = self.tree_updates.drain(..).skip(idx_of_root);
         // Take the last root
-        let (last_root, update) = drained.last().unwrap();
+        let (update_root, update) = drained.next().unwrap();
 
-        assert_eq!(last_root, *root);
+        // And collect the remaining updates to later recalculate them
+        let remaining_updates: Vec<_> = drained.collect();
 
+        debug_assert_eq!(update_root, *root);
+
+        self.apply_update(update);
+
+        debug_assert_eq!(self.tree.root(), *root);
+
+        self.reappend_updates(remaining_updates)
+            .expect("Failed to re-append updates");
+    }
+
+    fn apply_update(&mut self, update: StorageUpdates) {
         // Filter out updates that are not leaves
         let mut leaf_updates = update
             .into_iter()
@@ -349,8 +354,60 @@ where
         for leaf_idx in deletions {
             self.tree.set_leaf(leaf_idx, Hash::ZERO);
         }
+    }
 
-        assert_eq!(self.tree.root(), *root);
+    fn reappend_updates(
+        &mut self,
+        updates: Vec<(Hash, StorageUpdates)>,
+    ) -> Result<(), IdentityTreeError> {
+        let num_leaves = self.tree.num_leaves() as u32;
+
+        for (root, update) in updates {
+            let mut leaf_updates =
+                Self::storage_to_leaf_updates(self.tree.depth(), update);
+
+            // We don't want to reinsert leaves that are already in the tree
+            if let LeafUpdates::Insert(leaves) = &mut leaf_updates {
+                *leaves = leaves
+                    .drain()
+                    .filter(|(leaf_idx, _v)| leaf_idx.0 >= num_leaves)
+                    .collect();
+            }
+
+            let updates = self.construct_storage_updates(leaf_updates, None)?;
+            self.tree_updates.push((root, updates));
+        }
+
+        Ok(())
+    }
+
+    fn storage_to_leaf_updates(
+        tree_depth: usize,
+        update: StorageUpdates,
+    ) -> LeafUpdates {
+        let leaf_updates = update
+            .into_iter()
+            .filter_map(|(idx, value)| {
+                let leaf_idx = node_to_leaf_idx(idx.0, tree_depth)?;
+                let leaf_idx = LeafIndex(leaf_idx);
+
+                Some((leaf_idx, value))
+            })
+            .collect::<Leaves>();
+
+        let all_zero = leaf_updates.values().all(|v| *v == Hash::ZERO);
+        let any_zero = leaf_updates.values().any(|v| *v == Hash::ZERO);
+
+        debug_assert!(
+            all_zero || !any_zero,
+            "Cannot mix insertions and deletions"
+        );
+
+        if all_zero {
+            LeafUpdates::Delete(leaf_updates)
+        } else {
+            LeafUpdates::Insert(leaf_updates)
+        }
     }
 
     /// Construct an inclusion proof for a given leaf
@@ -895,8 +952,15 @@ mod test {
         // Apply updates up to root 3
         identity_tree.apply_updates_to_root(&precalc_batches[3].1);
 
+        install_batch(&mut identity_tree, 4)?;
+        install_batch(&mut identity_tree, 5)?;
+        install_batch(&mut identity_tree, 6)?;
+
+        // Apply updates up to root 5
+        identity_tree.apply_updates_to_root(&precalc_batches[5].1);
+
         // Verify all the inserted leaves
-        for batch_idx in 0..=3 {
+        for batch_idx in 0..=5 {
             for n in 0..batch_size {
                 let leaf = batches[batch_idx][n];
                 let inclusion_proof =
