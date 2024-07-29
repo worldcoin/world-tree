@@ -17,14 +17,14 @@ use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
 };
 
-const TREE_DEPTH: usize = 20;
+const TREE_DEPTH: usize = 30;
 
 mod common;
 
 use common::*;
 
-const NUM_BATCHES: usize = 5;
-const BATCH_SIZE: usize = 5;
+const NUM_BATCHES: usize = 100;
+const BATCH_SIZE: usize = 10;
 
 #[tokio::test]
 async fn many_batches() -> eyre::Result<()> {
@@ -127,6 +127,7 @@ async fn many_batches() -> eyre::Result<()> {
     // Each batch is (Pre Root, Vec<Leaf>, Post Root)
     let mut batches = vec![];
 
+    tracing::info!("Prepare batches");
     for _i in 0..NUM_BATCHES {
         let leaves = random_leaves(BATCH_SIZE);
         let pre_root = tree.root();
@@ -135,7 +136,10 @@ async fn many_batches() -> eyre::Result<()> {
         batches.push((pre_root, leaves.clone(), post_root));
 
         tracing::info!(?pre_root, ?post_root, "Batch prepared");
+        tracing::debug!(?pre_root, ?post_root, ?leaves, "Batch");
     }
+
+    let (batch_idx_tx, mut batch_idx_rx) = tokio::sync::mpsc::channel(1);
 
     let submit_batches_on_mainnet = async {
         let mut rng = rand::thread_rng();
@@ -155,10 +159,15 @@ async fn many_batches() -> eyre::Result<()> {
                 .await?;
 
             let wait_offset: f32 = rng.gen();
-            tokio::time::sleep(Duration::from_secs_f32(4.0 + wait_offset))
+            tokio::time::sleep(Duration::from_secs_f32(2.0 + wait_offset))
                 .await;
+
+            batch_idx_tx.send(i).await?;
         }
 
+        drop(batch_idx_tx);
+
+        tracing::info!("All batches submitted");
         eyre::Result::<()>::Ok(())
     };
 
@@ -175,33 +184,48 @@ async fn many_batches() -> eyre::Result<()> {
                 .await?;
 
             let wait_offset: f32 = rng.gen();
-            tokio::time::sleep(Duration::from_secs_f32(4.0 + wait_offset))
+            tokio::time::sleep(Duration::from_secs_f32(2.0 + wait_offset))
                 .await;
         }
 
+        tracing::info!("All batches bridged");
         eyre::Result::<()>::Ok(())
     };
 
-    let (submit_batches_on_mainnet, submit_batches_on_bridged) =
-        tokio::join!(submit_batches_on_mainnet, submit_batches_on_bridged);
+    let check_batches = async {
+        while let Some(batch_idx) = batch_idx_rx.recv().await {
+            let (pre_root, batch_leaves, post_root) = &batches[batch_idx];
+
+            tracing::info!(?pre_root, ?post_root, "Checking batch");
+
+            for leaf in batch_leaves {
+                let ip = attempt_async! {
+                    async {
+                        tracing::info!(?leaf, "Fetching inclusion proof for leaf");
+                        client
+                            .inclusion_proof(leaf)
+                            .await
+                            .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
+                    }
+                };
+
+                assert!(ip.verify(*leaf));
+            }
+        }
+
+        tracing::info!("All batches verified");
+        eyre::Result::<()>::Ok(())
+    };
+
+    let (submit_batches_on_mainnet, submit_batches_on_bridged, check_batches) = tokio::join!(
+        submit_batches_on_mainnet,
+        submit_batches_on_bridged,
+        check_batches
+    );
 
     submit_batches_on_mainnet?;
     submit_batches_on_bridged?;
-
-    for (_pre_root, batch_leaves, _post_root) in &batches {
-        for leaf in batch_leaves {
-            let ip = attempt_async! {
-                async {
-                    client
-                        .inclusion_proof(leaf)
-                        .await
-                        .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
-                }
-            };
-
-            assert!(ip.verify(*leaf));
-        }
-    }
+    check_batches?;
 
     tracing::info!("Waiting for world-tree service to shutdown...");
     for handle in handles {

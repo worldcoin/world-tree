@@ -69,6 +69,6 @@ where
         self.next_block.store(next_block, Ordering::SeqCst);
         tracing::debug!(chain_id = ?self.chain_id, last_synced_block = ?next_block - 1, "Last synced block updated");
 
-        return Ok((num_blocks, logs));
+        Ok((num_blocks, logs))
     }
 }

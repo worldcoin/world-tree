@@ -30,16 +30,25 @@ pub struct IdentityTree<S> {
 
     /// Mapping of leaf hash to leaf index
     pub leaves: HashMap<Hash, u32>,
+
+    /// An ordered list of seen roots
+    pub roots: Vec<Hash>,
+
+    /// Mapping of root hash to index in the roots list
+    pub root_map: HashMap<Hash, usize>,
 }
 
 impl IdentityTree<Vec<Hash>> {
     pub fn new(depth: usize) -> Self {
         let tree = CascadingMerkleTree::new(vec![], depth, &Hash::ZERO);
+        let root = initial_root(depth, &Hash::ZERO);
 
         Self {
             tree,
             tree_updates: Vec::new(),
             leaves: HashMap::new(),
+            roots: vec![root],
+            root_map: maplit::hashmap! { root => 0 },
         }
     }
 }
@@ -113,59 +122,27 @@ impl IdentityTree<MmapVec<Hash>> {
             })
             .collect::<HashMap<Hash, u32>>();
 
+        let root = initial_root(depth, &Hash::ZERO);
+
         Ok(Self {
             tree,
             leaves,
             tree_updates: Vec::new(),
+            roots: vec![root],
+            root_map: maplit::hashmap! { root => 0 },
         })
     }
+}
+
+fn initial_root(depth: usize, empty_leaf: &Hash) -> Hash {
+    CascadingMerkleTree::<PoseidonHash, _>::new(vec![], depth, empty_leaf)
+        .root()
 }
 
 impl<S> IdentityTree<S>
 where
     S: GenericStorage<Hash>,
 {
-    /// Inserts a new leaf into the tree and updates the leaves hashmap
-    /// Returns an error if the leaf already exists
-    pub fn insert(
-        &mut self,
-        index: u32,
-        leaf: Hash,
-    ) -> Result<(), IdentityTreeError> {
-        // Check if the leaf already exists
-        if self.leaves.contains_key(&leaf) {
-            return Err(IdentityTreeError::LeafAlreadyExists);
-        }
-        self.leaves.insert(leaf, index);
-
-        // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-        self.tree.push(leaf).expect("Failed to insert into tree");
-
-        Ok(())
-    }
-
-    /// Extends the tree with new leaves and updates the leaves hashmap
-    pub fn extend_from_slice(&mut self, leaves: &[(u32, Hash)]) {
-        // Update the leaves hashmap and collect the new leaf values
-        let leaves = leaves
-            .iter()
-            .map(|(idx, hash)| {
-                self.leaves.insert(*hash, *idx);
-                *hash
-            })
-            .collect::<Vec<_>>();
-
-        // Insert the new leaves into the tree
-        self.tree.extend_from_slice(&leaves);
-    }
-
-    /// Removes a leaf from the tree and updates the leaves hashmap
-    pub fn remove(&mut self, index: usize) {
-        let leaf = self.tree.get_leaf(index);
-        self.leaves.remove(&leaf);
-        self.tree.set_leaf(index, Hash::ZERO);
-    }
-
     // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
     pub fn append_updates(
         &mut self,
@@ -173,31 +150,30 @@ where
         post_root: Hash,
         leaf_updates: LeafUpdates,
     ) -> Result<(), IdentityTreeError> {
-        let latest_root =
-            if let Some((last_root, _updates)) = self.tree_updates.last() {
-                // We already have pending updates
-                *last_root
-            } else {
-                // New root to an empty tree or all chains are synced
-                self.tree.root()
-            };
-
         self.update_leaf_index_mapping(&leaf_updates);
 
+        let latest_root = self
+            .roots
+            .last()
+            .copied()
+            .expect("There must always be at least one root");
+
         if pre_root != latest_root {
-            // This can occur if the tree has been restored from cache, but we're replaying chain events
-            tracing::warn!(
+            tracing::error!(
                 ?latest_root,
                 ?pre_root,
                 ?post_root,
                 "Attempted to insert root out of order"
             );
-            return Ok(());
+            return Err(IdentityTreeError::RootNotFound);
         }
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
 
         self.tree_updates.push((post_root, updates));
+        let new_root_idx = self.roots.len();
+        self.roots.push(post_root);
+        self.root_map.insert(post_root, new_root_idx);
 
         Ok(())
     }
@@ -316,15 +292,24 @@ where
 
     // Applies updates up to the specified root, inclusive
     pub fn apply_updates_to_root(&mut self, root: &Hash) {
-        let idx_of_root = self
+        let Some(idx_of_root) = self
             .tree_updates
             .iter()
             .position(|(update_root, _update)| update_root == root)
-            .expect("Tried applying updates to a non-existent root");
+        else {
+            tracing::warn!(
+                ?root,
+                "Root not found in tree updates - cannot apply"
+            );
+            return;
+        };
 
         // Drain the updates up to and including the root
         let drained = self.tree_updates.drain(..=idx_of_root);
-        let (_root, update) = drained.last().unwrap();
+        // Take the last root
+        let (last_root, update) = drained.last().unwrap();
+
+        assert_eq!(last_root, *root);
 
         // Filter out updates that are not leaves
         let mut leaf_updates = update
@@ -554,17 +539,50 @@ mod test {
     use eyre::{eyre, ContextCompat};
     use rand::{Rng, SeedableRng};
     use semaphore::cascading_merkle_tree::CascadingMerkleTree;
-    use semaphore::generic_storage::MmapVec;
+    use semaphore::generic_storage::{GenericStorage, MmapVec};
     use semaphore::merkle_tree::Branch;
     use semaphore::poseidon_tree::PoseidonHash;
     use tempfile::NamedTempFile;
 
-    use super::{leaf_to_storage_idx, IdentityTree, LeafUpdates};
+    use super::*;
+    use crate::tree::error::IdentityTreeError;
     use crate::tree::identity_tree::{node_to_leaf_idx, storage_idx_to_coords};
     use crate::tree::{Hash, LeafIndex};
 
     const TREE_DEPTH: usize = 2;
     const NUM_LEAVES: usize = 1 << TREE_DEPTH;
+
+    // Extra methods for testing
+    impl<S> IdentityTree<S>
+    where
+        S: GenericStorage<Hash>,
+    {
+        /// Inserts a new leaf into the tree and updates the leaves hashmap
+        /// Returns an error if the leaf already exists
+        pub fn insert(
+            &mut self,
+            index: u32,
+            leaf: Hash,
+        ) -> Result<(), IdentityTreeError> {
+            // Check if the leaf already exists
+            if self.leaves.contains_key(&leaf) {
+                return Err(IdentityTreeError::LeafAlreadyExists);
+            }
+            self.leaves.insert(leaf, index);
+
+            // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
+            self.tree.push(leaf).expect("Failed to insert into tree");
+
+            Ok(())
+        }
+
+        /// Removes a leaf from the tree and updates the leaves hashmap
+        pub fn remove(&mut self, index: usize) {
+            let leaf = self.tree.get_leaf(index);
+            self.leaves.remove(&leaf);
+            self.tree.set_leaf(index, Hash::ZERO);
+        }
+    }
 
     fn infinite_leaves() -> impl Iterator<Item = Hash> {
         let mut rng = rand::rngs::SmallRng::seed_from_u64(42);
@@ -706,9 +724,12 @@ mod test {
 
         tree.extend_from_slice(&first_half);
         let pre_root = tree.root();
-
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
+
+        // Need to update the internal root tracking
+        identity_tree.roots.push(pre_root);
+        identity_tree.root_map.insert(pre_root, 1);
 
         // Collect the second half of the leaves
         let offset = NUM_LEAVES / 2;
@@ -760,6 +781,10 @@ mod test {
 
         // Generate the updated tree with all of the leaves
         let pre_root = tree.root();
+
+        identity_tree.roots.push(pre_root);
+        identity_tree.root_map.insert(pre_root, 1);
+
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
@@ -791,6 +816,8 @@ mod test {
 
             assert_eq!(proof.root, post_root);
             assert_eq!(proof.proof, tree.proof(leaf_idx));
+
+            assert!(proof.verify(*leaf));
         }
 
         Ok(())
@@ -837,6 +864,8 @@ mod test {
 
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
+        identity_tree.roots.push(identity_tree.tree.root());
+        identity_tree.root_map.insert(identity_tree.tree.root(), 1);
 
         let initial_root = {
             let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
@@ -957,6 +986,82 @@ mod test {
     }
 
     #[test]
+    fn test_mmap_append_and_apply() -> eyre::Result<()> {
+        let tree_depth = 30;
+        let batch_size = 16;
+        let num_batches = 64;
+        let num_leaves = num_batches * batch_size;
+
+        let temp_file = NamedTempFile::new()?;
+        let path = temp_file.path().to_path_buf();
+
+        let mut identity_tree =
+            IdentityTree::new_with_cache_unchecked(tree_depth, &path)?;
+
+        let mut ref_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], tree_depth, &Hash::ZERO);
+
+        let leaves: Vec<_> = infinite_leaves().take(num_leaves).collect();
+        let mut batches = vec![];
+        for batch in leaves.chunks(batch_size) {
+            batches.push(batch.to_vec());
+        }
+
+        for (idx, batch) in batches.iter().enumerate() {
+            let pre_root = ref_tree.root();
+            ref_tree.extend_from_slice(batch);
+            let post_root = ref_tree.root();
+
+            let start_index = idx * batch_size;
+            let insertions = batch
+                .iter()
+                .enumerate()
+                .map(|(idx, value)| {
+                    let leaf_idx = LeafIndex((start_index + idx) as u32);
+                    (leaf_idx, *value)
+                })
+                .collect::<HashMap<LeafIndex, Hash>>();
+
+            identity_tree.append_updates(
+                pre_root,
+                post_root,
+                LeafUpdates::Insert(insertions),
+            )?;
+        }
+
+        let last_root = ref_tree.root();
+
+        identity_tree.apply_updates_to_root(&last_root);
+
+        drop(identity_tree);
+
+        let size = cross_platform_file_size(&path)?;
+
+        let meta_size = std::mem::size_of::<usize>();
+        let expected_size =
+            num_leaves * 2 * std::mem::size_of::<Hash>() + meta_size;
+
+        assert_eq!(
+            size, expected_size,
+            "Cache size should be {expected_size} but is {size}"
+        );
+
+        Ok(())
+    }
+
+    fn cross_platform_file_size(path: impl AsRef<Path>) -> eyre::Result<usize> {
+        let meta = std::fs::metadata(path.as_ref())?;
+
+        #[cfg(unix)]
+        let size = std::os::unix::fs::MetadataExt::size(&meta) as usize;
+
+        #[cfg(windows)]
+        let size = std::os::windows::fs::MetadataExt::file_size(&meta) as usize;
+
+        Ok(size)
+    }
+
+    #[test]
     fn test_auto_purge_cache() -> eyre::Result<()> {
         let temp_file = NamedTempFile::new()?;
         let path = temp_file.path().to_path_buf();
@@ -970,7 +1075,7 @@ mod test {
             identity_tree.tree.push(*leaf).unwrap();
         }
 
-        let mut cache: MmapVec<ruint::Uint<256, 4>> =
+        let mut cache: MmapVec<Hash> =
             unsafe { MmapVec::<Hash>::restore_from_path(&path)? };
         cache[0] = Hash::ZERO;
 
