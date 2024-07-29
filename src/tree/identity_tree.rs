@@ -833,6 +833,85 @@ mod test {
     }
 
     #[test]
+    fn consecutive_staggered_updates() -> eyre::Result<()> {
+        let tree_depth = 30;
+        let num_leaves = 1 << 12;
+        let batch_size = 32;
+        let num_batches = num_leaves / batch_size;
+
+        assert_eq!(num_batches, 128);
+
+        let mut identity_tree = IdentityTree::new(tree_depth);
+        let mut ref_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], tree_depth, &Hash::ZERO);
+
+        let leaves: Vec<_> = infinite_leaves().take(num_leaves).collect();
+        let batches: Vec<_> = leaves
+            .chunks(batch_size)
+            .map(|batch| batch.to_vec())
+            .collect();
+
+        let mut precalc_batches = vec![];
+        for batch in &batches {
+            let pre_root = ref_tree.root();
+            ref_tree.extend_from_slice(&batch);
+            let post_root = ref_tree.root();
+
+            precalc_batches.push((pre_root, post_root));
+        }
+
+        let install_batch = |identity_tree: &mut IdentityTree<Vec<Hash>>,
+                             batch_idx: usize| {
+            let batch = &batches[batch_idx];
+            let leaf_updates = batch
+                .iter()
+                .enumerate()
+                .map(|(idx, value)| {
+                    (LeafIndex((batch_idx * batch_size + idx) as u32), *value)
+                })
+                .collect::<HashMap<LeafIndex, Hash>>();
+
+            let pre_root = precalc_batches[batch_idx].0;
+            let post_root = precalc_batches[batch_idx].1;
+
+            identity_tree.append_updates(
+                pre_root,
+                post_root,
+                LeafUpdates::Insert(leaf_updates),
+            )?;
+
+            eyre::Result::<Hash>::Ok(post_root)
+        };
+
+        install_batch(&mut identity_tree, 0)?;
+        install_batch(&mut identity_tree, 1)?;
+        install_batch(&mut identity_tree, 2)?;
+
+        // Apply updates up to root 1
+        identity_tree.apply_updates_to_root(&precalc_batches[1].1);
+
+        install_batch(&mut identity_tree, 3)?;
+
+        // Apply updates up to root 3
+        identity_tree.apply_updates_to_root(&precalc_batches[3].1);
+
+        // Verify all the inserted leaves
+        for batch_idx in 0..=3 {
+            for n in 0..batch_size {
+                let leaf = batches[batch_idx][n];
+                let inclusion_proof =
+                    identity_tree.inclusion_proof(leaf, None)?;
+                let inclusion_proof =
+                    inclusion_proof.expect("Missing inclusion proof");
+
+                assert!(inclusion_proof.verify(leaf), "Proof must be valid for leaf {leaf:?} (batch {batch_idx}, index {n})");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn test_compute_root() -> eyre::Result<()> {
         let mut identity_tree = IdentityTree::new(TREE_DEPTH);
 
