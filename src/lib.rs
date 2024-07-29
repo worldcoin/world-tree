@@ -128,13 +128,17 @@ mod tests {
 
         let content = std::fs::read(fname).unwrap();
 
-        let updates: HashMap<NodeIndex, Hash> = serde_json::from_slice(&content).unwrap();
+        let updates: HashMap<NodeIndex, Hash> =
+            serde_json::from_slice(&content).unwrap();
 
-        let mut leaf_idxs: Vec<_> = updates.keys().filter_map(|node_idx| {
-            let leaf_idx = node_to_leaf_idx(node_idx.0, 30)?;
+        let mut leaf_idxs: Vec<_> = updates
+            .keys()
+            .filter_map(|node_idx| {
+                let leaf_idx = node_to_leaf_idx(node_idx.0, 30)?;
 
-            Some(leaf_idx)
-        }).collect();
+                Some(leaf_idx)
+            })
+            .collect();
 
         leaf_idxs.sort();
 
