@@ -198,16 +198,14 @@ where
 
         if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
             Ok(identity_tree.roots[*chain_root_idx])
+        } else if canonical_chain_id == chain_id {
+            Ok(identity_tree
+                .roots
+                .last()
+                .copied()
+                .expect("There must always be at least one root"))
         } else {
-            if canonical_chain_id == chain_id {
-                Ok(identity_tree
-                    .roots
-                    .last()
-                    .copied()
-                    .expect("There must always be at least one root"))
-            } else {
-                Ok(identity_tree.tree.root())
-            }
+            Ok(identity_tree.tree.root())
         }
     }
 }

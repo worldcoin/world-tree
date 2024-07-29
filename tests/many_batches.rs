@@ -32,8 +32,6 @@ async fn many_batches() -> eyre::Result<()> {
 
     let cache_file = NamedTempFile::new()?;
 
-    println!("cache_file: {}", cache_file.path().display());
-
     let mainnet_container = setup_mainnet().await?;
     let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
     let mainnet_rpc_url = format!("http://127.0.0.1:{mainnet_rpc_port}");
