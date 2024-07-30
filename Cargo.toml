@@ -35,7 +35,7 @@ opentelemetry-datadog = "0.9.0"
 rand = { version = "0.8.5", features = ["small_rng"] }
 rayon = "1.10.0"
 ruint = "1.11.0"
-semaphore = { git = "https://github.com/worldcoin/semaphore-rs", rev = "d0153a00aa5ea298f25df8aa07fb2459746436e8", features = [
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs", rev = "59b2a0af2e156dafeb15d35b07fc283edb8859f2", features = [
     "depth_20",
 ] }
 serde = { version = "1.0.189", features = ["derive"] }

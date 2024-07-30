@@ -65,10 +65,6 @@ pub async fn init_world_tree(
         if config.cache.cache_file.exists() {
             fs::remove_file(&config.cache.cache_file)?;
         }
-
-        // There's something wrong with CascadingMerkleTree impl
-        // in some cases it'll fail if the file doesn't exist
-        fs::write(&config.cache.cache_file, [])?;
     }
 
     Ok(Arc::new(WorldTree::new(
