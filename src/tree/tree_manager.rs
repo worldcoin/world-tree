@@ -1,14 +1,12 @@
-use std::collections::{BTreeMap, HashMap};
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::time::Duration;
-
 use ethers::abi::{AbiDecode, RawLog};
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::Middleware;
 use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
+use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
@@ -131,7 +129,7 @@ impl TreeVersion for CanonicalTree {
                     }
 
                     let identity_updates = extract_identity_updates(
-                        &logs,
+                        logs,
                         block_scanner.middleware.clone(),
                     )
                     .await?;
@@ -209,38 +207,38 @@ impl TreeVersion for BridgedTree {
 
 /// Extract identity updates from logs emitted by the `WorldIdIdentityManager`.
 pub async fn extract_identity_updates<M: Middleware + 'static>(
-    logs: &[Log],
+    logs: Vec<Log>,
     middleware: Arc<M>,
 ) -> Result<Vec<CanonicalChainUpdate>, WorldTreeError<M>> {
     let mut tree_updates = Vec::new();
 
-    let mut tasks = FuturesUnordered::new();
-
     // Fetch the transactions for each log concurrently
-    for log in logs {
-        let tx_hash = log
-            .transaction_hash
-            .ok_or(WorldTreeError::TransactionHashNotFound)?;
+    // and sort them by block number and transaction index
+    let mut txs: Vec<_> = futures::stream::iter(logs)
+        .map(|log| {
+            let middleware = middleware.as_ref();
+            async move {
+                let tx_hash = log
+                    .transaction_hash
+                    .ok_or(WorldTreeError::TransactionHashNotFound)?;
+                tracing::debug!(?tx_hash, "Getting transaction");
+                middleware
+                    .get_transaction(tx_hash)
+                    .await
+                    .map_err(|e| {
+                        WorldTreeError::TransactionSearchError(e.to_string())
+                    })?
+                    .ok_or(WorldTreeError::TransactionNotFound)
+            }
+        })
+        .buffer_unordered(100)
+        .try_collect()
+        .await?;
 
-        tracing::debug!(?tx_hash, "Getting transaction");
-        tasks.push(middleware.get_transaction(tx_hash));
-    }
-
-    let mut sorted_transactions = BTreeMap::new();
-
-    // Sort the transactions by nonce. These should be in order due to the block scanner, but we sort them for redundancy in the case of out-of-order logs.
-    while let Some(transaction) = tasks.next().await {
-        let transaction = transaction
-            .map_err(WorldTreeError::MiddlewareError)?
-            .ok_or(WorldTreeError::TransactionNotFound)?;
-
-        let tx_hash = transaction.hash;
-        tracing::debug!(?tx_hash, "Transaction received");
-        sorted_transactions.insert(transaction.nonce, transaction);
-    }
+    txs.sort_unstable_by_key(|tx| (tx.block_number, tx.transaction_index));
 
     // Process each transaction, constructing identity updates for each root
-    for (_nonce, transaction) in sorted_transactions {
+    for transaction in txs {
         let calldata = &transaction.input;
 
         let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();

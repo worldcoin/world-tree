@@ -21,8 +21,12 @@ where
     TreeNotSynced,
     #[error("Transaction hash not found")]
     TransactionHashNotFound,
-    #[error("Transaction found")]
+    #[error("Transaction not found")]
     TransactionNotFound,
+    #[error("Transaction search error: {0}")]
+    TransactionSearchError(String),
+    #[error("Duplicate transaction")]
+    DuplicateTransaction,
     #[error("Calldata does not have a function selector")]
     MissingFunctionSelector,
     #[error(transparent)]
