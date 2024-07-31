@@ -1176,7 +1176,7 @@ mod test {
         let mut precalc_batches = vec![];
         for batch in &batches {
             let pre_root = ref_tree.root();
-            ref_tree.extend_from_slice(&batch);
+            ref_tree.extend_from_slice(batch);
             let post_root = ref_tree.root();
 
             precalc_batches.push((pre_root, post_root));
