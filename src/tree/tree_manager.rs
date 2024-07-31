@@ -6,19 +6,17 @@ use futures::{StreamExt, TryStreamExt};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use super::block_scanner::BlockScanner;
-use super::error::WorldTreeError;
+use super::error::{WorldTreeError, WorldTreeResult};
 use super::identity_tree::LeafUpdates;
 use super::{Hash, LeafIndex};
 use crate::abi::{
     DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
     TreeChangedFilter,
 };
-use crate::error::{ok, Log as _};
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
 
@@ -28,7 +26,7 @@ pub trait TreeVersion: Default {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), WorldTreeError<M>>>;
+    ) -> JoinHandle<WorldTreeResult<()>>;
 
     fn tree_changed_signature() -> H256;
 }
@@ -50,12 +48,8 @@ where
         window_size: u64,
         last_synced_block: u64,
         middleware: Arc<M>,
-    ) -> Result<Self, WorldTreeError<M>> {
-        let chain_id = middleware
-            .get_chainid()
-            .await
-            .map_err(WorldTreeError::MiddlewareError)?
-            .as_u64();
+    ) -> WorldTreeResult<Self> {
+        let chain_id = middleware.get_chainid().await?.as_u64();
 
         let filter = Filter::new()
             .address(address)
@@ -68,8 +62,7 @@ where
                 last_synced_block,
                 filter,
             )
-            .await
-            .map_err(WorldTreeError::MiddlewareError)?,
+            .await?,
         );
 
         Ok(Self {
@@ -83,7 +76,7 @@ where
     pub fn spawn(
         &self,
         tx: Sender<T::ChannelData>,
-    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+    ) -> JoinHandle<WorldTreeResult<()>> {
         T::spawn(tx, self.block_scanner.clone())
     }
 }
@@ -104,30 +97,21 @@ impl TreeVersion for CanonicalTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+    ) -> JoinHandle<WorldTreeResult<()>> {
         tokio::spawn(async move {
-            let chain_id = block_scanner
-                .middleware
-                .get_chainid()
-                .await
-                .map_err(WorldTreeError::MiddlewareError)?
-                .as_u64();
+            let chain_id =
+                block_scanner.middleware.get_chainid().await?.as_u64();
 
             tracing::info!(?chain_id, "Starting canonical tree manager");
 
-            loop {
-                async {
-                    let (num_blocks, logs) = block_scanner.next().await?;
-
-                    if num_blocks == 0 {
-                        tokio::time::sleep(Duration::from_secs(
-                            BLOCK_SCANNER_SLEEP_TIME,
-                        ))
-                        .await;
-
-                        return ok(());
-                    }
-
+            block_scanner
+                .block_stream()
+                // Retrieve logs concurrently
+                // Setting this too high can cause a 502
+                .buffered(4)
+                // Process logs sequentially
+                .try_for_each(|logs| async {
+                    // TODO: maybe we need retry logic here
                     let identity_updates = extract_identity_updates(
                         logs,
                         block_scanner.middleware.clone(),
@@ -137,14 +121,12 @@ impl TreeVersion for CanonicalTree {
                     for update in identity_updates {
                         let new_root = &update.post_root;
                         tracing::info!(?chain_id, ?new_root, "Root updated");
-                        tx.send(update).await?;
+                        tx.send(update).await.unwrap();
                     }
-
-                    ok(())
-                }
-                .await
-                .log();
-            }
+                    Ok(())
+                })
+                .await?;
+            Ok(())
         })
     }
 
@@ -160,29 +142,19 @@ impl TreeVersion for BridgedTree {
     fn spawn<M: Middleware + 'static>(
         tx: Sender<Self::ChannelData>,
         block_scanner: Arc<BlockScanner<M>>,
-    ) -> JoinHandle<Result<(), WorldTreeError<M>>> {
+    ) -> JoinHandle<WorldTreeResult<()>> {
         tokio::spawn(async move {
-            let chain_id = block_scanner
-                .middleware
-                .get_chainid()
-                .await
-                .map_err(WorldTreeError::MiddlewareError)?
-                .as_u64();
+            let chain_id =
+                block_scanner.middleware.get_chainid().await?.as_u64();
 
             tracing::info!(?chain_id, "Starting bridged tree manager");
-
-            loop {
-                async {
-                    let (num_blocks, logs) = block_scanner.next().await?;
-                    if num_blocks == 0 {
-                        tokio::time::sleep(Duration::from_secs(
-                            BLOCK_SCANNER_SLEEP_TIME,
-                        ))
-                        .await;
-
-                        return ok(());
-                    }
-
+            block_scanner
+                .block_stream()
+                // Retrieve logs concurrently
+                // Setting this too high can cause a 502
+                .buffered(4)
+                // Process logs sequentially
+                .try_for_each(|logs| async {
                     for log in logs {
                         // Extract the root from the RootAdded log
                         let data =
@@ -192,11 +164,10 @@ impl TreeVersion for BridgedTree {
                         tracing::info!(?chain_id, ?new_root, "Root updated");
                         tx.send((chain_id, new_root)).await?;
                     }
-                    ok(())
-                }
-                .await
-                .log();
-            }
+                    Ok(())
+                })
+                .await?;
+            Ok(())
         })
     }
 
@@ -209,7 +180,7 @@ impl TreeVersion for BridgedTree {
 pub async fn extract_identity_updates<M: Middleware + 'static>(
     logs: Vec<Log>,
     middleware: Arc<M>,
-) -> Result<Vec<CanonicalChainUpdate>, WorldTreeError<M>> {
+) -> WorldTreeResult<Vec<CanonicalChainUpdate>> {
     let mut tree_updates = Vec::new();
 
     // Fetch the transactions for each log concurrently

@@ -22,7 +22,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use self::error::WorldTreeError;
+use self::error::{WorldTreeError, WorldTreeResult};
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
 use self::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
@@ -56,7 +56,7 @@ where
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
         cache: &Path,
-    ) -> Result<Self, WorldTreeError<M>> {
+    ) -> WorldTreeResult<Self> {
         let identity_tree =
             IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
@@ -86,10 +86,7 @@ where
     }
 
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
-    pub async fn spawn(
-        &self,
-    ) -> Result<Vec<JoinHandle<Result<(), WorldTreeError<M>>>>, WorldTreeError<M>>
-    {
+    pub async fn spawn(&self) -> Vec<JoinHandle<WorldTreeResult<()>>> {
         let (leaf_updates_tx, leaf_updates_rx) =
             tokio::sync::mpsc::channel(100);
         let (bridged_root_tx, bridged_root_rx) =
@@ -121,7 +118,7 @@ where
             leaf_updates_rx,
         )));
 
-        Ok(handles)
+        handles
     }
 
     /// Returns an inclusion proof for a given identity commitment.
@@ -130,7 +127,7 @@ where
         &self,
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
-    ) -> Result<Option<InclusionProof>, WorldTreeError<M>> {
+    ) -> WorldTreeResult<Option<InclusionProof>> {
         let chain_state = self.chain_state.read().await;
         let identity_tree = self.identity_tree.read().await;
 
@@ -161,7 +158,7 @@ where
         &self,
         identity_commitements: &[Hash],
         chain_id: Option<ChainId>,
-    ) -> Result<Hash, WorldTreeError<M>> {
+    ) -> WorldTreeResult<Hash> {
         let chain_state = self.chain_state.read().await;
         let identity_tree = self.identity_tree.read().await;
 
@@ -190,7 +187,7 @@ where
         chain_state: &HashMap<u64, Hash>,
         identity_tree: &IdentityTree<MmapVec<Hash>>,
         chain_id: ChainId,
-    ) -> Result<Hash, WorldTreeError<M>> {
+    ) -> WorldTreeResult<Hash> {
         let chain_root = chain_state
             .get(&chain_id)
             .copied()

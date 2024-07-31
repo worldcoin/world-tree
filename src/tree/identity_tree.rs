@@ -11,7 +11,7 @@ use semaphore::poseidon_tree::{PoseidonHash, Proof};
 use semaphore::Field;
 use serde::{Deserialize, Serialize};
 
-use super::error::IdentityTreeError;
+use super::error::{IdentityTreeError, WorldTreeResult};
 use super::{Hash, LeafIndex, NodeIndex};
 
 // Leaf index to hash, 0 indexed from the initial leaf
@@ -59,7 +59,7 @@ impl IdentityTree<MmapVec<Hash>> {
     pub fn new_with_cache_unchecked(
         depth: usize,
         file_path: &Path,
-    ) -> Result<Self, IdentityTreeError> {
+    ) -> WorldTreeResult<Self> {
         let mmap_vec: MmapVec<Hash> =
             match unsafe { MmapVec::restore_from_path(file_path) } {
                 Ok(mmap_vec) => mmap_vec,
@@ -1022,7 +1022,7 @@ mod test {
     }
 
     #[test]
-    fn test_mmap_cache() -> eyre::Result<()> {
+    fn test_mmap_cache() -> WorldTreeResult<()> {
         let temp_file = NamedTempFile::new()?;
         let path = temp_file.path().to_path_buf();
 
@@ -1052,7 +1052,7 @@ mod test {
     }
 
     #[test]
-    fn test_mmap_append_and_apply() -> eyre::Result<()> {
+    fn test_mmap_append_and_apply() -> WorldTreeResult<()> {
         let tree_depth = 30;
         let batch_size = 16;
         let num_batches = 64;

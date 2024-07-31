@@ -1,25 +1,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 
-use super::error::WorldTreeError;
+use super::error::WorldTreeResult;
 use super::identity_tree::IdentityTree;
 use super::tree_manager::CanonicalChainUpdate;
 use super::Hash;
 
-pub async fn handle_canonical_updates<M>(
+pub async fn handle_canonical_updates(
     canonical_chain_id: u64,
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
     mut leaf_updates_rx: Receiver<CanonicalChainUpdate>,
-) -> Result<(), WorldTreeError<M>>
-where
-    M: Middleware + 'static,
-{
+) -> WorldTreeResult<()> {
     loop {
         if let Some(update) = leaf_updates_rx.recv().await {
             tracing::info!(
@@ -47,14 +43,11 @@ where
     }
 }
 
-pub async fn handle_bridged_updates<M>(
+pub async fn handle_bridged_updates(
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
     mut bridged_root_rx: Receiver<(u64, Hash)>,
-) -> Result<(), WorldTreeError<M>>
-where
-    M: Middleware + 'static,
-{
+) -> WorldTreeResult<()> {
     loop {
         if let Some((chain_id, bridged_root)) = bridged_root_rx.recv().await {
             tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");

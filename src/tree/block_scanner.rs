@@ -1,9 +1,16 @@
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ethers::providers::Middleware;
 use ethers::types::{BlockNumber, Filter, Log};
-use tokio::sync::Mutex;
+use futures::{stream, Stream};
+
+use crate::tree::tree_manager::BLOCK_SCANNER_SLEEP_TIME;
+use crate::util::retry;
+
+use super::error::WorldTreeResult;
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 #[derive(Debug)]
@@ -11,7 +18,7 @@ pub struct BlockScanner<M: Middleware + 'static> {
     /// The onchain data provider
     pub middleware: Arc<M>,
     /// The block from which to start parsing a given event
-    pub next_block: Mutex<u64>,
+    pub start_block: u64,
     /// The maximum block range to parse
     window_size: u64,
     /// Filter specifying the address and topics to match on when scanning
@@ -27,47 +34,77 @@ where
     pub async fn new(
         middleware: Arc<M>,
         window_size: u64,
-        current_block: u64,
+        start_block: u64,
         filter: Filter,
-    ) -> Result<Self, M::Error> {
+    ) -> WorldTreeResult<Self> {
         let chain_id = middleware.get_chainid().await?.as_u64();
         Ok(Self {
             middleware,
-            next_block: Mutex::new(current_block),
+            start_block,
             window_size,
             filter,
             chain_id,
         })
     }
 
-    /// Retrieves events matching the specified address and topics from the last synced block to the latest block, stepping by `window_size`.
-    /// Note that the logs are unsorted and should be handled accordingly.
-    pub async fn next(&self) -> Result<(usize, Vec<Log>), M::Error> {
-        let mut next_block = self.next_block.lock().await;
-        let latest_block = self.middleware.get_block_number().await?.as_u64();
-
-        let to_block = (*next_block + self.window_size).min(latest_block);
-
-        let num_blocks =
-            if let Some(num_blocks) = to_block.checked_sub(*next_block) {
-                num_blocks as usize
-            } else {
-                return Ok((0, vec![]));
+    pub fn block_stream(
+        &self,
+    ) -> impl Stream<Item: Future<Output = WorldTreeResult<Vec<Log>>> + Send> + '_
+    {
+        stream::unfold(self.start_block, move |mut next_block| async move {
+            // This is executed before the item is yielded
+            let to_block = loop {
+                match self.middleware.get_block_number().await {
+                    Ok(latest) if latest.as_u64() < next_block => {
+                        tokio::time::sleep(Duration::from_secs(
+                            BLOCK_SCANNER_SLEEP_TIME,
+                        ))
+                        .await;
+                        continue;
+                    }
+                    Ok(latest) => {
+                        break (next_block + self.window_size)
+                            .min(latest.as_u64());
+                    }
+                    Err(_) => {
+                        tokio::time::sleep(Duration::from_secs(
+                            BLOCK_SCANNER_SLEEP_TIME,
+                        ))
+                        .await;
+                        continue;
+                    }
+                }
             };
 
-        let filter = self
-            .filter
-            .clone()
-            .from_block(BlockNumber::Number((*next_block).into()))
-            .to_block(BlockNumber::Number(to_block.into()));
+            let filter = self
+                .filter
+                .clone()
+                .from_block(BlockNumber::Number((next_block).into()))
+                .to_block(BlockNumber::Number(to_block.into()));
 
-        let middleware = self.middleware.clone();
+            let last_synced_block = next_block;
 
-        let logs = middleware.get_logs(&filter).await?;
+            let middleware = self.middleware.clone();
+            let chain_id = self.chain_id;
 
-        tracing::debug!(chain_id = ?self.chain_id, last_synced_block = ?*next_block, "Last synced block updated");
-        *next_block = to_block + 1;
+            // This future is yielded from the stream
+            // and is awaited on by the caller
+            let fut = retry(
+                Duration::from_millis(100),
+                Some(Duration::from_secs(60)),
+                move || {
+                    let filter = filter.clone();
+                    let middleware = middleware.clone();
+                    async move {
+                        tracing::trace!(?chain_id, ?last_synced_block);
+                        Ok(middleware.get_logs(&filter).await?)
+                    }
+                },
+            );
 
-        Ok((num_blocks, logs))
+            next_block = to_block + 1;
+
+            Some((fut, next_block))
+        })
     }
 }

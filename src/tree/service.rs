@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
-use super::error::WorldTreeError;
+use super::error::WorldTreeResult;
 use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
@@ -48,10 +48,8 @@ where
     pub async fn serve(
         self,
         addr: Option<SocketAddr>,
-    ) -> eyre::Result<(
-        SocketAddr,
-        Vec<JoinHandle<Result<(), WorldTreeError<M>>>>,
-    )> {
+    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<WorldTreeResult<()>>>)>
+    {
         let mut handles = vec![];
 
         // Initialize a new router and spawn the server
@@ -81,7 +79,7 @@ where
 
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn().await?);
+        handles.extend(self.world_tree.spawn().await);
 
         handles.push(server_handle);
 
@@ -128,7 +126,7 @@ pub async fn inclusion_proof<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
-) -> Result<(StatusCode, Json<Option<InclusionProof>>), WorldTreeError<M>> {
+) -> WorldTreeResult<(StatusCode, Json<Option<InclusionProof>>)> {
     let chain_id = query_params.chain_id;
     let inclusion_proof = world_tree
         .inclusion_proof(req.identity_commitment, chain_id)
@@ -147,7 +145,7 @@ struct HealthResponse {
 #[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
-) -> Result<Json<HealthResponse>, WorldTreeError<M>> {
+) -> WorldTreeResult<Json<HealthResponse>> {
     let chain_state = world_tree.chain_state.read().await.clone();
     let identity_tree = world_tree.identity_tree.read().await;
     let cascading_tree_root = identity_tree.tree.root();
@@ -163,7 +161,7 @@ pub async fn compute_root<M: Middleware + 'static>(
     State(world_tree): State<Arc<WorldTree<M>>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<ComputeRootRequest>,
-) -> Result<(StatusCode, Json<Hash>), WorldTreeError<M>> {
+) -> WorldTreeResult<(StatusCode, Json<Hash>)> {
     let chain_id = query_params.chain_id;
     let updated_root = world_tree
         .compute_root(&req.identity_commitments, chain_id)

@@ -11,6 +11,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use world_tree::init_world_tree;
 use world_tree::tree::config::ServiceConfig;
+use world_tree::tree::error::WorldTreeResult;
 use world_tree::tree::service::InclusionProofService;
 
 /// This service syncs the state of the World Tree and spawns a server that can deliver inclusion proofs for a given identity.
@@ -28,7 +29,7 @@ struct Opts {
 }
 
 #[tokio::main]
-pub async fn main() -> eyre::Result<()> {
+pub async fn main() -> WorldTreeResult<()> {
     dotenv::dotenv().ok();
 
     let opts = Opts::parse();

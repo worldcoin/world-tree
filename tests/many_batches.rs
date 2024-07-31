@@ -22,12 +22,13 @@ const TREE_DEPTH: usize = 30;
 mod common;
 
 use common::*;
+use world_tree::tree::error::WorldTreeResult;
 
 const NUM_BATCHES: usize = 40;
 const BATCH_SIZE: usize = 10;
 
 #[tokio::test]
-async fn many_batches() -> eyre::Result<()> {
+async fn many_batches() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let cache_file = NamedTempFile::new()?;

@@ -16,7 +16,7 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use world_tree::init_world_tree;
 use world_tree::tree::config::ServiceConfig;
-use world_tree::tree::error::WorldTreeError;
+use world_tree::tree::error::{WorldTreeError, WorldTreeResult};
 use world_tree::tree::service::InclusionProofService;
 
 mod test_client;
@@ -55,14 +55,7 @@ macro_rules! attempt_async {
 
 pub async fn setup_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<(
-    SocketAddr,
-    Vec<
-        JoinHandle<
-            Result<(), WorldTreeError<Provider<ThrottledJsonRpcClient<Http>>>>,
-        >,
-    >,
-)> {
+) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<WorldTreeResult<()>>>)> {
     let world_tree = init_world_tree(config).await?;
 
     let service = InclusionProofService::new(world_tree);
