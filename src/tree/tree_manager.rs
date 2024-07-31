@@ -108,7 +108,7 @@ impl TreeVersion for CanonicalTree {
                 .block_stream()
                 // Retrieve logs concurrently
                 // Setting this too high can cause a 502
-                .buffered(4)
+                .buffered(10)
                 // Process logs sequentially
                 .try_for_each(|logs| async {
                     // TODO: maybe we need retry logic here
@@ -152,7 +152,7 @@ impl TreeVersion for BridgedTree {
                 .block_stream()
                 // Retrieve logs concurrently
                 // Setting this too high can cause a 502
-                .buffered(4)
+                .buffered(10)
                 // Process logs sequentially
                 .try_for_each(|logs| async {
                     for log in logs {
