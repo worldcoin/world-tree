@@ -3,3 +3,6 @@
 ips.toml
 .env
 tree-cache
+
+config.mainnet.toml
+config.staging.toml
