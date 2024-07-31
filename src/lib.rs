@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::needless_range_loop))]
+
 use std::fs;
 use std::sync::Arc;
 

@@ -304,13 +304,25 @@ where
             return;
         };
 
-        // Drain the updates up to and including the root
-        let drained = self.tree_updates.drain(..=idx_of_root);
+        // We must drain all roots - to recalculate the pending ones
+        let mut drained = self.tree_updates.drain(..).skip(idx_of_root);
         // Take the last root
-        let (last_root, update) = drained.last().unwrap();
+        let (update_root, update) = drained.next().unwrap();
 
-        assert_eq!(last_root, *root);
+        // And collect the remaining updates to later recalculate them
+        let remaining_updates: Vec<_> = drained.collect();
 
+        debug_assert_eq!(update_root, *root);
+
+        self.apply_update(update);
+
+        debug_assert_eq!(self.tree.root(), *root);
+
+        self.reappend_updates(remaining_updates)
+            .expect("Failed to re-append updates");
+    }
+
+    fn apply_update(&mut self, update: StorageUpdates) {
         // Filter out updates that are not leaves
         let mut leaf_updates = update
             .into_iter()
@@ -341,6 +353,60 @@ where
         // TODO: Implement bulk deletions
         for leaf_idx in deletions {
             self.tree.set_leaf(leaf_idx, Hash::ZERO);
+        }
+    }
+
+    fn reappend_updates(
+        &mut self,
+        updates: Vec<(Hash, StorageUpdates)>,
+    ) -> Result<(), IdentityTreeError> {
+        let num_leaves = self.tree.num_leaves() as u32;
+
+        for (root, update) in updates {
+            let mut leaf_updates =
+                Self::storage_to_leaf_updates(self.tree.depth(), update);
+
+            // We don't want to reinsert leaves that are already in the tree
+            if let LeafUpdates::Insert(leaves) = &mut leaf_updates {
+                *leaves = leaves
+                    .drain()
+                    .filter(|(leaf_idx, _v)| leaf_idx.0 >= num_leaves)
+                    .collect();
+            }
+
+            let updates = self.construct_storage_updates(leaf_updates, None)?;
+            self.tree_updates.push((root, updates));
+        }
+
+        Ok(())
+    }
+
+    fn storage_to_leaf_updates(
+        tree_depth: usize,
+        update: StorageUpdates,
+    ) -> LeafUpdates {
+        let leaf_updates = update
+            .into_iter()
+            .filter_map(|(idx, value)| {
+                let leaf_idx = node_to_leaf_idx(idx.0, tree_depth)?;
+                let leaf_idx = LeafIndex(leaf_idx);
+
+                Some((leaf_idx, value))
+            })
+            .collect::<Leaves>();
+
+        let all_zero = leaf_updates.values().all(|v| *v == Hash::ZERO);
+        let any_zero = leaf_updates.values().any(|v| *v == Hash::ZERO);
+
+        debug_assert!(
+            all_zero || !any_zero,
+            "Cannot mix insertions and deletions"
+        );
+
+        if all_zero {
+            LeafUpdates::Delete(leaf_updates)
+        } else {
+            LeafUpdates::Insert(leaf_updates)
         }
     }
 
@@ -1084,6 +1150,85 @@ mod test {
 
         assert!(restored_tree.tree.num_leaves() == 0);
         assert!(restored_tree.leaves.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn consecutive_staggered_updates() -> eyre::Result<()> {
+        let tree_depth = 30;
+        let num_leaves = 1 << 12;
+        let batch_size = 32;
+        let num_batches = num_leaves / batch_size;
+
+        assert_eq!(num_batches, 128);
+
+        let mut identity_tree = IdentityTree::new(tree_depth);
+        let mut ref_tree: CascadingMerkleTree<PoseidonHash> =
+            CascadingMerkleTree::new(vec![], tree_depth, &Hash::ZERO);
+
+        let leaves: Vec<_> = infinite_leaves().take(num_leaves).collect();
+        let batches: Vec<_> = leaves
+            .chunks(batch_size)
+            .map(|batch| batch.to_vec())
+            .collect();
+
+        let mut precalc_batches = vec![];
+        for batch in &batches {
+            let pre_root = ref_tree.root();
+            ref_tree.extend_from_slice(batch);
+            let post_root = ref_tree.root();
+
+            precalc_batches.push((pre_root, post_root));
+        }
+
+        let install_batch = |identity_tree: &mut IdentityTree<Vec<Hash>>,
+                             batch_idx: usize| {
+            let batch = &batches[batch_idx];
+            let leaf_updates = batch
+                .iter()
+                .enumerate()
+                .map(|(idx, value)| {
+                    (LeafIndex((batch_idx * batch_size + idx) as u32), *value)
+                })
+                .collect::<HashMap<LeafIndex, Hash>>();
+
+            let pre_root = precalc_batches[batch_idx].0;
+            let post_root = precalc_batches[batch_idx].1;
+
+            identity_tree.append_updates(
+                pre_root,
+                post_root,
+                LeafUpdates::Insert(leaf_updates),
+            )?;
+
+            eyre::Result::<Hash>::Ok(post_root)
+        };
+
+        install_batch(&mut identity_tree, 0)?;
+        install_batch(&mut identity_tree, 1)?;
+        install_batch(&mut identity_tree, 2)?;
+
+        // Apply updates up to root 1
+        identity_tree.apply_updates_to_root(&precalc_batches[1].1);
+
+        install_batch(&mut identity_tree, 3)?;
+
+        // Apply updates up to root 3
+        identity_tree.apply_updates_to_root(&precalc_batches[3].1);
+
+        // Verify all the inserted leaves
+        for batch_idx in 0..=3 {
+            for n in 0..batch_size {
+                let leaf = batches[batch_idx][n];
+                let inclusion_proof =
+                    identity_tree.inclusion_proof(leaf, None)?;
+                let inclusion_proof =
+                    inclusion_proof.expect("Missing inclusion proof");
+
+                assert!(inclusion_proof.verify(leaf), "Proof must be valid for leaf {leaf:?} (batch {batch_idx}, index {n})");
+            }
+        }
 
         Ok(())
     }
