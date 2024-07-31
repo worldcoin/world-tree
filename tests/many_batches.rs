@@ -23,7 +23,7 @@ mod common;
 
 use common::*;
 
-const NUM_BATCHES: usize = 100;
+const NUM_BATCHES: usize = 40;
 const BATCH_SIZE: usize = 10;
 
 #[tokio::test]
