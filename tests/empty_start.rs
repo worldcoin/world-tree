@@ -10,10 +10,10 @@ use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
-use tempfile::NamedTempFile;
+use tempfile::TempDir;
 use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::tree::config::{
-    CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
+    DataConfig, ProviderConfig, ServiceConfig, TreeConfig,
 };
 
 const TREE_DEPTH: usize = 20;
@@ -27,7 +27,8 @@ use world_tree::tree::error::WorldTreeResult;
 async fn empty_start() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let cache_file = NamedTempFile::new()?;
+    let temp_dir = TempDir::new()?;
+    let cache_dir = temp_dir.path().join("cache");
 
     let mainnet_container = setup_mainnet().await?;
     let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
@@ -98,9 +99,9 @@ async fn empty_start() -> WorldTreeResult<()> {
                 throttle: 150,
             },
         },
-        cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: true,
+        data: DataConfig {
+            dir: cache_dir.to_path_buf(),
+            purge: true,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,

@@ -8,10 +8,9 @@ pub mod tree_manager;
 
 mod tasks;
 
-use std::collections::HashMap;
 use std::path::Path;
-use std::process;
 use std::sync::Arc;
+use std::{process, thread};
 
 use ethers::providers::Middleware;
 use semaphore::generic_storage::MmapVec;
@@ -22,7 +21,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use self::error::{WorldTreeError, WorldTreeResult};
+use self::error::WorldTreeResult;
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
 use self::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
@@ -39,12 +38,6 @@ pub struct WorldTree<M: Middleware + 'static> {
     pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
     /// Responsible for listening to state changes state changes to bridged WorldIDs
     pub bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
-
-    /// Mapping of chain Id -> the latest observed root
-    ///
-    /// This mapping is used to monitor if observed chains
-    /// are synced with the canonical chain
-    pub chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
 }
 
 impl<M> WorldTree<M>
@@ -55,31 +48,96 @@ where
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
-        cache: &Path,
+        cache_dir: &Path,
     ) -> WorldTreeResult<Self> {
-        let identity_tree =
-            IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
+        let mut chain_ids = vec![];
+
+        chain_ids.push(canonical_tree_manager.chain_id);
+        for tree_manager in &bridged_tree_managers {
+            chain_ids.push(tree_manager.chain_id);
+        }
+
+        let chain_ids = chain_ids.into_iter().map(ChainId).collect::<Vec<_>>();
+        let identity_tree = IdentityTree::new_with_cache_unchecked(
+            tree_depth, cache_dir, &chain_ids,
+        )?;
 
         let world_tree = Self {
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_managers,
-            chain_state: Arc::new(RwLock::new(HashMap::new())),
         };
 
         let tree = world_tree.identity_tree.clone();
-        let cache = cache.to_owned();
+        let cache_dir = cache_dir.to_owned();
 
         tokio::task::spawn_blocking(move || {
-            info!("Validating tree");
+            info!("Validating trees");
             let start = std::time::Instant::now();
-            if let Err(e) = tree.blocking_read().tree.validate() {
-                tracing::error!("Tree validation failed: {e:?}");
-                tracing::info!("Deleting cache and exiting");
-                std::fs::remove_file(cache).unwrap();
-                process::exit(1);
-            }
-            info!("Tree validation completed in {:?}", start.elapsed());
+            let tree = tree.blocking_read();
+
+            // Scoped threads to validate all trees in parallel
+            thread::scope(|s| {
+                let mut join_handles = vec![];
+                let j = s.spawn(|| {
+                    let now = std::time::Instant::now();
+                    tracing::info!("Validating canonical tree");
+
+                    let res = tree.canonical_tree.validate();
+                    let is_valid = res.is_ok();
+                    let elapsed = now.elapsed();
+
+                    tracing::info!(
+                        ?elapsed,
+                        is_valid,
+                        "Validated canonical tree"
+                    );
+
+                    res
+                });
+                join_handles.push(j);
+
+                for (chain_id, tree) in tree.trees.iter() {
+                    let j = s.spawn(move || {
+                        let now = std::time::Instant::now();
+                        tracing::info!(%chain_id, "Validating tree");
+
+                        let res = tree.validate();
+                        let is_valid = res.is_ok();
+                        let elapsed = now.elapsed();
+
+                        tracing::info!(%chain_id, ?elapsed, is_valid, "Validated tree");
+
+                        res
+                    });
+                    join_handles.push(j);
+                }
+
+                for handle in join_handles {
+                    match handle.join() {
+                        Err(e) => {
+                            tracing::error!("Tree validation failed: {e:?}");
+                            tracing::info!("Deleting cache and exiting");
+                            std::fs::remove_dir_all(cache_dir).unwrap();
+                            process::exit(1);
+                        }
+                        Ok(Err(validation_error)) => {
+                            tracing::error!(
+                                "Tree validation failed: {validation_error:?}"
+                            );
+                            tracing::info!("Deleting cache and exiting");
+                            std::fs::remove_dir_all(cache_dir).unwrap();
+                            process::exit(1);
+                        }
+                        _ => {
+                            // validation succeeded
+                        }
+                    }
+                }
+            });
+
+            let elapsed = start.elapsed();
+            info!(?elapsed, "Validation complete");
         });
 
         Ok(world_tree)
@@ -105,7 +163,6 @@ where
             // pending updates when a new common root is bridged to all chains
             handles.push(tokio::task::spawn(tasks::handle_bridged_updates(
                 self.identity_tree.clone(),
-                self.chain_state.clone(),
                 bridged_root_rx,
             )));
         }
@@ -114,7 +171,6 @@ where
         handles.push(tokio::task::spawn(tasks::handle_canonical_updates(
             self.canonical_tree_manager.chain_id,
             self.identity_tree.clone(),
-            self.chain_state.clone(),
             leaf_updates_rx,
         )));
 
@@ -128,81 +184,11 @@ where
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
     ) -> WorldTreeResult<Option<InclusionProof>> {
-        let chain_state = self.chain_state.read().await;
         let identity_tree = self.identity_tree.read().await;
 
-        let root = if let Some(chain_id) = chain_id {
-            let root = Self::resolve_chain_root(
-                self.canonical_tree_manager.chain_id.into(),
-                &chain_state,
-                &identity_tree,
-                chain_id,
-            )
-            .await?;
-
-            Some(root)
-        } else {
-            None
-        };
-
-        let inclusion_proof = identity_tree
-            .inclusion_proof(identity_commitment, root.as_ref())?;
+        let inclusion_proof =
+            identity_tree.inclusion_proof(identity_commitment, chain_id)?;
 
         Ok(inclusion_proof)
-    }
-
-    /// Computes the updated root given a set of identity commitments.
-    /// If a chain ID is provided, the updated root is calculated from the latest root on the specified chain.
-    /// If no chain ID is provided, the updated root is calculated from the latest root bridged to all chains.
-    pub async fn compute_root(
-        &self,
-        identity_commitements: &[Hash],
-        chain_id: Option<ChainId>,
-    ) -> WorldTreeResult<Hash> {
-        let chain_state = self.chain_state.read().await;
-        let identity_tree = self.identity_tree.read().await;
-
-        let root = if let Some(chain_id) = chain_id {
-            Some(
-                Self::resolve_chain_root(
-                    self.canonical_tree_manager.chain_id.into(),
-                    &chain_state,
-                    &identity_tree,
-                    chain_id,
-                )
-                .await?,
-            )
-        } else {
-            None
-        };
-
-        let updated_root =
-            identity_tree.compute_root(identity_commitements, root.as_ref())?;
-
-        Ok(updated_root)
-    }
-
-    async fn resolve_chain_root(
-        canonical_chain_id: ChainId,
-        chain_state: &HashMap<u64, Hash>,
-        identity_tree: &IdentityTree<MmapVec<Hash>>,
-        chain_id: ChainId,
-    ) -> WorldTreeResult<Hash> {
-        let chain_root = chain_state
-            .get(&chain_id)
-            .copied()
-            .ok_or(WorldTreeError::ChainIdNotFound)?;
-
-        if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
-            Ok(identity_tree.roots[*chain_root_idx])
-        } else if canonical_chain_id == chain_id {
-            Ok(identity_tree
-                .roots
-                .last()
-                .copied()
-                .expect("There must always be at least one root"))
-        } else {
-            Ok(identity_tree.tree.root())
-        }
     }
 }

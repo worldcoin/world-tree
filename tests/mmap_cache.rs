@@ -5,7 +5,7 @@ use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
 use tempfile::NamedTempFile;
 use world_tree::tree::config::{
-    CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
+    DataConfig, ProviderConfig, ServiceConfig, TreeConfig,
 };
 
 const TREE_DEPTH: usize = 20;
@@ -24,9 +24,9 @@ use world_tree::tree::error::WorldTreeResult;
 async fn mmap_cache() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let mut cache_file = NamedTempFile::new()?;
+    let mut cache_dir = NamedTempFile::new()?;
     // Write an invalid cache file
-    cache_file.write(&[
+    cache_dir.write(&[
         // length
         4, 0, 0, 0, 0, 0, 0, 0, //
         // num leaves
@@ -86,9 +86,9 @@ async fn mmap_cache() -> WorldTreeResult<()> {
                 throttle: 150,
             },
         },
-        cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: false,
+        data: DataConfig {
+            dir: cache_dir.path().to_path_buf(),
+            purge: false,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,

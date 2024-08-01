@@ -21,9 +21,9 @@ creation_block = 0
 rpc_endpoint = "http://localhost:8545/"
 throttle = 150
 
-[cache]
-cache_file = "cache.mmap"
-purge_cache = true
+[data]
+dir = "cache"
+purge = true
 
 [bridged_trees.0]
 address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"

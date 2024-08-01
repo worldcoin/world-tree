@@ -13,7 +13,8 @@ pub struct ServiceConfig {
     /// Configuration for the canonical tree on mainnet
     pub canonical_tree: TreeConfig,
     /// Configuration for tree cache
-    pub cache: CacheConfig,
+    #[serde(alias = "cache")]
+    pub data: DataConfig,
     /// Configuration for bridged trees
     #[serde(with = "map_vec", default)]
     pub bridged_trees: Vec<TreeConfig>,
@@ -25,11 +26,13 @@ pub struct ServiceConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CacheConfig {
+pub struct DataConfig {
     /// Path to mmap file responsible for caching the state of the canonical tree
-    pub cache_file: PathBuf,
+    #[serde(alias = "cache_file")]
+    pub dir: PathBuf,
     #[serde(default)]
-    pub purge_cache: bool,
+    #[serde(alias = "purge_cache")]
+    pub purge: bool,
 }
 
 impl ServiceConfig {
@@ -161,9 +164,9 @@ mod tests {
             rpc_endpoint = "http://localhost:8545/"
             throttle = 150
 
-            [cache]
-            cache_file = "cache.mmap"
-            purge_cache = true
+            [data]
+            dir = "cache.mmap"
+            purge = true
 
             [bridged_trees.0]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
@@ -188,9 +191,9 @@ mod tests {
                     throttle: 150,
                 },
             },
-            cache: CacheConfig {
-                cache_file: PathBuf::from("cache.mmap"),
-                purge_cache: true,
+            data: DataConfig {
+                dir: PathBuf::from("cache.mmap"),
+                purge: true,
             },
             bridged_trees: vec![TreeConfig {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
@@ -210,5 +213,37 @@ mod tests {
         let serialized = toml::to_string(&config).unwrap();
 
         assert_eq!(serialized.trim(), S.trim());
+    }
+
+    #[test]
+    fn legacy_deserialize() {
+        const S: &str = indoc::indoc! {r#"
+            tree_depth = 10
+            socket_address = "127.0.0.1:8080"
+
+            [canonical_tree]
+            address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
+            window_size = 10
+            creation_block = 0
+
+            [canonical_tree.provider]
+            rpc_endpoint = "http://localhost:8545/"
+            throttle = 150
+
+            [cache]
+            cache_file = "cache.mmap"
+            purge_cache = true
+
+            [bridged_trees.0]
+            address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
+            window_size = 10
+            creation_block = 0
+
+            [bridged_trees.0.provider]
+            rpc_endpoint = "http://localhost:8546/"
+            throttle = 150
+        "#};
+
+        toml::from_str::<ServiceConfig>(&S).unwrap();
     }
 }
