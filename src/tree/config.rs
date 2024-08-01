@@ -244,6 +244,6 @@ mod tests {
             throttle = 150
         "#};
 
-        toml::from_str::<ServiceConfig>(&S).unwrap();
+        toml::from_str::<ServiceConfig>(S).unwrap();
     }
 }

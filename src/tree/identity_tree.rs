@@ -83,7 +83,7 @@ impl IdentityTree<MmapVec<Hash>> {
             .iter()
             .map(|chain_id| {
                 let path = Self::tree_cache_path(cache_dir, *chain_id);
-                let storage = Self::init_storage(&path)?;
+                let storage = Self::init_storage(path)?;
                 WorldTreeResult::Ok((*chain_id, storage))
             })
             .collect::<Result<_, _>>()?;
@@ -129,12 +129,12 @@ impl IdentityTree<MmapVec<Hash>> {
         let path = path.as_ref();
 
         let mmap_vec: MmapVec<Hash> =
-            match unsafe { MmapVec::restore_from_path(&path) } {
+            match unsafe { MmapVec::restore_from_path(path) } {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(e) => unsafe {
                     tracing::error!("Cache restore error: {:?}", e);
-                    MmapVec::create_from_path(&path)?
+                    MmapVec::create_from_path(path)?
                 },
             };
 
