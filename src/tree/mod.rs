@@ -116,9 +116,7 @@ where
                 for handle in join_handles {
                     match handle.join() {
                         Err(e) => {
-                            tracing::error!("Tree validation failed: {e:?}");
-                            tracing::info!("Deleting cache and exiting");
-                            std::fs::remove_dir_all(cache_dir).unwrap();
+                            tracing::error!("Joining validation thread failed: {e:?}");
                             process::exit(1);
                         }
                         Ok(Err(validation_error)) => {

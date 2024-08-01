@@ -4,6 +4,8 @@ use semaphore::generic_storage::MmapVec;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 
+use crate::tree::ChainId;
+
 use super::error::WorldTreeResult;
 use super::identity_tree::IdentityTree;
 use super::tree_manager::CanonicalChainUpdate;
@@ -30,6 +32,18 @@ pub async fn handle_canonical_updates(
             identity_tree
                 .update_chain(canonical_chain_id.into(), update.post_root)?;
             identity_tree.update_trees()?;
+
+            let canonical_tree = identity_tree.trees.get(&ChainId(canonical_chain_id)).unwrap();
+            if canonical_tree.root() != update.post_root {
+                tracing::error!(
+                    "Canonical tree root mismatch: expected {}, got {}",
+                    canonical_tree.root(),
+                    update.post_root
+                );
+
+                panic!("Canonical tree root mismatch");
+            }
+
             identity_tree.realign_trees()?;
         }
     }

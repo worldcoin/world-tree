@@ -235,6 +235,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn update_tree(
         &mut self,
         chain_id: ChainId,
@@ -252,6 +253,7 @@ where
 
         let pre_root = tree.root();
         for update in updates {
+            tracing::info!(?update, "Applying update");
             Self::apply_update(tree, update.update);
         }
 
