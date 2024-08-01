@@ -1,14 +1,9 @@
 use axum::response::IntoResponse;
-use ethers::prelude::{AbiError, ContractError};
-use ethers::providers::Middleware;
 use hyper::StatusCode;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum WorldTreeError<M>
-where
-    M: Middleware + 'static,
-{
+pub enum WorldTreeError {
     #[error("Roots are different when expected to be the same")]
     IncongruentRoots,
     #[error("Leaf channel closed")]
@@ -29,18 +24,6 @@ where
     DuplicateTransaction,
     #[error("Calldata does not have a function selector")]
     MissingFunctionSelector,
-    #[error(transparent)]
-    IdentityTreeError(#[from] IdentityTreeError),
-    #[error(transparent)]
-    MiddlewareError(<M as Middleware>::Error),
-    #[error(transparent)]
-    ContractError(#[from] ContractError<M>),
-    #[error(transparent)]
-    ABICodecError(#[from] AbiError),
-    #[error(transparent)]
-    EthABIError(#[from] ethers::abi::Error),
-    #[error(transparent)]
-    HyperError(#[from] hyper::Error),
 }
 
 #[derive(Error, Debug)]
@@ -51,14 +34,10 @@ pub enum IdentityTreeError {
     LeafAlreadyExists,
     #[error("Leaf does not exist in tree")]
     LeafNotFound,
-    #[error(transparent)]
-    MmapVecError(#[from] eyre::Report),
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
 }
 
-impl IdentityTreeError {
-    fn to_status_code(&self) -> StatusCode {
+impl Status for IdentityTreeError {
+    fn status_code(&self) -> StatusCode {
         match self {
             IdentityTreeError::RootNotFound
             | IdentityTreeError::LeafNotFound => StatusCode::NOT_FOUND,
@@ -67,26 +46,50 @@ impl IdentityTreeError {
     }
 }
 
-impl<M> WorldTreeError<M>
-where
-    M: Middleware + 'static,
-{
-    fn to_status_code(&self) -> StatusCode {
+impl Status for WorldTreeError {
+    fn status_code(&self) -> StatusCode {
         match self {
             WorldTreeError::TreeNotSynced => StatusCode::SERVICE_UNAVAILABLE,
-            WorldTreeError::IdentityTreeError(e) => e.to_status_code(),
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
-impl<M> IntoResponse for WorldTreeError<M>
-where
-    M: Middleware + 'static,
-{
+pub trait Status {
+    fn status_code(&self) -> StatusCode;
+}
+
+#[derive(Debug)]
+pub struct WorldTreeEyre(pub color_eyre::eyre::Report);
+
+impl std::fmt::Display for WorldTreeEyre {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+pub type WorldTreeResult<T> = Result<T, WorldTreeEyre>;
+
+impl<E: Into<eyre::Report>> From<E> for WorldTreeEyre {
+    fn from(e: E) -> Self {
+        Self(e.into())
+    }
+}
+
+impl IntoResponse for WorldTreeEyre {
     fn into_response(self) -> axum::response::Response {
-        let status_code = self.to_status_code();
-        let response_body = self.to_string();
-        (status_code, response_body).into_response()
+        if let Some(e) = self.0.downcast_ref::<WorldTreeError>() {
+            let status_code = e.status_code();
+            let response_body = e.to_string();
+            (status_code, response_body).into_response()
+        } else if let Some(e) = self.0.downcast_ref::<IdentityTreeError>() {
+            let status_code = e.status_code();
+            let response_body = e.to_string();
+            (status_code, response_body).into_response()
+        } else {
+            let status_code = StatusCode::INTERNAL_SERVER_ERROR;
+            let response_body = self.0.to_string();
+            (status_code, response_body).into_response()
+        }
     }
 }

@@ -21,9 +21,10 @@ const TREE_DEPTH: usize = 20;
 mod common;
 
 use common::*;
+use world_tree::tree::error::WorldTreeResult;
 
 #[tokio::test]
-async fn missing_event_on_bridged() -> eyre::Result<()> {
+async fn missing_event_on_bridged() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let cache_file = NamedTempFile::new()?;

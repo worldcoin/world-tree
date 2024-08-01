@@ -9,14 +9,16 @@ use tree::config::ServiceConfig;
 use tree::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
 use tree::WorldTree;
 
+use self::tree::error::WorldTreeResult;
+
 pub mod abi;
-mod error;
 pub mod serde_utils;
 pub mod tree;
+pub mod util;
 
 pub async fn init_world_tree(
     config: &ServiceConfig,
-) -> eyre::Result<Arc<WorldTree<Provider<ThrottledJsonRpcClient<Http>>>>> {
+) -> WorldTreeResult<Arc<WorldTree<Provider<ThrottledJsonRpcClient<Http>>>>> {
     let canonical_provider_config = &config.canonical_tree.provider;
 
     let http_provider =

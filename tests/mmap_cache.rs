@@ -13,6 +13,7 @@ const TREE_DEPTH: usize = 20;
 mod common;
 
 use common::*;
+use world_tree::tree::error::WorldTreeResult;
 
 /// Check that an invalid cache results in the process exiting.
 /// We expect the process here to exit(1).
@@ -20,7 +21,7 @@ use common::*;
 /// so I'm just ignoreing it.
 #[ignore]
 #[tokio::test]
-async fn mmap_cache() -> eyre::Result<()> {
+async fn mmap_cache() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let mut cache_file = NamedTempFile::new()?;
