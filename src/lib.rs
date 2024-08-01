@@ -64,10 +64,10 @@ pub async fn init_world_tree(
         bridged_tree_managers.push(tree_manager);
     }
 
-    if config.cache.purge_cache {
+    if config.data.purge {
         tracing::info!("Purging tree cache");
-        if config.cache.cache_file.exists() {
-            fs::remove_file(&config.cache.cache_file)?;
+        if config.data.dir.exists() {
+            fs::remove_dir_all(&config.data.dir)?;
         }
     }
 
@@ -75,6 +75,6 @@ pub async fn init_world_tree(
         config.tree_depth,
         canonical_tree_manager,
         bridged_tree_managers,
-        &config.cache.cache_file,
+        &config.data.dir,
     )?))
 }

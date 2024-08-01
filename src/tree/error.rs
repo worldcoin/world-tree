@@ -30,10 +30,14 @@ pub enum WorldTreeError {
 pub enum IdentityTreeError {
     #[error("Root not found")]
     RootNotFound,
+    #[error("Tree not found")]
+    TreeNotFound,
     #[error("Leaf already exists")]
     LeafAlreadyExists,
     #[error("Leaf does not exist in tree")]
     LeafNotFound,
+    #[error("Update not found")]
+    UpdateNotFound,
 }
 
 impl Status for IdentityTreeError {

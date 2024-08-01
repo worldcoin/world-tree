@@ -4,5 +4,8 @@ ips.toml
 .env
 tree-cache
 
+# Local testing files
 config.mainnet.toml
 config.staging.toml
+cache.staging/
+cache.mainnet/

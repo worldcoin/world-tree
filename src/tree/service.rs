@@ -57,7 +57,6 @@ where
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            .route("/computeRoot", axum::routing::post(compute_root))
             .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
@@ -141,31 +140,13 @@ struct HealthResponse {
     pub canonical_root: Hash,
 }
 
-#[tracing::instrument(level = "debug", skip(world_tree))]
+#[tracing::instrument(level = "debug", skip(_world_tree))]
 #[allow(clippy::complexity)]
 pub async fn health<M: Middleware + 'static>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
-) -> WorldTreeResult<Json<HealthResponse>> {
-    let chain_state = world_tree.chain_state.read().await.clone();
-    let identity_tree = world_tree.identity_tree.read().await;
-    let cascading_tree_root = identity_tree.tree.root();
+    State(_world_tree): State<Arc<WorldTree<M>>>,
+) -> WorldTreeResult<()> {
+    // let identity_tree = world_tree.identity_tree.read().await;
+    // let cascading_tree_root = identity_tree.tree.root();
 
-    Ok(Json(HealthResponse {
-        chain_state,
-        canonical_root: cascading_tree_root,
-    }))
-}
-
-#[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn compute_root<M: Middleware + 'static>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
-    Query(query_params): Query<ChainIdQueryParams>,
-    Json(req): Json<ComputeRootRequest>,
-) -> WorldTreeResult<(StatusCode, Json<Hash>)> {
-    let chain_id = query_params.chain_id;
-    let updated_root = world_tree
-        .compute_root(&req.identity_commitments, chain_id)
-        .await?;
-
-    Ok((StatusCode::OK, Json(updated_root)))
+    Ok(())
 }
