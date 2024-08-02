@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::{process, thread};
 
 use ethers::providers::Middleware;
+use ethers::types::BlockNumber;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
@@ -116,7 +117,9 @@ where
                 for handle in join_handles {
                     match handle.join() {
                         Err(e) => {
-                            tracing::error!("Joining validation thread failed: {e:?}");
+                            tracing::error!(
+                                "Joining validation thread failed: {e:?}"
+                            );
                             process::exit(1);
                         }
                         Ok(Err(validation_error)) => {
@@ -141,12 +144,43 @@ where
         Ok(world_tree)
     }
 
+    pub async fn sync_to_head(&self) -> WorldTreeResult<()> {
+        let mut identity_tree = self.identity_tree.write().await;
+
+        // Get the latest root for each bridged chain
+        for bridged_tree in self.bridged_tree_managers.iter() {
+            let latest_block = bridged_tree
+                .block_scanner
+                .middleware
+                .get_block_number()
+                .await?;
+
+            let latest_root = bridged_tree
+                .get_latest_root(BlockNumber::Number(latest_block))
+                .await?;
+
+            // TODO: update the start block for the block scanner
+
+            identity_tree
+                .update_chain(bridged_tree.chain_id.into(), latest_root)?;
+        }
+
+        // TODO: sync in reverse until you hit the root in cachce, appending updates along the way
+
+        identity_tree.update_trees()?;
+        identity_tree.realign_trees()?;
+
+        Ok(())
+    }
+
     /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
     pub async fn spawn(&self) -> Vec<JoinHandle<WorldTreeResult<()>>> {
         let (leaf_updates_tx, leaf_updates_rx) =
             tokio::sync::mpsc::channel(100);
         let (bridged_root_tx, bridged_root_rx) =
             tokio::sync::mpsc::channel(100);
+
+        // TODO: sync to head
 
         // Spawn the tree managers to listen to the canonical and bridged trees for updates
         let mut handles = vec![];

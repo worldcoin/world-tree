@@ -1,7 +1,9 @@
 use ethers::abi::{AbiDecode, RawLog};
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::Middleware;
-use ethers::types::{Filter, Log, Selector, ValueOrArray, H160, H256, U256};
+use ethers::types::{
+    BlockId, BlockNumber, Filter, Log, Selector, ValueOrArray, H160, H256, U256,
+};
 use futures::{StreamExt, TryStreamExt};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -14,8 +16,8 @@ use super::error::{WorldTreeError, WorldTreeResult};
 use super::identity_tree::LeafUpdates;
 use super::{Hash, LeafIndex};
 use crate::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall, RootAddedFilter,
-    TreeChangedFilter,
+    DeleteIdentitiesCall, IBridgedWorldID, RegisterIdentitiesCall,
+    RootAddedFilter, TreeChangedFilter,
 };
 
 pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
@@ -78,6 +80,21 @@ where
         tx: Sender<T::ChannelData>,
     ) -> JoinHandle<WorldTreeResult<()>> {
         T::spawn(tx, self.block_scanner.clone())
+    }
+
+    pub async fn get_latest_root(
+        &self,
+        block: BlockNumber,
+    ) -> WorldTreeResult<Hash> {
+        let tree = IBridgedWorldID::new(
+            self.address,
+            self.block_scanner.middleware.clone(),
+        );
+
+        let latest_root =
+            Hash::from_limbs(tree.latest_root().block(block).call().await?.0);
+
+        Ok(latest_root)
     }
 }
 

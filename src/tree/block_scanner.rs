@@ -44,6 +44,8 @@ where
         })
     }
 
+    // TODO: implement reverse range
+
     pub fn block_stream(
         &self,
     ) -> impl Stream<Item: Future<Output = WorldTreeResult<Vec<Log>>> + Send> + '_
