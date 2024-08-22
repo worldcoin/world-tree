@@ -99,7 +99,7 @@ async fn many_batches() -> WorldTreeResult<()> {
             provider: ProviderConfig {
                 rpc_endpoint: mainnet_rpc_url.parse()?,
                 throttle: 150,
-                logs_window_size: 10,
+                window_size: 10,
             },
         },
         cache: CacheConfig {
@@ -112,7 +112,7 @@ async fn many_batches() -> WorldTreeResult<()> {
             provider: ProviderConfig {
                 rpc_endpoint: rollup_rpc_url.parse()?,
                 throttle: 150,
-                logs_window_size: 10,
+                window_size: 10,
             },
         }],
         socket_address: None,

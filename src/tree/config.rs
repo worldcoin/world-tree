@@ -72,7 +72,7 @@ pub struct ProviderConfig {
     #[serde(default = "default::provider_throttle")]
     pub throttle: u32,
     #[serde(default = "default::window_size")]
-    pub logs_window_size: u64,
+    pub window_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,12 +168,12 @@ mod tests {
 
             [bridged_trees.0]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
-            window_size = 10
             creation_block = 0
 
             [bridged_trees.0.provider]
             rpc_endpoint = "http://localhost:8546/"
             throttle = 150
+            window_size = 10
         "#};
 
         let config = ServiceConfig {
@@ -186,7 +186,7 @@ mod tests {
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
                     throttle: 150,
-                    logs_window_size: 10,
+                    window_size: 10,
                 },
             },
             cache: CacheConfig {
@@ -201,7 +201,7 @@ mod tests {
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
                     throttle: 150,
-                    logs_window_size: 10,
+                    window_size: 10,
                 },
             }],
             socket_address: Some(([127, 0, 0, 1], 8080).into()),

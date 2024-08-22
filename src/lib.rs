@@ -33,7 +33,7 @@ pub async fn init_world_tree(
     let canonical_tree_config = &config.canonical_tree;
     let canonical_tree_manager = TreeManager::<_, CanonicalTree>::new(
         canonical_tree_config.address,
-        canonical_tree_config.provider.logs_window_size,
+        canonical_tree_config.provider.window_size,
         canonical_tree_config.creation_block,
         canonical_middleware,
     )
@@ -55,7 +55,7 @@ pub async fn init_world_tree(
 
         let tree_manager = TreeManager::<_, BridgedTree>::new(
             tree_config.address,
-            tree_config.provider.logs_window_size,
+            tree_config.provider.window_size,
             tree_config.creation_block,
             bridged_middleware,
         )
