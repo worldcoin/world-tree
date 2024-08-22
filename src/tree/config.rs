@@ -57,10 +57,9 @@ impl ServiceConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TreeConfig {
+    /// The address of the tree contract
     pub address: Address,
-    #[serde(default = "default::window_size")]
-    pub window_size: u64,
-    #[serde(default)]
+    /// The block number at which the tree was created
     pub creation_block: u64,
     pub provider: ProviderConfig,
 }
@@ -72,6 +71,8 @@ pub struct ProviderConfig {
     pub rpc_endpoint: Url,
     #[serde(default = "default::provider_throttle")]
     pub throttle: u32,
+    #[serde(default = "default::window_size")]
+    pub logs_window_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,11 +182,11 @@ mod tests {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
                     .parse()
                     .unwrap(),
-                window_size: 10,
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
                     throttle: 150,
+                    logs_window_size: 10,
                 },
             },
             cache: CacheConfig {
@@ -196,11 +197,11 @@ mod tests {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
                     .parse()
                     .unwrap(),
-                window_size: 10,
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
                     throttle: 150,
+                    logs_window_size: 10,
                 },
             }],
             socket_address: Some(([127, 0, 0, 1], 8080).into()),

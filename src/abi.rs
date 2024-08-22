@@ -3,6 +3,7 @@ use ethers::middleware::contract::abigen;
 abigen!(
     IWorldIDIdentityManager,
     r#"[
+        event WorldIDIdentityManagerImplInitialized(uint8 _treeDepth, uint256 initialRoot)
         function latestRoot() external returns (uint256)
         event TreeChanged(uint256 indexed preRoot, uint8 indexed kind, uint256 indexed postRoot)
         function registerIdentities(uint256[8] calldata insertionProof, uint256 preRoot, uint32 startIndex, uint256[] calldata identityCommitments, uint256 postRoot) external

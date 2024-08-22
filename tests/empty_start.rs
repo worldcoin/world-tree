@@ -91,11 +91,11 @@ async fn empty_start() -> WorldTreeResult<()> {
         tree_depth: TREE_DEPTH,
         canonical_tree: TreeConfig {
             address: id_manager_address,
-            window_size: 10,
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: mainnet_rpc_url.parse()?,
                 throttle: 150,
+                logs_window_size: 10,
             },
         },
         cache: CacheConfig {
@@ -104,11 +104,11 @@ async fn empty_start() -> WorldTreeResult<()> {
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,
-            window_size: 10,
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: rollup_rpc_url.parse()?,
                 throttle: 150,
+                logs_window_size: 10,
             },
         }],
         socket_address: None,
