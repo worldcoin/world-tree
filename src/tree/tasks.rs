@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use super::error::WorldTreeResult;
 use super::identity_tree::IdentityTree;
-use super::tree_manager::CanonicalChainUpdate;
+use super::tree_manager::{BridgeTreeUpdate, CanonicalChainUpdate};
 use super::Hash;
 
 pub async fn handle_canonical_updates(
@@ -46,10 +46,14 @@ pub async fn handle_canonical_updates(
 pub async fn handle_bridged_updates(
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
     chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
-    mut bridged_root_rx: Receiver<(u64, Hash)>,
+    mut bridged_root_rx: Receiver<BridgeTreeUpdate>,
 ) -> WorldTreeResult<()> {
     loop {
-        if let Some((chain_id, bridged_root)) = bridged_root_rx.recv().await {
+        if let Some(BridgeTreeUpdate {
+            chain_id,
+            root: bridged_root,
+        }) = bridged_root_rx.recv().await
+        {
             tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
 
             let mut chain_state = chain_state.write().await;
