@@ -4,7 +4,8 @@ use std::sync::Arc;
 use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::Middleware;
-use ethers::types::{Log, Selector, Transaction, H256, U256};
+use ethers::types::{Log, Selector, Transaction, H256, U256, U64};
+use eyre::ContextCompat;
 use futures::{StreamExt, TryStreamExt};
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
@@ -26,6 +27,8 @@ pub struct CanonicalChainUpdate {
     pub pre_root: Hash,
     pub post_root: Hash,
     pub leaf_updates: LeafUpdates,
+    pub tx_hash: H256,
+    pub block_number: U64,
 }
 
 impl TreeVersion for CanonicalTree {
@@ -119,6 +122,10 @@ fn extract_identity_update(
 ) -> WorldTreeResult<Option<CanonicalChainUpdate>> {
     let calldata = &transaction.input;
 
+    let tx_hash = transaction.hash;
+    let block_number =
+        transaction.block_number.context("Missing block number")?;
+
     let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();
 
     let function_selector = Selector::try_from(&calldata[0..4])
@@ -153,6 +160,8 @@ fn extract_identity_update(
             pre_root,
             post_root,
             leaf_updates: LeafUpdates::Insert(identity_updates),
+            tx_hash,
+            block_number,
         }))
     } else if function_selector == DeleteIdentitiesCall::selector() {
         tracing::debug!("Decoding deleteIdentities calldata");
@@ -178,6 +187,8 @@ fn extract_identity_update(
             pre_root,
             post_root,
             leaf_updates: LeafUpdates::Delete(identity_updates),
+            tx_hash,
+            block_number,
         }))
     } else {
         Ok(None)

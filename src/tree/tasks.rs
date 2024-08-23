@@ -52,6 +52,7 @@ pub async fn handle_bridged_updates(
         if let Some(BridgeTreeUpdate {
             chain_id,
             root: bridged_root,
+            ..
         }) = bridged_root_rx.recv().await
         {
             tracing::info!(?chain_id, root = ?bridged_root, "Bridged root received");
