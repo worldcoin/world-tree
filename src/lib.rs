@@ -15,6 +15,7 @@ pub mod abi;
 pub mod serde_utils;
 pub mod tree;
 pub mod util;
+pub mod db;
 
 pub async fn init_world_tree(
     config: &ServiceConfig,

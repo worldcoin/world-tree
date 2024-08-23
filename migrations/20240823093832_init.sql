@@ -1,3 +1,13 @@
+-- Metadata about on-chain transactions
+-- Used to establish order of observed roots
+-- And to fetch latest block number from which to sync
+CREATE TABLE tx_meta (
+    id BIGSERIAL PRIMARY KEY,
+    chain_id BIGINT NOT NULL,
+    block_number BIGINT NOT NULL,
+    tx_hash BYTEA NOT NULL
+);
+
 -- The canonical chain updates
 CREATE TABLE canonical_updates (
     tx_id BIGINT PRIMARY KEY,
@@ -15,18 +25,9 @@ CREATE TABLE bridged_updates (
     FOREIGN KEY (tx_id) REFERENCES tx_meta (id)
 );
 
--- Metadata about on-chain transactions
--- Used to establish order of observed roots
--- And to fetch latest block number from which to sync
-CREATE TABLE tx_meta (
-    id BIGSERIAL PRIMARY KEY,
-    chain_id BIGINT NOT NULL,
-    block_number BIGINT NOT NULL,
-    tx_hash BYTEA NOT NULL
-);
-
 -- Flat leaf storage
-CREATE TABLE leaves (
+CREATE TABLE leaf_updates (
     id BIGSERIAL PRIMARY KEY,
+    leaf_idx BIGINT NOT NULL,
     leaf BYTEA NOT NULL
 );
