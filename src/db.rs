@@ -37,9 +37,7 @@ impl DerefMut for Db {
 }
 
 #[async_trait]
-pub trait DbMethods<'c>:
-    Acquire<'c, Database = Postgres> + Send + Sync + Sized
-{
+pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn insert_tx(
         self,
         chain_id: u64,
