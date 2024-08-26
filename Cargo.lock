@@ -7305,6 +7305,7 @@ dependencies = [
  "ethers-throttle",
  "eyre",
  "futures",
+ "futures-core",
  "governor",
  "hex",
  "hyper 0.14.30",
