@@ -219,6 +219,7 @@ pub fn unpack_indices(packed: &[u8]) -> Vec<u32> {
 /// # Arguments
 ///
 /// * `indices` - The array of indices representing positions of identity commitments in the `WorldTree`.
+#[cfg(test)]
 pub fn pack_indices(indices: &[u32]) -> Vec<u8> {
     let mut packed = Vec::with_capacity(indices.len() * 4);
 
