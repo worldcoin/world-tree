@@ -1,44 +1,23 @@
-use std::marker::PhantomData;
+use sqlx::{Acquire, Postgres};
 
-use sqlx::{Acquire, Executor, Postgres};
-
-pub struct Db<T, E> {
+#[derive(Clone, Copy)]
+pub struct Db<T> {
     inner: T,
-    _e: PhantomData<E>,
 }
 
-impl<T, E> Clone for Db<T, E>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Db {
-            inner: self.inner.clone(),
-            _e: PhantomData,
-        }
-    }
-}
-
-impl<T, E> Copy for Db<T, E> where T: Copy {}
-
-impl<T, E> Db<T, E> {
+impl<T> Db<T> {
     pub fn new(inner: T) -> Self {
-        Db {
-            inner,
-            _e: PhantomData,
-        }
+        Db { inner }
     }
 }
 
-impl<'c, T, E> Db<T, E>
+impl<'c, T> Db<T>
 where
     T: Acquire<'c, Database = Postgres> + Send,
-    <T as Acquire<'c>>::Connection: AsMut<E> + Send,
-    for<'a> &'a mut E: Executor<'a, Database = Postgres>,
 {
     pub async fn fetch_user_id(self) -> sqlx::Result<Option<i32>> {
         let mut conn = self.inner.acquire().await?;
-        let executor: &mut E = conn.as_mut();
+        let executor = conn.as_mut();
 
         let x: Option<(i32,)> = sqlx::query_as("SELECT id FROM users")
             .fetch_optional(executor)
@@ -50,7 +29,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use sqlx::{Connection, PgConnection, PgPool, Transaction};
+    use sqlx::{Connection, PgConnection, PgPool};
 
     use super::*;
 
@@ -60,12 +39,13 @@ mod tests {
             PgPool::connect("postgres://postgres:password@localhost/testdb")
                 .await
                 .unwrap();
+
         let db = Db::new(&pool);
 
         let id = db.fetch_user_id().await.unwrap();
         assert_eq!(id, None);
 
-        // Can reuse because db &Pool is Copy
+        // Can reuse because db &Pool is Copy and fetch_user_id borrows self
         let id = db.fetch_user_id().await.unwrap();
         assert_eq!(id, None);
     }
@@ -77,12 +57,13 @@ mod tests {
         )
         .await
         .unwrap();
-        let db: Db<&mut PgConnection, PgConnection> = Db::new(&mut conn);
+
+        let db = Db::new(&mut conn);
 
         let id = db.fetch_user_id().await.unwrap();
         assert_eq!(id, None);
 
-        // Doesn't work, because &mut PgConnection is neither Clone nor Copy
+        // Doesn't work because &mut T is neither Clone nor Copy
         // let id = db.fetch_user_id().await.unwrap();
         // assert_eq!(id, None);
     }
@@ -100,15 +81,11 @@ mod tests {
         let id = db.fetch_user_id().await.unwrap();
         assert_eq!(id, None);
 
-        // Doesn't work, because &mut Transaction is neither Clone nor Copy
+        // Doesn't work because &mut T is neither Clone nor Copy
         // let id = db.fetch_user_id().await.unwrap();
         // assert_eq!(id, None);
 
-        // We can do a trick however, that seems to make it work
-        let id = Db::new(&mut tx).fetch_user_id().await.unwrap();
-        assert_eq!(id, None);
-
-        // Doesn't work, because &mut Transaction is neither Clone nor Copy
+        // This works though
         let id = Db::new(&mut tx).fetch_user_id().await.unwrap();
         assert_eq!(id, None);
     }
