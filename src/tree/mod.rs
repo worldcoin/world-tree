@@ -22,6 +22,8 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
 
+use crate::db::Db;
+
 use self::error::{WorldTreeError, WorldTreeResult};
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
@@ -40,6 +42,8 @@ pub struct WorldTree<M: Middleware + 'static> {
     /// Responsible for listening to state changes state changes to bridged WorldIDs
     pub bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
 
+    pub db: Arc<Db>,
+
     /// Mapping of chain Id -> the latest observed root
     ///
     /// This mapping is used to monitor if observed chains
@@ -52,6 +56,7 @@ where
     M: Middleware + 'static,
 {
     pub fn new(
+        db: Arc<Db>,
         tree_depth: usize,
         canonical_tree_manager: TreeManager<M, CanonicalTree>,
         bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
@@ -61,6 +66,7 @@ where
             IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
         let world_tree = Self {
+            db,
             identity_tree: Arc::new(RwLock::new(identity_tree)),
             canonical_tree_manager,
             bridged_tree_managers,

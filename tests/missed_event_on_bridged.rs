@@ -96,6 +96,7 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
 
     let service_config = ServiceConfig {
         tree_depth: TREE_DEPTH,
+        db: todo!(),
         canonical_tree: TreeConfig {
             address: id_manager_address,
             creation_block: 0,

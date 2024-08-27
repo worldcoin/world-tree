@@ -3,6 +3,7 @@
 use std::fs;
 use std::sync::Arc;
 
+use db::Db;
 use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use tree::config::ServiceConfig;
@@ -72,7 +73,10 @@ pub async fn init_world_tree(
         }
     }
 
+    let db = Arc::new(Db::init(&config.db).await?);
+
     Ok(Arc::new(WorldTree::new(
+        db,
         config.tree_depth,
         canonical_tree_manager,
         bridged_tree_managers,

@@ -10,6 +10,7 @@ pub const CONFIG_PREFIX: &str = "WLD";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceConfig {
     pub tree_depth: usize,
+    pub db: DbConfig,
     /// Configuration for the canonical tree on mainnet
     pub canonical_tree: TreeConfig,
     /// Configuration for tree cache
@@ -22,6 +23,21 @@ pub struct ServiceConfig {
     pub socket_address: Option<SocketAddr>,
     #[serde(default)]
     pub telemetry: Option<TelemetryConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DbConfig {
+    /// The db connection string
+    /// i.e. postgresql://user:password@localhost:5432/dbname
+    pub connection_string: String,
+
+    /// Whether to create the database if it does not exist
+    #[serde(default = "default::bool_true")]
+    pub create: bool,
+
+    /// Whether to run migrations
+    #[serde(default = "default::bool_true")]
+    pub migrate: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -101,12 +117,16 @@ mod default {
         Some(([127, 0, 0, 1], 8080).into())
     }
 
-    pub fn window_size() -> u64 {
+    pub const fn window_size() -> u64 {
         1000
     }
 
-    pub fn provider_throttle() -> u32 {
+    pub const fn provider_throttle() -> u32 {
         150
+    }
+
+    pub const fn bool_true() -> bool {
+        true
     }
 }
 
@@ -153,14 +173,19 @@ mod tests {
             tree_depth = 10
             socket_address = "127.0.0.1:8080"
 
+            [db]
+            connection_string = "postgresql://user:password@localhost:5432/dbname"
+            create = true
+            migrate = true
+
             [canonical_tree]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
-            window_size = 10
             creation_block = 0
 
             [canonical_tree.provider]
             rpc_endpoint = "http://localhost:8545/"
             throttle = 150
+            window_size = 10
 
             [cache]
             cache_file = "cache.mmap"
@@ -178,6 +203,13 @@ mod tests {
 
         let config = ServiceConfig {
             tree_depth: 10,
+            db: DbConfig {
+                connection_string:
+                    "postgresql://user:password@localhost:5432/dbname"
+                        .to_string(),
+                migrate: true,
+                create: true,
+            },
             canonical_tree: TreeConfig {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
                     .parse()

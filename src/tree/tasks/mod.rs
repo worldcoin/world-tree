@@ -10,6 +10,9 @@ use super::identity_tree::IdentityTree;
 use super::tree_manager::{BridgeTreeUpdate, CanonicalChainUpdate};
 use super::Hash;
 
+pub mod updates;
+pub mod ingest;
+
 pub async fn handle_canonical_updates(
     canonical_chain_id: u64,
     identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,

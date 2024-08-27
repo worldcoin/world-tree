@@ -2,8 +2,9 @@ use std::ops::{Deref, DerefMut};
 
 use async_trait::async_trait;
 use ethers::types::{H256, U64};
-use sqlx::{Acquire, Error, PgPool, Postgres};
+use sqlx::{Acquire, PgPool, Postgres};
 
+use crate::tree::config::DbConfig;
 use crate::tree::Hash;
 
 pub struct Db {
@@ -11,12 +12,19 @@ pub struct Db {
 }
 
 impl Db {
-    pub async fn new(database_url: &str) -> Result<Self, Error> {
+    pub async fn init(config: &DbConfig) -> sqlx::Result<Self> {
+        let db = Self::new(&config.connection_string).await?;
+
+
+        Ok(db)
+    }
+
+    pub async fn new(database_url: &str) -> sqlx::Result<Self> {
         let pool = PgPool::connect(database_url).await?;
         Ok(Self { pool })
     }
 
-    pub async fn migrate(&self) -> Result<(), Error> {
+    pub async fn migrate(&self) -> sqlx::Result<()> {
         sqlx::migrate!("./migrations").run(&self.pool).await?;
         Ok(())
     }
@@ -43,7 +51,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         chain_id: u64,
         block_number: U64,
         tx_hash: H256,
-    ) -> Result<i64, sqlx::Error> {
+    ) -> sqlx::Result<i64> {
         let mut conn = self.acquire().await?;
 
         let row: (i64,) = sqlx::query_as(
@@ -67,7 +75,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         pre_root: Hash,
         post_root: Hash,
         tx_id: i64,
-    ) -> Result<(), sqlx::Error> {
+    ) -> sqlx::Result<()> {
         let mut conn = self.acquire().await?;
 
         sqlx::query(
@@ -89,7 +97,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         self,
         root: Hash,
         tx_id: i64,
-    ) -> Result<(), sqlx::Error> {
+    ) -> sqlx::Result<()> {
         let mut conn = self.acquire().await?;
 
         sqlx::query(
@@ -109,7 +117,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn bulk_insert_leaves(
         self,
         leaves: &[(u64, Hash)],
-    ) -> Result<(), sqlx::Error> {
+    ) -> sqlx::Result<()> {
         let mut conn = self.acquire().await?;
 
         // TODO: Use query builder
@@ -132,7 +140,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn fetch_latest_block_number(
         self,
         chain_id: u64,
-    ) -> Result<Option<U64>, sqlx::Error> {
+    ) -> sqlx::Result<Option<U64>> {
         let mut conn = self.acquire().await?;
 
         let row: Option<(i64,)> = sqlx::query_as(
