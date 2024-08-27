@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use async_trait::async_trait;
-use ethers::types::{Address, H256, U64};
+use ethers::types::{H256, U64};
 use sqlx::migrate::MigrateDatabase;
 use sqlx::{Acquire, PgPool, Postgres};
 
@@ -62,21 +62,19 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         chain_id: u64,
         block_number: U64,
         tx_hash: H256,
-        address: Address,
     ) -> sqlx::Result<i64> {
         let mut conn = self.acquire().await?;
 
         let row: (i64,) = sqlx::query_as(
             r#"
-            INSERT INTO tx (chain_id, block_number, tx_hash, address)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO tx (chain_id, block_number, tx_hash)
+            VALUES ($1, $2, $3)
             RETURNING id
             "#,
         )
         .bind(chain_id as i64)
         .bind(block_number.as_u64() as i64)
         .bind(tx_hash.as_bytes())
-        .bind(address.as_bytes())
         .fetch_one(&mut *conn)
         .await?;
 
@@ -271,13 +269,10 @@ mod tests {
 
         let pre_root = Hash::from(1u64);
         let post_root = Hash::from(2u64);
-        let address = Address::zero();
 
         let leaves: Vec<_> = random_leaves().take(10).collect();
 
-        let tx_id = tx
-            .insert_tx(chain_id, block_number, tx_hash, address)
-            .await?;
+        let tx_id = tx.insert_tx(chain_id, block_number, tx_hash).await?;
 
         tx.insert_canonical_update(pre_root, post_root, tx_id)
             .await?;

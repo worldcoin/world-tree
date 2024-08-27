@@ -10,7 +10,7 @@ use ethers::abi::AbiDecode;
 use ethers::contract::{EthCall, EthEvent};
 use ethers::providers::Middleware;
 use ethers::types::{
-    Address, Filter, Log, Selector, Transaction, ValueOrArray, H256, U256, U64,
+    Filter, Log, Selector, Transaction, ValueOrArray, H256, U256, U64,
 };
 use eyre::ContextCompat;
 use futures::{StreamExt, TryStreamExt};
@@ -66,12 +66,7 @@ pub async fn ingest_canonical(
 
             // 1. Insert tx metadata
             let tx_id = tx
-                .insert_tx(
-                    chain_id,
-                    update.block_number,
-                    update.tx_hash,
-                    update.address,
-                )
+                .insert_tx(chain_id, update.block_number, update.tx_hash)
                 .await?;
 
             // 2. Insert canonical updates data (pre & post root)
@@ -117,7 +112,6 @@ struct CanonicalChainUpdate {
     pub post_root: Hash,
     pub leaf_updates: LeafUpdates,
     pub tx_hash: H256,
-    pub address: Address,
     pub block_number: U64,
 }
 
@@ -133,32 +127,29 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
     let mut txs: Vec<_> = futures::stream::iter(logs)
         .map(|log| {
             let middleware = middleware.as_ref();
-
             async move {
                 let tx_hash = log
                     .transaction_hash
                     .ok_or(WorldTreeError::TransactionHashNotFound)?;
                 tracing::debug!(?tx_hash, "Getting transaction");
-                let tx = middleware
+                middleware
                     .get_transaction(tx_hash)
                     .await
                     .map_err(|e| {
                         WorldTreeError::TransactionSearchError(e.to_string())
                     })?
-                    .ok_or(WorldTreeError::TransactionNotFound);
-
-                tx.map(|tx| (tx, log.address))
+                    .ok_or(WorldTreeError::TransactionNotFound)
             }
         })
         .buffer_unordered(100)
         .try_collect()
         .await?;
 
-    txs.sort_unstable_by_key(|(tx, _)| (tx.block_number, tx.transaction_index));
+    txs.sort_unstable_by_key(|tx| (tx.block_number, tx.transaction_index));
 
     // Process each transaction, constructing identity updates for each root
-    for (transaction, address) in txs {
-        if let Some(update) = extract_identity_update(&transaction, address)? {
+    for transaction in txs {
+        if let Some(update) = extract_identity_update(&transaction)? {
             tree_updates.push(update);
         }
     }
@@ -168,7 +159,6 @@ pub async fn extract_identity_updates<M: Middleware + 'static>(
 
 fn extract_identity_update(
     transaction: &Transaction,
-    address: Address,
 ) -> WorldTreeResult<Option<CanonicalChainUpdate>> {
     let calldata = &transaction.input;
 
@@ -211,7 +201,6 @@ fn extract_identity_update(
             post_root,
             leaf_updates: LeafUpdates::Insert(identity_updates),
             tx_hash,
-            address,
             block_number,
         }))
     } else if function_selector == DeleteIdentitiesCall::selector() {
@@ -239,7 +228,6 @@ fn extract_identity_update(
             post_root,
             leaf_updates: LeafUpdates::Delete(identity_updates),
             tx_hash,
-            address,
             block_number,
         }))
     } else {
