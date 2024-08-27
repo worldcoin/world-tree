@@ -103,11 +103,6 @@ impl IdentityTree<MmapVec<Hash>> {
     }
 }
 
-fn initial_root(depth: usize, empty_leaf: &Hash) -> Hash {
-    CascadingMerkleTree::<PoseidonHash, _>::new(vec![], depth, empty_leaf)
-        .root()
-}
-
 impl<S> IdentityTree<S>
 where
     S: GenericStorage<Hash>,

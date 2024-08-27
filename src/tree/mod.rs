@@ -5,8 +5,6 @@ pub mod identity_tree;
 pub mod newtypes;
 pub mod service;
 
-mod tasks;
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::process;
@@ -22,7 +20,7 @@ use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use self::error::{WorldTreeError, WorldTreeResult};
+use self::error::WorldTreeResult;
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
 use crate::db::Db;
@@ -31,7 +29,6 @@ pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
 pub type WorldTreeProvider = Arc<Provider<ThrottledJsonRpcClient<Http>>>;
-
 
 /// The main state struct of this service
 ///
@@ -71,6 +68,7 @@ impl WorldTree {
         let tree = world_tree.identity_tree.clone();
         let cache = cache.to_owned();
 
+        // TODO: Move to a higher level? A task handler of sorts?
         tokio::task::spawn_blocking(move || {
             info!("Validating tree");
             let start = std::time::Instant::now();
@@ -87,7 +85,9 @@ impl WorldTree {
     }
 
     // TODO: Cache?
-    pub async fn canonical_provider(&self) -> WorldTreeResult<WorldTreeProvider> {
+    pub async fn canonical_provider(
+        &self,
+    ) -> WorldTreeResult<WorldTreeProvider> {
         provider(&self.config.canonical_tree.provider).await
     }
 
@@ -117,8 +117,8 @@ impl WorldTree {
 
         let leaf_idx = todo!();
 
-        let inclusion_proof = identity_tree
-            .inclusion_proof(leaf_idx, root.as_ref())?;
+        let inclusion_proof =
+            identity_tree.inclusion_proof(leaf_idx, root.as_ref())?;
 
         Ok(inclusion_proof)
     }
@@ -180,14 +180,12 @@ impl WorldTree {
     }
 }
 
-pub async fn provider(config: &ProviderConfig) -> WorldTreeResult<WorldTreeProvider> {
-    let http_provider =
-        Http::new(config.rpc_endpoint.clone());
-    let throttled_provider = ThrottledJsonRpcClient::new(
-        http_provider,
-        config.throttle,
-        None,
-    );
+pub async fn provider(
+    config: &ProviderConfig,
+) -> WorldTreeResult<WorldTreeProvider> {
+    let http_provider = Http::new(config.rpc_endpoint.clone());
+    let throttled_provider =
+        ThrottledJsonRpcClient::new(http_provider, config.throttle, None);
 
     let middleware = Arc::new(Provider::new(throttled_provider));
 

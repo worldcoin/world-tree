@@ -25,6 +25,9 @@ async fn mmap_cache() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     let mut cache_file = NamedTempFile::new()?;
+
+    let (db_config, _db_container) = setup_db().await?;
+
     // Write an invalid cache file
     cache_file.write(&[
         // length
@@ -77,7 +80,7 @@ async fn mmap_cache() -> WorldTreeResult<()> {
 
     let service_config = ServiceConfig {
         tree_depth: TREE_DEPTH,
-        db: todo!(),
+        db: db_config,
         canonical_tree: TreeConfig {
             address: id_manager_address,
             creation_block: 0,

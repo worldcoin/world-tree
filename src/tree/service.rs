@@ -6,7 +6,6 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::{middleware, Json};
 use axum_middleware::logging;
-use ethers::providers::Middleware;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -75,8 +74,22 @@ impl InclusionProofService {
         });
 
         // Spawn a task to sync and maintain the state of the world tree
-        tracing::info!("Spawning world tree");
-        // handles.extend(self.world_tree.spawn().await);
+        tracing::info!("Spawning world tree tasks");
+
+        // TODO: Decouple InclusionProofService (API layer) from spawning tasks
+        let world_tree = self.world_tree.clone();
+        handles.push(tokio::spawn(crate::tasks::observe::observe(
+            world_tree.clone(),
+        )));
+        handles.push(tokio::spawn(crate::tasks::ingest::ingest_canonical(
+            world_tree.clone(),
+        )));
+        handles.push(tokio::spawn(crate::tasks::update::append_updates(
+            world_tree.clone(),
+        )));
+        handles.push(tokio::spawn(crate::tasks::update::reallign(
+            world_tree.clone(),
+        )));
 
         handles.push(server_handle);
 

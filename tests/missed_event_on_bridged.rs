@@ -29,6 +29,8 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
 
     let cache_file = NamedTempFile::new()?;
 
+    let (db_config, _db_container) = setup_db().await?;
+
     let mainnet_container = setup_mainnet().await?;
     let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
     let mainnet_rpc_url = format!("http://127.0.0.1:{mainnet_rpc_port}");
@@ -96,7 +98,7 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
 
     let service_config = ServiceConfig {
         tree_depth: TREE_DEPTH,
-        db: todo!(),
+        db: db_config,
         canonical_tree: TreeConfig {
             address: id_manager_address,
             creation_block: 0,

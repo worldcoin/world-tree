@@ -4,18 +4,17 @@ use std::fs;
 use std::sync::Arc;
 
 use db::Db;
-use ethers::providers::{Http, Provider};
-use ethers_throttle::ThrottledJsonRpcClient;
 use tree::config::ServiceConfig;
 use tree::WorldTree;
 
 use self::tree::error::WorldTreeResult;
 
 pub mod abi;
+pub mod db;
 pub mod serde_utils;
+pub mod tasks;
 pub mod tree;
 pub mod util;
-pub mod db;
 
 pub async fn init_world_tree(
     config: &ServiceConfig,
@@ -29,10 +28,12 @@ pub async fn init_world_tree(
 
     let db = Arc::new(Db::init(&config.db).await?);
 
-    Ok(Arc::new(WorldTree::new(
+    let world_tree = Arc::new(WorldTree::new(
         config.clone(),
         db,
         config.tree_depth,
         &config.cache.cache_file,
-    )?))
+    )?);
+
+    Ok(world_tree)
 }

@@ -70,12 +70,9 @@ pub async fn ingest_canonical(
                 .await?;
 
             // 2. Insert canonical updates data (pre & post root)
-            let update_id = tx.insert_update(
-                update.pre_root,
-                update.post_root,
-                tx_id,
-            )
-            .await?;
+            let update_id = tx
+                .insert_update(update.pre_root, update.post_root, tx_id)
+                .await?;
 
             // 3. Insert leaf updates
             let start_update_id = tx.get_last_leaf_update_id().await? + 1;
@@ -119,7 +116,7 @@ struct CanonicalChainUpdate {
 }
 
 /// Extract identity updates from logs emitted by the `WorldIdIdentityManager`.
-pub async fn extract_identity_updates<M: Middleware + 'static>(
+async fn extract_identity_updates<M: Middleware + 'static>(
     logs: Vec<Log>,
     middleware: Arc<M>,
 ) -> WorldTreeResult<Vec<CanonicalChainUpdate>> {

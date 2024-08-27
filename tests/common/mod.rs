@@ -12,10 +12,11 @@ use semaphore::Field;
 use testcontainers::core::{ContainerPort, Mount};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
+use testcontainers_modules::postgres;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use world_tree::init_world_tree;
-use world_tree::tree::config::ServiceConfig;
+use world_tree::tree::config::{DbConfig, ServiceConfig};
 use world_tree::tree::error::{WorldTreeError, WorldTreeResult};
 use world_tree::tree::service::InclusionProofService;
 
@@ -88,6 +89,24 @@ pub async fn setup_chain(
         .await?;
 
     Ok(container)
+}
+
+pub async fn setup_db(
+) -> eyre::Result<(DbConfig, ContainerAsync<postgres::Postgres>)> {
+    let container = postgres::Postgres::default().start().await?;
+    let db_host = container.get_host().await?;
+    let db_port = container.get_host_port_ipv4(5432).await?;
+
+    let db_url =
+        format!("postgres://postgres:postgres@{db_host}:{db_port}/postgres",);
+
+    let config = DbConfig {
+        connection_string: db_url.clone(),
+        create: true,
+        migrate: true,
+    };
+
+    Ok((config, container))
 }
 
 pub async fn wait_until_contracts_deployed(
