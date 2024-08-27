@@ -277,8 +277,6 @@ impl<'c, T> DbMethods<'c> for T where
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use rand::{Rng, SeedableRng};
     use testcontainers::runners::AsyncRunner;
     use testcontainers::ContainerAsync;
@@ -352,6 +350,72 @@ mod tests {
         // Test fetching the latest block number
         let latest_block = db.fetch_latest_block_number(chain_id).await?;
         assert_eq!(latest_block, Some(block_number));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_next_updates() -> eyre::Result<()> {
+        let (db, _container) = setup().await?;
+
+        let chain_id = 1;
+
+        let roots = vec![
+            Hash::from(0u64),
+            Hash::from(1u64),
+            Hash::from(2u64),
+            Hash::from(3u64),
+            Hash::from(4u64),
+        ];
+
+        // 15 updates in 3 batches
+        let leaves: Vec<_> = random_leaves().take(15).collect();
+
+        let batches: Vec<Vec<(u64, Hash)>> = leaves
+            .chunks(5)
+            .enumerate()
+            .map(|(chunk_idx, chunk)| {
+                chunk
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, leaf)| {
+                        let idx = chunk_idx * 5 + idx;
+
+                        (idx as u64, *leaf)
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let tx_1_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
+        let tx_2_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
+        let tx_3_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
+
+        let update_1_id = db.insert_update(roots[0], roots[1], tx_1_id).await?;
+        let update_2_id = db.insert_update(roots[1], roots[2], tx_2_id).await?;
+        let update_3_id = db.insert_update(roots[2], roots[3], tx_3_id).await?;
+
+        db.insert_root(roots[1], tx_1_id).await?;
+        db.insert_root(roots[2], tx_2_id).await?;
+        db.insert_root(roots[3], tx_3_id).await?;
+
+        db.insert_leaf_updates(0, &batches[0]).await?;
+        db.insert_leaf_batch(update_1_id, 0, 4).await?;
+
+        db.insert_leaf_updates(5, &batches[1]).await?;
+        db.insert_leaf_batch(update_2_id, 5, 9).await?;
+
+        db.insert_leaf_updates(10, &batches[2]).await?;
+        db.insert_leaf_batch(update_3_id, 10, 14).await?;
+
+        let nu_1 = db.fetch_next_updates(roots[0]).await?;
+        assert_eq!(batches[0], nu_1);
+
+        let nu_2 = db.fetch_next_updates(roots[1]).await?;
+        assert_eq!(batches[1], nu_2);
+
+        let nu_3 = db.fetch_next_updates(roots[2]).await?;
+        assert_eq!(batches[2], nu_3);
 
         Ok(())
     }
