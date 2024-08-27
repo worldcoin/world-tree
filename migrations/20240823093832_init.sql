@@ -41,11 +41,13 @@ CREATE TABLE leaf_updates (
 
 -- Table to associate ranges of leaves with roots
 CREATE TABLE leaf_batches (
-    tx_id BIGINT PRIMARY KEY,
+    -- We're using tx id since it serves as a unique key
+    -- but we're actually referencing the roots in canonical_updates
+    root_id BIGINT PRIMARY KEY,
     start_id BIGINT NOT NULL,
     end_id BIGINT NOT NULL,
 
-    FOREIGN KEY (tx_id) REFERENCES tx (id),
+    FOREIGN KEY (root_id) REFERENCES canonical_updates (tx_id),
     FOREIGN KEY (start_id) REFERENCES leaf_updates (id),
     FOREIGN KEY (end_id) REFERENCES leaf_updates (id)
 );

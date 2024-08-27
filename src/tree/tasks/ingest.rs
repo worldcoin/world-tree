@@ -1,7 +1,7 @@
-//! Log ingestion logic
-//! this module defines tasks that are responsible for fetching
-//! logs from every supported chain
-//! extracting log data and saving the data into the DB
+//! Batch ingestion logic
+//! this module defines the task responsible for fetching
+//! batch events from the canonical chain and
+//! ingesting them into the database
 
 use std::collections::HashMap;
 use std::sync::Arc;

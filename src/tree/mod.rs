@@ -13,7 +13,7 @@ use std::path::Path;
 use std::process;
 use std::sync::Arc;
 
-use config::ServiceConfig;
+use config::{ProviderConfig, ServiceConfig};
 use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use semaphore::generic_storage::MmapVec;
@@ -89,18 +89,7 @@ impl WorldTree {
 
     // TODO: Cache?
     pub async fn canonical_provider(&self) -> WorldTreeResult<WorldTreeProvider> {
-        let canonical_provider_config = &self.config.canonical_tree.provider;
-
-        let http_provider =
-            Http::new(canonical_provider_config.rpc_endpoint.clone());
-        let throttled_provider = ThrottledJsonRpcClient::new(
-            http_provider,
-            canonical_provider_config.throttle,
-            None,
-        );
-        let canonical_middleware = Arc::new(Provider::new(throttled_provider));
-
-        Ok(canonical_middleware)
+        provider(&self.config.canonical_tree.provider).await
     }
 
     /// Returns an inclusion proof for a given identity commitment.
@@ -187,4 +176,18 @@ impl WorldTree {
             Ok(identity_tree.tree.root())
         }
     }
+}
+
+pub async fn provider(config: &ProviderConfig) -> WorldTreeResult<WorldTreeProvider> {
+    let http_provider =
+        Http::new(config.rpc_endpoint.clone());
+    let throttled_provider = ThrottledJsonRpcClient::new(
+        http_provider,
+        config.throttle,
+        None,
+    );
+
+    let middleware = Arc::new(Provider::new(throttled_provider));
+
+    Ok(middleware)
 }
