@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use async_trait::async_trait;
 use ethers::types::{H256, U64};
+use sqlx::migrate::MigrateDatabase;
 use sqlx::{Acquire, PgPool, Postgres};
 
 use crate::tree::config::DbConfig;
@@ -13,14 +14,22 @@ pub struct Db {
 
 impl Db {
     pub async fn init(config: &DbConfig) -> sqlx::Result<Self> {
+        if config.create && !Postgres::database_exists(&config.connection_string).await? {
+            Postgres::create_database(&config.connection_string).await?;
+        }
+
         let db = Self::new(&config.connection_string).await?;
 
+        if config.migrate {
+            db.migrate().await?;
+        }
 
         Ok(db)
     }
 
     pub async fn new(database_url: &str) -> sqlx::Result<Self> {
         let pool = PgPool::connect(database_url).await?;
+
         Ok(Self { pool })
     }
 
@@ -170,6 +179,7 @@ impl<'c, T> DbMethods<'c> for T where
 mod tests {
     use rand::{Rng, SeedableRng};
     use testcontainers::runners::AsyncRunner;
+    use testcontainers::ContainerAsync;
     use testcontainers_modules::postgres;
 
     use super::*;
@@ -180,8 +190,7 @@ mod tests {
         std::iter::from_fn(move || Some(Hash::from(rng.gen::<u64>())))
     }
 
-    #[tokio::test]
-    async fn db_operations() -> eyre::Result<()> {
+    async fn setup() -> eyre::Result<(Db, ContainerAsync<postgres::Postgres>)> {
         let container = postgres::Postgres::default().start().await?;
         let db_host = container.get_host().await?;
         let db_port = container.get_host_port_ipv4(5432).await?;
@@ -192,8 +201,18 @@ mod tests {
         );
 
         // Create a database connection pool
-        let db = Db::new(&db_url).await?;
-        db.migrate().await?;
+        let db = Db::init(&DbConfig {
+            connection_string: db_url.clone(),
+            create: true,
+            migrate: true,
+        }).await?;
+
+        Ok((db, container))
+    }
+
+    #[tokio::test]
+    async fn db_operations() -> eyre::Result<()> {
+        let (db, container) = setup().await?;
 
         let mut tx = db.begin().await?;
 
