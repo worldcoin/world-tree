@@ -10,7 +10,7 @@ CREATE TABLE tx (
     chain_id BIGINT NOT NULL,
     block_number BIGINT NOT NULL,
     -- Address of the contract the emitted this event
-    -- address BYTEA NOT NULL,
+    address BYTEA NOT NULL,
     tx_hash BYTEA NOT NULL
 );
 
