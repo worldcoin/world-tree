@@ -12,6 +12,7 @@ use super::Hash;
 
 pub mod updates;
 pub mod ingest;
+pub mod observe;
 
 pub async fn handle_canonical_updates(
     canonical_chain_id: u64,

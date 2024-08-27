@@ -25,6 +25,8 @@ use crate::tree::error::{WorldTreeError, WorldTreeResult};
 use crate::tree::identity_tree::{LeafUpdates, Leaves};
 use crate::tree::{Hash, LeafIndex, WorldTree};
 
+/// Ingests the canonical logs from the mainnet contract
+/// Saves the ingested data into the database
 pub async fn ingest_canonical(
     world_tree: Arc<WorldTree>,
 ) -> WorldTreeResult<()> {
