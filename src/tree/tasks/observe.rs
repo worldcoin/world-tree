@@ -85,7 +85,7 @@ pub async fn observe_bridged(
             let tx_id = tx.insert_tx(chain_id, block_number, tx_hash).await?;
 
             // 2. Insert bridged update data
-            tx.insert_bridged_update(root, tx_id).await?;
+            tx.insert_root(root, tx_id).await?;
 
             tx.commit().await?;
         }

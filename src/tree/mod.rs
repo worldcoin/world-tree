@@ -4,7 +4,6 @@ pub mod error;
 pub mod identity_tree;
 pub mod newtypes;
 pub mod service;
-pub mod tree_manager;
 
 mod tasks;
 
@@ -116,8 +115,10 @@ impl WorldTree {
             None
         };
 
+        let leaf_idx = todo!();
+
         let inclusion_proof = identity_tree
-            .inclusion_proof(identity_commitment, root.as_ref())?;
+            .inclusion_proof(leaf_idx, root.as_ref())?;
 
         Ok(inclusion_proof)
     }
@@ -159,22 +160,23 @@ impl WorldTree {
         identity_tree: &IdentityTree<MmapVec<Hash>>,
         chain_id: ChainId,
     ) -> WorldTreeResult<Hash> {
-        let chain_root = chain_state
-            .get(&chain_id)
-            .copied()
-            .ok_or(WorldTreeError::ChainIdNotFound)?;
+        todo!()
+        // let chain_root = chain_state
+        //     .get(&chain_id)
+        //     .copied()
+        //     .ok_or(WorldTreeError::ChainIdNotFound)?;
 
-        if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
-            Ok(identity_tree.roots[*chain_root_idx])
-        } else if canonical_chain_id == chain_id {
-            Ok(identity_tree
-                .roots
-                .last()
-                .copied()
-                .expect("There must always be at least one root"))
-        } else {
-            Ok(identity_tree.tree.root())
-        }
+        // if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
+        //     Ok(identity_tree.roots[*chain_root_idx])
+        // } else if canonical_chain_id == chain_id {
+        //     Ok(identity_tree
+        //         .roots
+        //         .last()
+        //         .copied()
+        //         .expect("There must always be at least one root"))
+        // } else {
+        //     Ok(identity_tree.tree.root())
+        // }
     }
 }
 

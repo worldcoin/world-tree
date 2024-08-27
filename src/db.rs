@@ -65,7 +65,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     ) -> sqlx::Result<i64> {
         let mut conn = self.acquire().await?;
 
-        let row: (i64,) = sqlx::query_as(
+        let (id,): (i64,) = sqlx::query_as(
             r#"
             INSERT INTO tx (chain_id, block_number, tx_hash)
             VALUES ($1, $2, $3)
@@ -78,42 +78,39 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         .fetch_one(&mut *conn)
         .await?;
 
-        Ok(row.0)
+        Ok(id)
     }
 
-    async fn insert_canonical_update(
+    async fn insert_update(
         self,
         pre_root: Hash,
         post_root: Hash,
         tx_id: i64,
-    ) -> sqlx::Result<()> {
+    ) -> sqlx::Result<i64> {
         let mut conn = self.acquire().await?;
 
-        sqlx::query(
+        let (id,): (i64,) = sqlx::query_as(
             r#"
-            INSERT INTO canonical_updates (pre_root, post_root, tx_id)
+            INSERT INTO updates (pre_root, post_root, tx_id)
             VALUES ($1, $2, $3)
+            RETURNING id
             "#,
         )
         .bind(pre_root.as_le_bytes().as_ref())
         .bind(post_root.as_le_bytes().as_ref())
         .bind(tx_id)
-        .execute(&mut *conn)
+        .fetch_one(&mut *conn)
         .await?;
 
-        Ok(())
+        Ok(id)
     }
 
-    async fn insert_bridged_update(
-        self,
-        root: Hash,
-        tx_id: i64,
-    ) -> sqlx::Result<()> {
+    async fn insert_root(self, root: Hash, tx_id: i64) -> sqlx::Result<()> {
         let mut conn = self.acquire().await?;
 
         sqlx::query(
             r#"
-            INSERT INTO bridged_updates (root, tx_id)
+            INSERT INTO roots (root, tx_id)
             VALUES ($1, $2)
             "#,
         )
@@ -171,7 +168,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
 
     async fn insert_leaf_batch(
         self,
-        tx_id: i64,
+        update_id: i64,
         start_id: u64,
         end_id: u64,
     ) -> sqlx::Result<()> {
@@ -179,11 +176,11 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
 
         sqlx::query(
             r#"
-            INSERT INTO leaf_batches (tx_id, start_id, end_id)
+            INSERT INTO leaf_batches (update_id, start_id, end_id)
             VALUES ($1, $2, $3)
             "#,
         )
-        .bind(tx_id)
+        .bind(update_id)
         .bind(start_id as i64)
         .bind(end_id as i64)
         .execute(&mut *conn)
@@ -213,6 +210,63 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
 
         Ok(row.map(|r| U64::from(r.0 as u64)))
     }
+
+    async fn fetch_next_updates(
+        self,
+        root: Hash,
+    ) -> sqlx::Result<Vec<(u64, Hash)>> {
+        let mut conn = self.acquire().await?;
+
+        let updates: Vec<(i64, Vec<u8>)> = sqlx::query_as(
+            r#"
+            SELECT
+                leaf_updates.leaf_idx,
+                leaf_updates.leaf
+            FROM updates
+            JOIN leaf_batches ON updates.id = leaf_batches.update_id
+            JOIN leaf_updates ON leaf_updates.id BETWEEN leaf_batches.start_id AND leaf_batches.end_id
+            WHERE updates.pre_root = $1
+            ORDER BY leaf_updates.id ASC
+            "#,
+        )
+        .bind(root.as_le_bytes().as_ref())
+        .fetch_all(&mut *conn)
+        .await?;
+
+        Ok(updates
+            .into_iter()
+            .map(|(idx, leaf)| {
+                (idx as u64, Hash::try_from_le_slice(&leaf).unwrap())
+            })
+            .collect())
+    }
+
+    async fn fetch_latest_common_root(self) -> sqlx::Result<Hash> {
+        let mut conn = self.acquire().await?;
+
+        let (latest_hash,): (Vec<u8>,) = sqlx::query_as(
+            r#"
+            WITH latest AS (
+                SELECT tx.chain_id, MAX(updates.id) as id
+                FROM roots
+                JOIN updates ON roots.root = updates.post_root
+                JOIN tx ON roots.tx_id = tx.id
+                GROUP BY tx.chain_id
+            ),
+            latest_common AS (
+                SELECT MIN(latest.id) as id
+                FROM latest
+            )
+            SELECT updates.post_root
+            FROM latest_common
+            JOIN updates ON latest_common.id = updates.id
+            "#,
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(Hash::try_from_le_slice(&latest_hash).unwrap())
+    }
 }
 
 // Blanket implementation for all types that satisfy the trait bounds
@@ -223,6 +277,8 @@ impl<'c, T> DbMethods<'c> for T where
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use rand::{Rng, SeedableRng};
     use testcontainers::runners::AsyncRunner;
     use testcontainers::ContainerAsync;
@@ -246,6 +302,8 @@ mod tests {
             "postgres://postgres:postgres@{db_host}:{db_port}/postgres",
         );
 
+        println!("export DATABASE_URL={}", db_url);
+
         // Create a database connection pool
         let db = Db::init(&DbConfig {
             connection_string: db_url.clone(),
@@ -257,9 +315,14 @@ mod tests {
         Ok((db, container))
     }
 
+    fn rand_tx() -> H256 {
+        let mut rng = rand::thread_rng();
+        rng.gen()
+    }
+
     #[tokio::test]
     async fn db_operations() -> eyre::Result<()> {
-        let (db, container) = setup().await?;
+        let (db, _container) = setup().await?;
 
         let mut tx = db.begin().await?;
 
@@ -274,10 +337,9 @@ mod tests {
 
         let tx_id = tx.insert_tx(chain_id, block_number, tx_hash).await?;
 
-        tx.insert_canonical_update(pre_root, post_root, tx_id)
-            .await?;
+        tx.insert_update(pre_root, post_root, tx_id).await?;
 
-        tx.insert_bridged_update(post_root, tx_id).await?;
+        tx.insert_root(post_root, tx_id).await?;
 
         // Test bulk inserting leaves
         tx.insert_leaf_updates(0, &[(0, leaves[0]), (0, leaves[1])])
@@ -290,6 +352,81 @@ mod tests {
         // Test fetching the latest block number
         let latest_block = db.fetch_latest_block_number(chain_id).await?;
         assert_eq!(latest_block, Some(block_number));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn latest_common_root() -> eyre::Result<()> {
+        let (db, _container) = setup().await?;
+
+        let chain_1_id = 1;
+        let chain_2_id = 2;
+        let chain_3_id = 3;
+
+        let roots = vec![
+            Hash::from(0u64),
+            Hash::from(1u64),
+            Hash::from(2u64),
+            Hash::from(3u64),
+            Hash::from(4u64),
+        ];
+
+        let canonical_tx_1_id =
+            db.insert_tx(chain_1_id, 1.into(), rand_tx()).await?;
+
+        let canonical_tx_2_id =
+            db.insert_tx(chain_1_id, 2.into(), rand_tx()).await?;
+
+        let canonical_tx_3_id =
+            db.insert_tx(chain_1_id, 3.into(), rand_tx()).await?;
+
+        // Canonical updates
+        let _update_1 = db
+            .insert_update(roots[0], roots[1], canonical_tx_1_id)
+            .await?;
+        let _update_2 = db
+            .insert_update(roots[1], roots[2], canonical_tx_2_id)
+            .await?;
+        let _update_3 = db
+            .insert_update(roots[2], roots[3], canonical_tx_3_id)
+            .await?;
+
+        db.insert_root(roots[1], canonical_tx_1_id).await?;
+        db.insert_root(roots[2], canonical_tx_2_id).await?;
+        db.insert_root(roots[3], canonical_tx_3_id).await?;
+
+        // Chain 2 -> root[2]
+        let tx_2_id = db.insert_tx(chain_2_id, 2.into(), rand_tx()).await?;
+        db.insert_root(roots[2], tx_2_id).await?;
+
+        // Chain 3 -> root[1]
+        let tx_3_id = db.insert_tx(chain_3_id, 3.into(), rand_tx()).await?;
+        db.insert_root(roots[1], tx_3_id).await?;
+
+        // LCR == root[1]
+        let lcr = db.fetch_latest_common_root().await?;
+        assert_eq!(lcr, roots[1]);
+
+        // Chain 3 -> root[2]
+        let tx_4_id = db.insert_tx(chain_3_id, 4.into(), rand_tx()).await?;
+        db.insert_root(roots[2], tx_4_id).await?;
+
+        // LCR == root[2]
+        let lcr = db.fetch_latest_common_root().await?;
+        assert_eq!(lcr, roots[2]);
+
+        // Chain 2 -> root[3]
+        let tx_5_id = db.insert_tx(chain_2_id, 5.into(), rand_tx()).await?;
+        db.insert_root(roots[3], tx_5_id).await?;
+
+        // Chain 3 -> root[3]
+        let tx_6_id = db.insert_tx(chain_3_id, 6.into(), rand_tx()).await?;
+        db.insert_root(roots[3], tx_6_id).await?;
+
+        // LCR == root[3]
+        let lcr = db.fetch_latest_common_root().await?;
+        assert_eq!(lcr, roots[3]);
 
         Ok(())
     }

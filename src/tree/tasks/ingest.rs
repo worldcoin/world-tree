@@ -70,7 +70,7 @@ pub async fn ingest_canonical(
                 .await?;
 
             // 2. Insert canonical updates data (pre & post root)
-            tx.insert_canonical_update(
+            let update_id = tx.insert_update(
                 update.pre_root,
                 update.post_root,
                 tx_id,
@@ -93,11 +93,14 @@ pub async fn ingest_canonical(
 
             // 4. Insert leaf batch
             tx.insert_leaf_batch(
-                tx_id,
+                update_id,
                 start_update_id,
                 start_update_id + leaf_updates.len() as u64 - 1,
             )
             .await?;
+
+            // 5. Insert root
+            tx.insert_root(update.post_root, tx_id).await?;
 
             tx.commit().await?;
         }

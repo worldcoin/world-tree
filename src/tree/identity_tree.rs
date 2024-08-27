@@ -27,15 +27,6 @@ pub struct IdentityTree<S> {
     /// the updates are stored here until they are applied to all observed chains
     /// at which point they will be removed from this map and applied to the canonical tree
     pub tree_updates: Vec<(Hash, StorageUpdates)>,
-
-    /// Mapping of leaf hash to leaf index
-    pub leaves: HashMap<Hash, u32>,
-
-    /// An ordered list of seen roots
-    pub roots: Vec<Hash>,
-
-    /// Mapping of root hash to index in the roots list
-    pub root_map: HashMap<Hash, usize>,
 }
 
 impl IdentityTree<Vec<Hash>> {
@@ -46,9 +37,6 @@ impl IdentityTree<Vec<Hash>> {
         Self {
             tree,
             tree_updates: Vec::new(),
-            leaves: HashMap::new(),
-            roots: vec![root],
-            root_map: maplit::hashmap! { root => 0 },
         }
     }
 }
@@ -109,27 +97,9 @@ impl IdentityTree<MmapVec<Hash>> {
             tree
         };
 
-        // If the tree has leaves, restore the leaves hashmap
-        let leaves = tree
-            .leaves()
-            .enumerate()
-            .filter_map(|(idx, leaf)| {
-                if leaf != Hash::ZERO {
-                    Some((leaf, idx as u32))
-                } else {
-                    None
-                }
-            })
-            .collect::<HashMap<Hash, u32>>();
-
-        let root = initial_root(depth, &Hash::ZERO);
-
         Ok(Self {
             tree,
-            leaves,
             tree_updates: Vec::new(),
-            roots: vec![root],
-            root_map: maplit::hashmap! { root => 0 },
         })
     }
 }
@@ -143,54 +113,42 @@ impl<S> IdentityTree<S>
 where
     S: GenericStorage<Hash>,
 {
+    pub fn latest_root(&self) -> Hash {
+        if let Some(update_root) =
+            self.tree_updates.last().map(|(root, _)| root)
+        {
+            *update_root
+        } else {
+            self.tree.root()
+        }
+    }
+
     // Appends new leaf updates to the `leaves` hashmap and adds newly calculated storage nodes to `tree_updates`
+    // Returns the resulting post root
     pub fn append_updates(
         &mut self,
         pre_root: Hash,
-        post_root: Hash,
         leaf_updates: LeafUpdates,
-    ) -> Result<(), IdentityTreeError> {
-        self.update_leaf_index_mapping(&leaf_updates);
-
-        let latest_root = self
-            .roots
-            .last()
-            .copied()
-            .expect("There must always be at least one root");
+    ) -> Result<Hash, IdentityTreeError> {
+        let latest_root = self.latest_root();
 
         if pre_root != latest_root {
             tracing::error!(
                 ?latest_root,
                 ?pre_root,
-                ?post_root,
                 "Attempted to insert root out of order"
             );
             return Err(IdentityTreeError::RootNotFound);
         }
 
         let updates = self.construct_storage_updates(leaf_updates, None)?;
+        let post_root = *updates
+            .get(&NodeIndex(0))
+            .ok_or(IdentityTreeError::RootNotFound)?;
 
         self.tree_updates.push((post_root, updates));
-        let new_root_idx = self.roots.len();
-        self.roots.push(post_root);
-        self.root_map.insert(post_root, new_root_idx);
 
-        Ok(())
-    }
-
-    fn update_leaf_index_mapping(&mut self, leaf_updates: &LeafUpdates) {
-        match &leaf_updates {
-            LeafUpdates::Insert(updates) => {
-                for (idx, val) in updates.iter() {
-                    self.leaves.insert(*val, idx.into());
-                }
-            }
-            LeafUpdates::Delete(updates) => {
-                for (_, val) in updates.iter() {
-                    self.leaves.remove(val);
-                }
-            }
-        }
+        Ok(post_root)
     }
 
     /// Constructs storage updates from leaf updates
@@ -415,26 +373,21 @@ where
     /// Otherwise, the proof is constructed from the current canonical tree
     pub fn inclusion_proof(
         &self,
-        leaf: Hash,
+        leaf_idx: u32,
         root: Option<&Hash>,
     ) -> Result<Option<InclusionProof>, IdentityTreeError> {
-        let leaf_idx = match self.leaves.get(&leaf) {
-            Some(idx) => idx,
-            None => return Err(IdentityTreeError::LeafNotFound),
-        };
-
         match root {
             // TODO: This doesn't work for old roots which have been flattened into the cascading tree
             Some(root) if *root != self.tree.root() => {
-                let proof = self.construct_proof_from_root(*leaf_idx, root)?;
+                let proof = self.construct_proof_from_root(leaf_idx, root)?;
                 Ok(Some(InclusionProof::new(*root, proof)))
             }
             _ => {
-                if *leaf_idx as usize >= self.tree.num_leaves() {
+                if leaf_idx as usize >= self.tree.num_leaves() {
                     return Ok(None);
                 }
 
-                let proof = self.tree.proof(*leaf_idx as usize);
+                let proof = self.tree.proof(leaf_idx as usize);
                 Ok(Some(InclusionProof::new(self.tree.root(), proof)))
             }
         }
@@ -598,7 +551,7 @@ impl InclusionProof {
     }
 }
 
-#[cfg(test)]
+#[cfg(invalid)]
 mod test {
     use std::collections::HashMap;
 

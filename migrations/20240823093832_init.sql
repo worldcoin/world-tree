@@ -9,27 +9,27 @@ CREATE TABLE tx (
     id BIGSERIAL PRIMARY KEY,
     chain_id BIGINT NOT NULL,
     block_number BIGINT NOT NULL,
-    -- Address of the contract the emitted this event
-    -- address BYTEA NOT NULL,
     tx_hash BYTEA NOT NULL
 );
 
 -- The canonical chain updates
-CREATE TABLE canonical_updates (
-    tx_id BIGINT PRIMARY KEY,
+CREATE TABLE updates (
+    id BIGSERIAL PRIMARY KEY,
+    tx_id BIGINT NOT NULL,
+
     pre_root BYTEA NOT NULL UNIQUE,
     post_root BYTEA NOT NULL UNIQUE,
 
     FOREIGN KEY (tx_id) REFERENCES tx (id)
 );
 
--- The observed bridged updates
-CREATE TABLE bridged_updates (
+-- Table to monitor roots on each chain
+CREATE TABLE roots (
     tx_id BIGINT PRIMARY KEY,
     root BYTEA NOT NULL,
 
     FOREIGN KEY (tx_id) REFERENCES tx (id),
-    FOREIGN KEY (root) REFERENCES canonical_updates (post_root)
+    FOREIGN KEY (root) REFERENCES updates (post_root)
 );
 
 -- Flat leaf update storage
@@ -41,13 +41,11 @@ CREATE TABLE leaf_updates (
 
 -- Table to associate ranges of leaves with roots
 CREATE TABLE leaf_batches (
-    -- We're using tx id since it serves as a unique key
-    -- but we're actually referencing the roots in canonical_updates
-    root_id BIGINT PRIMARY KEY,
+    update_id BIGINT PRIMARY KEY,
     start_id BIGINT NOT NULL,
     end_id BIGINT NOT NULL,
 
-    FOREIGN KEY (root_id) REFERENCES canonical_updates (tx_id),
+    FOREIGN KEY (update_id) REFERENCES updates (id),
     FOREIGN KEY (start_id) REFERENCES leaf_updates (id),
     FOREIGN KEY (end_id) REFERENCES leaf_updates (id)
 );
