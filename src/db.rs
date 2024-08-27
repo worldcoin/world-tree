@@ -14,7 +14,9 @@ pub struct Db {
 
 impl Db {
     pub async fn init(config: &DbConfig) -> sqlx::Result<Self> {
-        if config.create && !Postgres::database_exists(&config.connection_string).await? {
+        if config.create
+            && !Postgres::database_exists(&config.connection_string).await?
+        {
             Postgres::create_database(&config.connection_string).await?;
         }
 
@@ -123,25 +125,69 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(())
     }
 
-    async fn bulk_insert_leaves(
+    async fn insert_leaf_updates(
         self,
-        leaves: &[(u64, Hash)],
+        start_id: u64,
+        leaf_updates: &[(u64, Hash)],
     ) -> sqlx::Result<()> {
         let mut conn = self.acquire().await?;
 
         // TODO: Use query builder
-        for (leaf_idx, leaf) in leaves {
+        for (idx, (leaf_idx, leaf)) in leaf_updates.into_iter().enumerate() {
+            let id = start_id + idx as u64;
+
             sqlx::query(
                 r#"
-                INSERT INTO leaf_updates (leaf_idx, leaf)
-                VALUES ($1, $2)
+                INSERT INTO leaf_updates (id, leaf_idx, leaf)
+                VALUES ($1, $2, $3)
                 "#,
             )
+            .bind(id as i64)
             .bind(*leaf_idx as i64)
             .bind(leaf.as_le_bytes().as_ref())
             .execute(&mut *conn)
             .await?;
         }
+
+        Ok(())
+    }
+
+    async fn get_last_leaf_update_id(self) -> sqlx::Result<u64> {
+        let mut conn = self.acquire().await?;
+
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT id
+            FROM leaf_updates
+            ORDER BY id DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(row.0 as u64)
+    }
+
+    async fn insert_leaf_batch(
+        self,
+        tx_id: i64,
+        start_id: u64,
+        end_id: u64,
+    ) -> sqlx::Result<()> {
+        let mut conn = self.acquire().await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO leaf_batches (tx_id, start_id, end_id)
+            VALUES ($1, $2, $3)
+            "#,
+        )
+        .bind(tx_id)
+        .bind(start_id as i64)
+        .bind(end_id as i64)
+        .execute(&mut *conn)
+        .await?;
 
         Ok(())
     }
@@ -205,7 +251,8 @@ mod tests {
             connection_string: db_url.clone(),
             create: true,
             migrate: true,
-        }).await?;
+        })
+        .await?;
 
         Ok((db, container))
     }
@@ -233,8 +280,10 @@ mod tests {
         tx.insert_bridged_update(post_root, tx_id).await?;
 
         // Test bulk inserting leaves
-        tx.bulk_insert_leaves(&[(0, leaves[0]), (0, leaves[1])])
+        tx.insert_leaf_updates(0, &[(0, leaves[0]), (0, leaves[1])])
             .await?;
+
+        tx.insert_leaf_batch(tx_id, 0, 1).await?;
 
         tx.commit().await?;
 

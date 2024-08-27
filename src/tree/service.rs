@@ -16,17 +16,14 @@ use super::{ChainId, Hash, InclusionProof, WorldTree};
 
 /// Service that keeps the World Tree synced with `WorldIDIdentityManager` and exposes an API endpoint to serve inclusion proofs for a given World ID.
 
-pub struct InclusionProofService<M: Middleware + 'static> {
+pub struct InclusionProofService {
     /// In-memory representation of the merkle tree containing all verified World IDs.
-    pub world_tree: Arc<WorldTree<M>>,
+    pub world_tree: Arc<WorldTree>,
     pub cancel_tx: broadcast::Sender<()>,
 }
 
-impl<M> InclusionProofService<M>
-where
-    M: Middleware,
-{
-    pub fn new(world_tree: Arc<WorldTree<M>>) -> Self {
+impl InclusionProofService {
+    pub fn new(world_tree: Arc<WorldTree>) -> Self {
         let (cancel_tx, _) = broadcast::channel(1);
 
         Self {
@@ -79,7 +76,7 @@ where
 
         // Spawn a task to sync and maintain the state of the world tree
         tracing::info!("Spawning world tree");
-        handles.extend(self.world_tree.spawn().await);
+        // handles.extend(self.world_tree.spawn().await);
 
         handles.push(server_handle);
 
@@ -122,8 +119,8 @@ pub struct ChainIdQueryParams {
 }
 
 #[tracing::instrument(skip(world_tree))]
-pub async fn inclusion_proof<M: Middleware + 'static>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
+pub async fn inclusion_proof(
+    State(world_tree): State<Arc<WorldTree>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<InclusionProofRequest>,
 ) -> WorldTreeResult<(StatusCode, Json<Option<InclusionProof>>)> {
@@ -143,8 +140,8 @@ struct HealthResponse {
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
 #[allow(clippy::complexity)]
-pub async fn health<M: Middleware + 'static>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
+pub async fn health(
+    State(world_tree): State<Arc<WorldTree>>,
 ) -> WorldTreeResult<Json<HealthResponse>> {
     let chain_state = world_tree.chain_state.read().await.clone();
     let identity_tree = world_tree.identity_tree.read().await;
@@ -157,8 +154,8 @@ pub async fn health<M: Middleware + 'static>(
 }
 
 #[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn compute_root<M: Middleware + 'static>(
-    State(world_tree): State<Arc<WorldTree<M>>>,
+pub async fn compute_root(
+    State(world_tree): State<Arc<WorldTree>>,
     Query(query_params): Query<ChainIdQueryParams>,
     Json(req): Json<ComputeRootRequest>,
 ) -> WorldTreeResult<(StatusCode, Json<Hash>)> {

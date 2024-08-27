@@ -20,7 +20,7 @@ pub mod db;
 
 pub async fn init_world_tree(
     config: &ServiceConfig,
-) -> WorldTreeResult<Arc<WorldTree<Provider<ThrottledJsonRpcClient<Http>>>>> {
+) -> WorldTreeResult<Arc<WorldTree>> {
     let canonical_provider_config = &config.canonical_tree.provider;
 
     let http_provider =
@@ -76,10 +76,9 @@ pub async fn init_world_tree(
     let db = Arc::new(Db::init(&config.db).await?);
 
     Ok(Arc::new(WorldTree::new(
+        config.clone(),
         db,
         config.tree_depth,
-        canonical_tree_manager,
-        bridged_tree_managers,
         &config.cache.cache_file,
     )?))
 }

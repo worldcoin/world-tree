@@ -13,36 +13,37 @@ use std::path::Path;
 use std::process;
 use std::sync::Arc;
 
-use ethers::providers::Middleware;
+use config::ServiceConfig;
+use ethers::providers::{Http, Provider};
+use ethers_throttle::ThrottledJsonRpcClient;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
 use tracing::info;
-
-use crate::db::Db;
 
 use self::error::{WorldTreeError, WorldTreeResult};
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
-use self::tree_manager::{BridgedTree, CanonicalTree, TreeManager};
+use crate::db::Db;
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
-/// The `WorldTree` syncs and maintains the state of the onchain Merkle tree representing all unique humans across multiple chains
-/// and is also able to deliver an inclusion proof for a given identity commitment across any tracked chain
-pub struct WorldTree<M: Middleware + 'static> {
-    /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
-    pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
-    /// Responsible for listening to state changes to the tree on mainnet
-    pub canonical_tree_manager: TreeManager<M, CanonicalTree>,
-    /// Responsible for listening to state changes state changes to bridged WorldIDs
-    pub bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
+pub type WorldTreeProvider = Arc<Provider<ThrottledJsonRpcClient<Http>>>;
+
+
+/// The main state struct of this service
+///
+/// It holds all the stateful parts of the service as well as a copy of the running config
+pub struct WorldTree {
+    pub config: ServiceConfig,
 
     pub db: Arc<Db>,
+
+    /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
+    pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
 
     /// Mapping of chain Id -> the latest observed root
     ///
@@ -51,25 +52,20 @@ pub struct WorldTree<M: Middleware + 'static> {
     pub chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
 }
 
-impl<M> WorldTree<M>
-where
-    M: Middleware + 'static,
-{
+impl WorldTree {
     pub fn new(
+        config: ServiceConfig,
         db: Arc<Db>,
         tree_depth: usize,
-        canonical_tree_manager: TreeManager<M, CanonicalTree>,
-        bridged_tree_managers: Vec<TreeManager<M, BridgedTree>>,
         cache: &Path,
     ) -> WorldTreeResult<Self> {
         let identity_tree =
             IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
         let world_tree = Self {
+            config,
             db,
             identity_tree: Arc::new(RwLock::new(identity_tree)),
-            canonical_tree_manager,
-            bridged_tree_managers,
             chain_state: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -91,40 +87,20 @@ where
         Ok(world_tree)
     }
 
-    /// Spawns tasks to synchronize the state of the world tree and listen for state changes across all chains
-    pub async fn spawn(&self) -> Vec<JoinHandle<WorldTreeResult<()>>> {
-        let (leaf_updates_tx, leaf_updates_rx) =
-            tokio::sync::mpsc::channel(100);
-        let (bridged_root_tx, bridged_root_rx) =
-            tokio::sync::mpsc::channel(100);
+    // TODO: Cache?
+    pub async fn canonical_provider(&self) -> WorldTreeResult<WorldTreeProvider> {
+        let canonical_provider_config = &self.config.canonical_tree.provider;
 
-        // Spawn the tree managers to listen to the canonical and bridged trees for updates
-        let mut handles = vec![];
-        handles.push(self.canonical_tree_manager.spawn(leaf_updates_tx));
+        let http_provider =
+            Http::new(canonical_provider_config.rpc_endpoint.clone());
+        let throttled_provider = ThrottledJsonRpcClient::new(
+            http_provider,
+            canonical_provider_config.throttle,
+            None,
+        );
+        let canonical_middleware = Arc::new(Provider::new(throttled_provider));
 
-        if !self.bridged_tree_managers.is_empty() {
-            for bridged_tree in self.bridged_tree_managers.iter() {
-                handles.push(bridged_tree.spawn(bridged_root_tx.clone()));
-            }
-
-            // Spawn a task to handle bridged updates, updating the tree with the latest root across all chains and applying
-            // pending updates when a new common root is bridged to all chains
-            handles.push(tokio::task::spawn(tasks::handle_bridged_updates(
-                self.identity_tree.clone(),
-                self.chain_state.clone(),
-                bridged_root_rx,
-            )));
-        }
-
-        // Spawn a task to handle canonical updates, appending new identity updates to `pending_updates` as they arrive
-        handles.push(tokio::task::spawn(tasks::handle_canonical_updates(
-            self.canonical_tree_manager.chain_id,
-            self.identity_tree.clone(),
-            self.chain_state.clone(),
-            leaf_updates_rx,
-        )));
-
-        handles
+        Ok(canonical_middleware)
     }
 
     /// Returns an inclusion proof for a given identity commitment.
@@ -139,7 +115,7 @@ where
 
         let root = if let Some(chain_id) = chain_id {
             let root = Self::resolve_chain_root(
-                self.canonical_tree_manager.chain_id.into(),
+                todo!("self.canonical_tree_manager.chain_id.into()"),
                 &chain_state,
                 &identity_tree,
                 chain_id,
@@ -171,7 +147,7 @@ where
         let root = if let Some(chain_id) = chain_id {
             Some(
                 Self::resolve_chain_root(
-                    self.canonical_tree_manager.chain_id.into(),
+                    todo!("self.canonical_tree_manager.chain_id.into()"),
                     &chain_state,
                     &identity_tree,
                     chain_id,
