@@ -43,7 +43,18 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 }
 
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
+    loop {
+        let latest_common_root =
+            world_tree.db.fetch_latest_common_root().await?;
+        let latest_root = world_tree.identity_tree.read().await.latest_root();
 
+        if latest_root == latest_common_root {
+            // TODO: Configureable & maybe listen/notify?
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        }
 
-    Ok(())
+        let mut identity_tree = world_tree.identity_tree.write().await;
+        identity_tree.apply_updates_to_root(&latest_common_root);
+    }
 }

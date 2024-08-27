@@ -32,7 +32,6 @@ pub struct IdentityTree<S> {
 impl IdentityTree<Vec<Hash>> {
     pub fn new(depth: usize) -> Self {
         let tree = CascadingMerkleTree::new(vec![], depth, &Hash::ZERO);
-        let root = initial_root(depth, &Hash::ZERO);
 
         Self {
             tree,
