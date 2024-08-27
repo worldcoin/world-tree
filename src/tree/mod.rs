@@ -5,7 +5,6 @@ pub mod identity_tree;
 pub mod newtypes;
 pub mod service;
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::process;
 use std::sync::Arc;
@@ -13,6 +12,7 @@ use std::sync::Arc;
 use config::{ProviderConfig, ServiceConfig};
 use ethers::providers::{Http, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
+use eyre::ContextCompat;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
@@ -23,7 +23,7 @@ use tracing::info;
 use self::error::WorldTreeResult;
 use self::identity_tree::{IdentityTree, InclusionProof};
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
-use crate::db::Db;
+use crate::db::{Db, DbMethods};
 
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
@@ -40,12 +40,6 @@ pub struct WorldTree {
 
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
     pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
-
-    /// Mapping of chain Id -> the latest observed root
-    ///
-    /// This mapping is used to monitor if observed chains
-    /// are synced with the canonical chain
-    pub chain_state: Arc<RwLock<HashMap<u64, Hash>>>,
 }
 
 impl WorldTree {
@@ -62,7 +56,6 @@ impl WorldTree {
             config,
             db,
             identity_tree: Arc::new(RwLock::new(identity_tree)),
-            chain_state: Arc::new(RwLock::new(HashMap::new())),
         };
 
         let tree = world_tree.identity_tree.clone();
@@ -98,24 +91,19 @@ impl WorldTree {
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
     ) -> WorldTreeResult<Option<InclusionProof>> {
-        let chain_state = self.chain_state.read().await;
         let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            let root = Self::resolve_chain_root(
-                todo!("self.canonical_tree_manager.chain_id.into()"),
-                &chain_state,
-                &identity_tree,
-                chain_id,
-            )
-            .await?;
-
-            Some(root)
+            self.db.root_by_chain(chain_id.0).await?
         } else {
             None
         };
 
-        let leaf_idx = todo!();
+        let leaf_idx = self
+            .db
+            .leaf_index(identity_commitment)
+            .await?
+            .context("Missing leaf index")?;
 
         let inclusion_proof =
             identity_tree.inclusion_proof(leaf_idx, root.as_ref())?;
@@ -131,19 +119,10 @@ impl WorldTree {
         identity_commitements: &[Hash],
         chain_id: Option<ChainId>,
     ) -> WorldTreeResult<Hash> {
-        let chain_state = self.chain_state.read().await;
         let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            Some(
-                Self::resolve_chain_root(
-                    todo!("self.canonical_tree_manager.chain_id.into()"),
-                    &chain_state,
-                    &identity_tree,
-                    chain_id,
-                )
-                .await?,
-            )
+            self.db.root_by_chain(chain_id.0).await?
         } else {
             None
         };
@@ -152,31 +131,6 @@ impl WorldTree {
             identity_tree.compute_root(identity_commitements, root.as_ref())?;
 
         Ok(updated_root)
-    }
-
-    async fn resolve_chain_root(
-        canonical_chain_id: ChainId,
-        chain_state: &HashMap<u64, Hash>,
-        identity_tree: &IdentityTree<MmapVec<Hash>>,
-        chain_id: ChainId,
-    ) -> WorldTreeResult<Hash> {
-        todo!()
-        // let chain_root = chain_state
-        //     .get(&chain_id)
-        //     .copied()
-        //     .ok_or(WorldTreeError::ChainIdNotFound)?;
-
-        // if let Some(chain_root_idx) = identity_tree.root_map.get(&chain_root) {
-        //     Ok(identity_tree.roots[*chain_root_idx])
-        // } else if canonical_chain_id == chain_id {
-        //     Ok(identity_tree
-        //         .roots
-        //         .last()
-        //         .copied()
-        //         .expect("There must always be at least one root"))
-        // } else {
-        //     Ok(identity_tree.tree.root())
-        // }
     }
 }
 

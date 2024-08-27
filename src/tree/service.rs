@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -147,7 +146,6 @@ pub async fn inclusion_proof(
 
 #[derive(Serialize, Deserialize, Debug)]
 struct HealthResponse {
-    pub chain_state: HashMap<u64, Hash>,
     pub canonical_root: Hash,
 }
 
@@ -156,12 +154,10 @@ struct HealthResponse {
 pub async fn health(
     State(world_tree): State<Arc<WorldTree>>,
 ) -> WorldTreeResult<Json<HealthResponse>> {
-    let chain_state = world_tree.chain_state.read().await.clone();
     let identity_tree = world_tree.identity_tree.read().await;
     let cascading_tree_root = identity_tree.tree.root();
 
     Ok(Json(HealthResponse {
-        chain_state,
         canonical_root: cascading_tree_root,
     }))
 }

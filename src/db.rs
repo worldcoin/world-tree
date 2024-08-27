@@ -267,6 +267,45 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
 
         Ok(Hash::try_from_le_slice(&latest_hash).unwrap())
     }
+
+    async fn leaf_index(self, leaf: Hash) -> sqlx::Result<Option<u32>> {
+        let mut conn = self.acquire().await?;
+
+        let (idx,): (i64,) = sqlx::query_as(
+            r#"
+            SELECT leaf_idx
+            FROM leaf_index
+            WHERE leaf = $1
+            ORDER BY id ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(leaf.as_le_bytes().as_ref())
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(Some(idx as u32))
+    }
+
+    async fn root_by_chain(self, chain_id: u64) -> sqlx::Result<Option<Hash>> {
+        let mut conn = self.acquire().await?;
+
+        let (root,): (Vec<u8>,) = sqlx::query_as(
+            r#"
+            SELECT roots.root
+            FROM roots
+            JOIN tx ON roots.tx_id = tx.id
+            WHERE tx.chain_id = $1
+            ORDER BY tx.block_number DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(chain_id as i64)
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(Some(Hash::try_from_le_slice(&root).unwrap()))
+    }
 }
 
 // Blanket implementation for all types that satisfy the trait bounds
