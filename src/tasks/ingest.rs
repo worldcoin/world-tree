@@ -59,9 +59,17 @@ pub async fn ingest_canonical(
     while let Some(log_batch) = stream.next().await {
         let logs: Vec<Log> = log_batch?;
 
+        tracing::info!(n = logs.len(), "Processing batch of logs");
+
         let updates = extract_identity_updates(logs, provider.clone()).await?;
 
         for update in updates {
+            tracing::info!(
+                ?update.pre_root,
+                ?update.post_root,
+                "Processing canonical update"
+            );
+
             let mut tx = world_tree.db.begin().await?;
 
             // 1. Insert tx metadata
@@ -69,13 +77,26 @@ pub async fn ingest_canonical(
                 .insert_tx(chain_id, update.block_number, update.tx_hash)
                 .await?;
 
+            tracing::info!("Inserted tx metadata");
+
             // 2. Insert canonical updates data (pre & post root)
             let update_id = tx
                 .insert_update(update.pre_root, update.post_root, tx_id)
                 .await?;
 
+            tracing::info!("Inserted update data");
+
             // 3. Insert leaf updates
-            let start_update_id = tx.get_last_leaf_update_id().await? + 1;
+            // Fetch the last update id
+            let start_update_id = if let Some(last_leaf_update_id) =
+                tx.get_last_leaf_update_id().await?
+            {
+                last_leaf_update_id + 1
+            } else {
+                0
+            };
+
+            tracing::info!(?start_update_id, "Inserting leaf updates");
 
             let leaf_updates: Leaves = update.leaf_updates.into();
             let mut leaf_updates: Vec<_> = leaf_updates.into_iter().collect();
@@ -88,6 +109,8 @@ pub async fn ingest_canonical(
             tx.insert_leaf_updates(start_update_id, &leaf_updates)
                 .await?;
 
+            tracing::info!("Inserted leaf updates");
+
             // 4. Insert leaf batch
             tx.insert_leaf_batch(
                 update_id,
@@ -99,7 +122,11 @@ pub async fn ingest_canonical(
             // 5. Insert root
             tx.insert_root(update.post_root, tx_id).await?;
 
+            tracing::info!("Inserted root");
+
             tx.commit().await?;
+
+            tracing::info!("Update commited");
         }
     }
 

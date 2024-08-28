@@ -99,11 +99,15 @@ impl WorldTree {
             None
         };
 
+        tracing::warn!("Root: {:?}", root);
+
         let leaf_idx = self
             .db
             .leaf_index(identity_commitment)
             .await?
             .context("Missing leaf index")?;
+
+        tracing::warn!("Leaf index: {:?}", leaf_idx);
 
         let inclusion_proof =
             identity_tree.inclusion_proof(leaf_idx, root.as_ref())?;

@@ -149,10 +149,10 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(())
     }
 
-    async fn get_last_leaf_update_id(self) -> sqlx::Result<u64> {
+    async fn get_last_leaf_update_id(self) -> sqlx::Result<Option<u64>> {
         let mut conn = self.acquire().await?;
 
-        let row: (i64,) = sqlx::query_as(
+        let row: Option<(i64,)> = sqlx::query_as(
             r#"
             SELECT id
             FROM leaf_updates
@@ -160,10 +160,10 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             LIMIT 1
             "#,
         )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?;
 
-        Ok(row.0 as u64)
+        Ok(row.map(|(id,)| id as u64))
     }
 
     async fn insert_leaf_batch(
@@ -241,10 +241,10 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             .collect())
     }
 
-    async fn fetch_latest_common_root(self) -> sqlx::Result<Hash> {
+    async fn fetch_latest_common_root(self) -> sqlx::Result<Option<Hash>> {
         let mut conn = self.acquire().await?;
 
-        let (latest_hash,): (Vec<u8>,) = sqlx::query_as(
+        let Some((latest_hash,)): Option<(Vec<u8>,)> = sqlx::query_as(
             r#"
             WITH latest AS (
                 SELECT tx.chain_id, MAX(updates.id) as id
@@ -262,29 +262,32 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             JOIN updates ON latest_common.id = updates.id
             "#,
         )
-        .fetch_one(&mut *conn)
-        .await?;
+        .fetch_optional(&mut *conn)
+        .await?
+        else {
+            return Ok(None);
+        };
 
-        Ok(Hash::try_from_le_slice(&latest_hash).unwrap())
+        Ok(Some(Hash::try_from_le_slice(&latest_hash).unwrap()))
     }
 
     async fn leaf_index(self, leaf: Hash) -> sqlx::Result<Option<u32>> {
         let mut conn = self.acquire().await?;
 
-        let (idx,): (i64,) = sqlx::query_as(
+        let idx: Option<(i64,)> = sqlx::query_as(
             r#"
             SELECT leaf_idx
-            FROM leaf_index
+            FROM leaf_updates
             WHERE leaf = $1
             ORDER BY id ASC
             LIMIT 1
             "#,
         )
         .bind(leaf.as_le_bytes().as_ref())
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?;
 
-        Ok(Some(idx as u32))
+        Ok(idx.map(|(idx,)| idx as u32))
     }
 
     async fn root_by_chain(self, chain_id: u64) -> sqlx::Result<Option<Hash>> {
@@ -508,7 +511,7 @@ mod tests {
         db.insert_root(roots[1], tx_3_id).await?;
 
         // LCR == root[1]
-        let lcr = db.fetch_latest_common_root().await?;
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[1]);
 
         // Chain 3 -> root[2]
@@ -516,7 +519,7 @@ mod tests {
         db.insert_root(roots[2], tx_4_id).await?;
 
         // LCR == root[2]
-        let lcr = db.fetch_latest_common_root().await?;
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[2]);
 
         // Chain 2 -> root[3]
@@ -528,7 +531,7 @@ mod tests {
         db.insert_root(roots[3], tx_6_id).await?;
 
         // LCR == root[3]
-        let lcr = db.fetch_latest_common_root().await?;
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[3]);
 
         Ok(())

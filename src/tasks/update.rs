@@ -9,18 +9,24 @@ use crate::tree::{LeafIndex, WorldTree};
 /// Periodically fetches the next batch of updates from the database and appends them to the identity tree
 pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let latest_root = world_tree.identity_tree.read().await.latest_root();
+        let mut identity_tree = world_tree.identity_tree.write().await;
+        let latest_root = identity_tree.latest_root();
 
         let next_updates =
             world_tree.db.fetch_next_updates(latest_root).await?;
 
         if next_updates.is_empty() {
             // TODO: Configureable & maybe listen/notify?
+            drop(identity_tree);
             tokio::time::sleep(Duration::from_secs(5)).await;
             continue;
         }
 
-        let mut identity_tree = world_tree.identity_tree.write().await;
+        tracing::info!(
+            n = next_updates.len(),
+            ?latest_root,
+            "Fetched next batch of updates"
+        );
 
         let is_deletion_batch =
             next_updates.iter().all(|(_, value)| value.is_zero());
@@ -44,11 +50,27 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let latest_common_root =
-            world_tree.db.fetch_latest_common_root().await?;
+        tracing::error!("Fetching latest common root");
+
+        let Some(latest_common_root) =
+            world_tree.db.fetch_latest_common_root().await?
+        else {
+            tracing::warn!("No latest common root found");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        };
+
         let latest_root = world_tree.identity_tree.read().await.latest_root();
 
+        tracing::warn!(
+            ?latest_root,
+            ?latest_common_root,
+            "Realigning identity tree"
+        );
+
         if latest_root == latest_common_root {
+            tracing::warn!("Identity tree is up-to-date");
+
             // TODO: Configureable & maybe listen/notify?
             tokio::time::sleep(Duration::from_secs(5)).await;
             continue;
@@ -56,5 +78,7 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
         let mut identity_tree = world_tree.identity_tree.write().await;
         identity_tree.apply_updates_to_root(&latest_common_root);
+
+        tracing::warn!(?latest_common_root, "Identity tree realigned");
     }
 }

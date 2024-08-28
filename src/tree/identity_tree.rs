@@ -545,7 +545,7 @@ impl InclusionProof {
     }
 }
 
-#[cfg(invalid)]
+#[cfg(test)]
 mod test {
     use std::collections::HashMap;
 
@@ -578,21 +578,20 @@ mod test {
             leaf: Hash,
         ) -> Result<(), IdentityTreeError> {
             // Check if the leaf already exists
-            if self.leaves.contains_key(&leaf) {
+            if self.tree.leaves().any(|l| l == leaf) {
                 return Err(IdentityTreeError::LeafAlreadyExists);
             }
-            self.leaves.insert(leaf, index);
+
+            assert_eq!(index, self.tree.num_leaves() as u32);
 
             // We can expect here because the `reallocate` implementation for Vec<H::Hash> as DynamicTreeStorage does not fail
-            self.tree.push(leaf).expect("Failed to insert into tree");
+            self.tree.push(leaf).expect("Failed to push leaf");
 
             Ok(())
         }
 
         /// Removes a leaf from the tree and updates the leaves hashmap
         pub fn remove(&mut self, index: usize) {
-            let leaf = self.tree.get_leaf(index);
-            self.leaves.remove(&leaf);
             self.tree.set_leaf(index, Hash::ZERO);
         }
     }
@@ -669,14 +668,6 @@ mod test {
         // Ensure the tree roots are equal
         assert_eq!(identity_tree.tree.root(), expected_tree.root());
 
-        // Assert that each of the leaves are in the leaves hashmap
-        for (leaf_idx, leaf) in leaves.iter().enumerate() {
-            assert_eq!(
-                identity_tree.leaves.get(leaf),
-                Some(&(leaf_idx as u32))
-            );
-        }
-
         Ok(())
     }
 
@@ -709,12 +700,6 @@ mod test {
         // Ensure the tree roots are equal
         assert_eq!(identity_tree.tree.root(), expected_tree.root());
 
-        // Assert that each of the leaves are not in the leaves hashmap
-        for leaf in 0..1 << TREE_DEPTH {
-            let leaf_hash = Hash::from(leaf);
-            assert_eq!(identity_tree.leaves.get(&leaf_hash), None);
-        }
-
         Ok(())
     }
 
@@ -740,10 +725,6 @@ mod test {
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
-        // Need to update the internal root tracking
-        identity_tree.roots.push(pre_root);
-        identity_tree.root_map.insert(pre_root, 1);
-
         // Collect the second half of the leaves
         let offset = NUM_LEAVES / 2;
         let leaf_updates = second_half
@@ -755,11 +736,10 @@ mod test {
         // Cache the expected root as the tree root should not change from the appended updates
         let expected_root = identity_tree.tree.root();
 
-        identity_tree.append_updates(
-            pre_root,
-            post_root,
-            LeafUpdates::Insert(leaf_updates),
-        )?;
+        let actual_post_root = identity_tree
+            .append_updates(pre_root, LeafUpdates::Insert(leaf_updates))?;
+
+        assert_eq!(actual_post_root, post_root);
 
         // Ensure that the root is correct and the updates are stored
         assert_eq!(identity_tree.tree.root(), expected_root);
@@ -795,9 +775,6 @@ mod test {
         // Generate the updated tree with all of the leaves
         let pre_root = tree.root();
 
-        identity_tree.roots.push(pre_root);
-        identity_tree.root_map.insert(pre_root, 1);
-
         tree.extend_from_slice(&second_half);
         let post_root = tree.root();
 
@@ -810,11 +787,10 @@ mod test {
             })
             .collect::<HashMap<LeafIndex, Hash>>();
 
-        identity_tree.append_updates(
-            pre_root,
-            post_root,
-            LeafUpdates::Insert(leaf_updates),
-        )?;
+        let act_post_root = identity_tree
+            .append_updates(pre_root, LeafUpdates::Insert(leaf_updates))?;
+
+        assert_eq!(act_post_root, post_root);
 
         // Apply updates to the tree
         identity_tree.apply_updates_to_root(&post_root);
@@ -824,7 +800,7 @@ mod test {
 
         for (leaf_idx, leaf) in leaves.iter().enumerate() {
             let proof = identity_tree
-                .inclusion_proof(*leaf, None)?
+                .inclusion_proof(leaf_idx as u32, None)?
                 .ok_or(eyre!("Proof not found"))?;
 
             assert_eq!(proof.root, post_root);
@@ -877,8 +853,6 @@ mod test {
 
         // We insert only the first leaf
         identity_tree.insert(0, leaves[0])?;
-        identity_tree.roots.push(identity_tree.tree.root());
-        identity_tree.root_map.insert(identity_tree.tree.root(), 1);
 
         let initial_root = {
             let mut tree = CascadingMerkleTree::<PoseidonHash>::new(
@@ -912,7 +886,10 @@ mod test {
             (tree.root(), updates)
         };
 
-        identity_tree.append_updates(initial_root, root_012, updates)?;
+        let act_root_012 =
+            identity_tree.append_updates(initial_root, updates)?;
+
+        assert_eq!(act_root_012, root_012);
 
         // Simulate and create updates
         let (root_0123, updates) = {
@@ -936,10 +913,12 @@ mod test {
             (tree.root(), updates)
         };
 
-        identity_tree.append_updates(root_012, root_0123, updates)?;
+        let act_root_0123 = identity_tree.append_updates(root_012, updates)?;
+
+        assert_eq!(act_root_0123, root_0123);
 
         let proof = identity_tree
-            .inclusion_proof(leaves[3], Some(&root_0123))?
+            .inclusion_proof(3, Some(&root_0123))?
             .context("Missing proof")?;
 
         assert_eq!(
@@ -949,7 +928,7 @@ mod test {
         );
 
         let proof = identity_tree
-            .inclusion_proof(leaves[2], Some(&root_012))?
+            .inclusion_proof(2, Some(&root_012))?
             .context("Missing proof")?;
 
         assert_eq!(
@@ -958,7 +937,7 @@ mod test {
             "The first sibling of leaf 2 must be zero hash"
         );
 
-        let proof = identity_tree.inclusion_proof(leaves[2], None)?;
+        let proof = identity_tree.inclusion_proof(2, None)?;
 
         assert!(
             proof.is_none(),
@@ -987,9 +966,9 @@ mod test {
 
         assert_eq!(identity_tree.tree.root(), restored_tree.tree.root());
 
-        for leaf in leaves.iter() {
+        for (idx, leaf) in leaves.iter().enumerate() {
             let proof = restored_tree
-                .inclusion_proof(*leaf, None)?
+                .inclusion_proof(idx as u32, None)?
                 .expect("Could not get proof");
 
             assert!(proof.verify(*leaf));
@@ -1035,11 +1014,10 @@ mod test {
                 })
                 .collect::<HashMap<LeafIndex, Hash>>();
 
-            identity_tree.append_updates(
-                pre_root,
-                post_root,
-                LeafUpdates::Insert(insertions),
-            )?;
+            let act_post_root = identity_tree
+                .append_updates(pre_root, LeafUpdates::Insert(insertions))?;
+
+            assert_eq!(act_post_root, post_root);
         }
 
         let last_root = ref_tree.root();
@@ -1096,7 +1074,6 @@ mod test {
             IdentityTree::new_with_cache_unchecked(TREE_DEPTH, &path).unwrap();
 
         assert!(restored_tree.tree.num_leaves() == 0);
-        assert!(restored_tree.leaves.is_empty());
 
         Ok(())
     }
@@ -1143,11 +1120,10 @@ mod test {
             let pre_root = precalc_batches[batch_idx].0;
             let post_root = precalc_batches[batch_idx].1;
 
-            identity_tree.append_updates(
-                pre_root,
-                post_root,
-                LeafUpdates::Insert(leaf_updates),
-            )?;
+            let act_post_root = identity_tree
+                .append_updates(pre_root, LeafUpdates::Insert(leaf_updates))?;
+
+            assert_eq!(act_post_root, post_root);
 
             eyre::Result::<Hash>::Ok(post_root)
         };
@@ -1167,9 +1143,10 @@ mod test {
         // Verify all the inserted leaves
         for batch_idx in 0..=3 {
             for n in 0..batch_size {
+                let leaf_idx = batch_idx * batch_size + n;
                 let leaf = batches[batch_idx][n];
                 let inclusion_proof =
-                    identity_tree.inclusion_proof(leaf, None)?;
+                    identity_tree.inclusion_proof(leaf_idx as u32, None)?;
                 let inclusion_proof =
                     inclusion_proof.expect("Missing inclusion proof");
 
