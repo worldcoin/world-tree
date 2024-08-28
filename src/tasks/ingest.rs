@@ -37,7 +37,7 @@ pub async fn ingest_canonical(
         world_tree.db.fetch_latest_block_number(chain_id).await?;
 
     let latest_block_number = latest_block_number
-        .map(|x| x.as_u64())
+        .map(|x| x.as_u64() + 1)
         .unwrap_or(world_tree.config.canonical_tree.creation_block);
 
     let filter = Filter::new()
@@ -52,14 +52,14 @@ pub async fn ingest_canonical(
     )
     .await?;
 
+    tracing::info!(chain_id, latest_block_number, "Starting ingestion");
+
     // TODO: Make buffer size configurable?
     let stream = scanner.block_stream().buffered(10);
     pin!(stream);
 
     while let Some(log_batch) = stream.next().await {
         let logs: Vec<Log> = log_batch?;
-
-        tracing::info!(n = logs.len(), "Processing batch of logs");
 
         let updates = extract_identity_updates(logs, provider.clone()).await?;
 

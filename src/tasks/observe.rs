@@ -50,7 +50,7 @@ pub async fn observe_bridged(
         world_tree.db.fetch_latest_block_number(chain_id).await?;
 
     let latest_block_number = latest_block_number
-        .map(|x| x.as_u64())
+        .map(|x| x.as_u64() + 1)
         .unwrap_or(world_tree.config.bridged_trees[idx].creation_block);
 
     let filter = Filter::new()
@@ -64,6 +64,8 @@ pub async fn observe_bridged(
         filter,
     )
     .await?;
+
+    tracing::info!(chain_id, latest_block_number, "Starting observation");
 
     // TODO: Make buffer size configurable?
     let stream = scanner.block_stream().buffered(10);
