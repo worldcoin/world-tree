@@ -77,14 +77,14 @@ pub async fn ingest_canonical(
                 .insert_tx(chain_id, update.block_number, update.tx_hash)
                 .await?;
 
-            tracing::info!("Inserted tx metadata");
+            tracing::debug!("Inserted tx metadata");
 
             // 2. Insert canonical updates data (pre & post root)
             let update_id = tx
                 .insert_update(update.pre_root, update.post_root, tx_id)
                 .await?;
 
-            tracing::info!("Inserted update data");
+            tracing::debug!("Inserted update data");
 
             // 3. Insert leaf updates
             // Fetch the last update id
@@ -96,7 +96,7 @@ pub async fn ingest_canonical(
                 0
             };
 
-            tracing::info!(?start_update_id, "Inserting leaf updates");
+            tracing::debug!(?start_update_id, "Inserting leaf updates");
 
             let leaf_updates: Leaves = update.leaf_updates.into();
             let mut leaf_updates: Vec<_> = leaf_updates.into_iter().collect();
@@ -109,7 +109,7 @@ pub async fn ingest_canonical(
             tx.insert_leaf_updates(start_update_id, &leaf_updates)
                 .await?;
 
-            tracing::info!("Inserted leaf updates");
+            tracing::debug!("Inserted leaf updates");
 
             // 4. Insert leaf batch
             tx.insert_leaf_batch(
@@ -122,11 +122,9 @@ pub async fn ingest_canonical(
             // 5. Insert root
             tx.insert_root(update.post_root, tx_id).await?;
 
-            tracing::info!("Inserted root");
-
             tx.commit().await?;
 
-            tracing::info!("Update commited");
+            tracing::info!(chain_id, tx_hash = ?update.tx_hash, root = ?update.post_root, "Inserted root");
         }
     }
 

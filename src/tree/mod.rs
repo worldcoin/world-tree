@@ -10,7 +10,7 @@ use std::process;
 use std::sync::Arc;
 
 use config::{ProviderConfig, ServiceConfig};
-use ethers::providers::{Http, Provider};
+use ethers::providers::{Http, Middleware, Provider};
 use ethers_throttle::ThrottledJsonRpcClient;
 use eyre::ContextCompat;
 use semaphore::generic_storage::MmapVec;
@@ -40,10 +40,12 @@ pub struct WorldTree {
 
     /// The identity tree is the main data structure that holds the state of the tree including latest roots, leaves, and an in-memory representation of the tree
     pub identity_tree: Arc<RwLock<IdentityTree<MmapVec<Hash>>>>,
+
+    pub canonical_chain_id: ChainId,
 }
 
 impl WorldTree {
-    pub fn new(
+    pub async fn new(
         config: ServiceConfig,
         db: Arc<Db>,
         tree_depth: usize,
@@ -52,10 +54,16 @@ impl WorldTree {
         let identity_tree =
             IdentityTree::new_with_cache_unchecked(tree_depth, cache)?;
 
+        let canonical_provider =
+            provider(&config.canonical_tree.provider).await?;
+        let canonical_chain_id = canonical_provider.get_chainid().await?;
+        let canonical_chain_id = ChainId(canonical_chain_id.as_u64());
+
         let world_tree = Self {
             config,
             db,
             identity_tree: Arc::new(RwLock::new(identity_tree)),
+            canonical_chain_id,
         };
 
         let tree = world_tree.identity_tree.clone();
@@ -94,7 +102,16 @@ impl WorldTree {
         let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            self.db.root_by_chain(chain_id.0).await?
+            let root = self.db.root_by_chain(chain_id.0).await?;
+
+            // match root {
+            //     Some(root) => Some(root),
+            //     None => {
+            //         tracing::warn!("Missing root for chain: {:?}", chain_id);
+            //         return Ok(None);
+            //     }
+            // }
+            root
         } else {
             None
         };

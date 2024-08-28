@@ -28,12 +28,15 @@ pub async fn init_world_tree(
 
     let db = Arc::new(Db::init(&config.db).await?);
 
-    let world_tree = Arc::new(WorldTree::new(
-        config.clone(),
-        db,
-        config.tree_depth,
-        &config.cache.cache_file,
-    )?);
+    let world_tree = Arc::new(
+        WorldTree::new(
+            config.clone(),
+            db,
+            config.tree_depth,
+            &config.cache.cache_file,
+        )
+        .await?,
+    );
 
     Ok(world_tree)
 }

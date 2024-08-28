@@ -3,6 +3,7 @@
 //! chains and extracting update information
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use ethers::abi::RawLog;
 use ethers::contract::EthEvent;
@@ -79,6 +80,24 @@ pub async fn observe_bridged(
             let data = RootAddedFilter::decode_log(&RawLog::from(log))?;
             let root = Hash::from_limbs(data.root.0);
 
+            // Wait until the root has been observed on the canonical chain
+            // this satisfies the DB constraints and provides a backpressure
+            // mechanism for the bridged block scanners
+            loop {
+                if world_tree.db.root_exists(root).await? {
+                    break;
+                }
+
+                tracing::info!(
+                    ?root,
+                    chain_id,
+                    "Bridged root is early, waiting"
+                );
+
+                // TODO: Configureable & maybe listen/notify?
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+
             let mut tx = world_tree.db.begin().await?;
 
             // 1. Insert tx metadata
@@ -88,6 +107,8 @@ pub async fn observe_bridged(
             tx.insert_root(root, tx_id).await?;
 
             tx.commit().await?;
+
+            tracing::info!(chain_id, ?tx_hash, ?root, "Inserted bridged root");
         }
     }
 

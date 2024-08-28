@@ -225,7 +225,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     let ip = client.inclusion_proof(&second_batch[0]).await?;
 
-    assert!(ip.is_none(), "The inclusion proof endpoint should return only roots finalized on chains (unless chain id is specified)");
+    assert!(ip.is_none(), "The inclusion proof endpoint should return only roots finalized on all chains (unless chain id is specified)");
 
     let ip = client
         .inclusion_proof(&first_batch[0])

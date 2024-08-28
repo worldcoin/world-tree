@@ -18,7 +18,7 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
         if next_updates.is_empty() {
             // TODO: Configureable & maybe listen/notify?
             drop(identity_tree);
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
 
@@ -50,35 +50,32 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        tracing::error!("Fetching latest common root");
-
         let Some(latest_common_root) =
             world_tree.db.fetch_latest_common_root().await?
         else {
             tracing::warn!("No latest common root found");
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         };
 
-        let latest_root = world_tree.identity_tree.read().await.latest_root();
+        let latest_alligned_root =
+            world_tree.identity_tree.read().await.tree.root();
 
-        tracing::warn!(
-            ?latest_root,
+        if latest_alligned_root == latest_common_root {
+            // TODO: Configureable & maybe listen/notify?
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+
+        tracing::info!(
+            ?latest_alligned_root,
             ?latest_common_root,
             "Realigning identity tree"
         );
 
-        if latest_root == latest_common_root {
-            tracing::warn!("Identity tree is up-to-date");
-
-            // TODO: Configureable & maybe listen/notify?
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            continue;
-        }
-
         let mut identity_tree = world_tree.identity_tree.write().await;
         identity_tree.apply_updates_to_root(&latest_common_root);
 
-        tracing::warn!(?latest_common_root, "Identity tree realigned");
+        tracing::info!(?latest_common_root, "Identity tree realigned");
     }
 }

@@ -105,9 +105,30 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(id)
     }
 
-    async fn insert_root(self, root: Hash, tx_id: i64) -> sqlx::Result<()> {
+    async fn root_exists(self, root: Hash) -> sqlx::Result<bool> {
         let mut conn = self.acquire().await?;
 
+        let (root_exists,): (bool,) = sqlx::query_as(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM updates
+                WHERE post_root = $1
+            )
+            "#,
+        )
+        .bind(root.as_le_bytes().as_ref())
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Ok(root_exists)
+    }
+
+    async fn insert_root(self, root: Hash, tx_id: i64) -> sqlx::Result<()> {
+        tracing::info!("### Acquiring connection");
+        let mut conn = self.acquire().await?;
+
+        tracing::info!("### Executing query");
         sqlx::query(
             r#"
             INSERT INTO roots (root, tx_id)
@@ -118,6 +139,8 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         .bind(tx_id)
         .execute(&mut *conn)
         .await?;
+
+        tracing::info!("### Query executed");
 
         Ok(())
     }
@@ -293,7 +316,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn root_by_chain(self, chain_id: u64) -> sqlx::Result<Option<Hash>> {
         let mut conn = self.acquire().await?;
 
-        let (root,): (Vec<u8>,) = sqlx::query_as(
+        let Some((root,)): Option<(Vec<u8>,)> = sqlx::query_as(
             r#"
             SELECT roots.root
             FROM roots
@@ -304,8 +327,11 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             "#,
         )
         .bind(chain_id as i64)
-        .fetch_one(&mut *conn)
-        .await?;
+        .fetch_optional(&mut *conn)
+        .await?
+        else {
+            return Ok(None);
+        };
 
         Ok(Some(Hash::try_from_le_slice(&root).unwrap()))
     }
