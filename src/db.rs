@@ -125,10 +125,8 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     }
 
     async fn insert_root(self, root: Hash, tx_id: i64) -> sqlx::Result<()> {
-        tracing::info!("### Acquiring connection");
         let mut conn = self.acquire().await?;
 
-        tracing::info!("### Executing query");
         sqlx::query(
             r#"
             INSERT INTO roots (root, tx_id)
@@ -139,8 +137,6 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         .bind(tx_id)
         .execute(&mut *conn)
         .await?;
-
-        tracing::info!("### Query executed");
 
         Ok(())
     }

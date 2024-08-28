@@ -48,12 +48,13 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     }
 }
 
+/// Periodically fetches the latest common root from the database and realigns the identity tree
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
         let Some(latest_common_root) =
             world_tree.db.fetch_latest_common_root().await?
         else {
-            tracing::warn!("No latest common root found");
+            tracing::debug!("No latest common root found");
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         };
