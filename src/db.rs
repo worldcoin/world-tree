@@ -149,7 +149,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         let mut conn = self.acquire().await?;
 
         // TODO: Use query builder
-        for (idx, (leaf_idx, leaf)) in leaf_updates.into_iter().enumerate() {
+        for (idx, (leaf_idx, leaf)) in leaf_updates.iter().enumerate() {
             let id = start_id + idx as u64;
 
             sqlx::query(
@@ -424,7 +424,7 @@ mod tests {
 
         let chain_id = 1;
 
-        let roots = vec![
+        let roots = [
             Hash::from(0u64),
             Hash::from(1u64),
             Hash::from(2u64),
@@ -492,7 +492,7 @@ mod tests {
         let chain_2_id = 2;
         let chain_3_id = 3;
 
-        let roots = vec![
+        let roots = [
             Hash::from(0u64),
             Hash::from(1u64),
             Hash::from(2u64),

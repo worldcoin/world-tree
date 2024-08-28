@@ -102,16 +102,7 @@ impl WorldTree {
         let identity_tree = self.identity_tree.read().await;
 
         let root = if let Some(chain_id) = chain_id {
-            let root = self.db.root_by_chain(chain_id.0).await?;
-
-            // match root {
-            //     Some(root) => Some(root),
-            //     None => {
-            //         tracing::warn!("Missing root for chain: {:?}", chain_id);
-            //         return Ok(None);
-            //     }
-            // }
-            root
+            self.db.root_by_chain(chain_id.0).await?
         } else {
             None
         };
