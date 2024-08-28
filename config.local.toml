@@ -12,6 +12,9 @@
 tree_depth = 30
 socket_address = "127.0.0.1:8080"
 
+[db]
+connection_string = "postgresql://postgres:postgres@localhost:5432/world_tree"
+
 [canonical_tree]
 address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 window_size = 10
@@ -22,7 +25,7 @@ rpc_endpoint = "http://localhost:8545/"
 throttle = 150
 
 [cache]
-cache_file = "cache.mmap"
+cache_file = "cache.local"
 purge_cache = true
 
 [bridged_trees.0]
