@@ -1083,9 +1083,7 @@ mod test {
         let tree_depth = 30;
         let num_leaves = 1 << 12;
         let batch_size = 32;
-        let num_batches = num_leaves / batch_size;
-
-        assert_eq!(num_batches, 128);
+        let num_batches = 4;
 
         let mut identity_tree = IdentityTree::new(tree_depth);
         let mut ref_tree: CascadingMerkleTree<PoseidonHash> =
@@ -1094,16 +1092,17 @@ mod test {
         let leaves: Vec<_> = infinite_leaves().take(num_leaves).collect();
         let batches: Vec<_> = leaves
             .chunks(batch_size)
+            .take(num_batches)
             .map(|batch| batch.to_vec())
             .collect();
 
-        let mut precalc_batches = vec![];
+        let mut batch_roots = vec![];
         for batch in &batches {
             let pre_root = ref_tree.root();
             ref_tree.extend_from_slice(batch);
             let post_root = ref_tree.root();
 
-            precalc_batches.push((pre_root, post_root));
+            batch_roots.push((pre_root, post_root));
         }
 
         let install_batch = |identity_tree: &mut IdentityTree<Vec<Hash>>,
@@ -1117,8 +1116,8 @@ mod test {
                 })
                 .collect::<HashMap<LeafIndex, Hash>>();
 
-            let pre_root = precalc_batches[batch_idx].0;
-            let post_root = precalc_batches[batch_idx].1;
+            let pre_root = batch_roots[batch_idx].0;
+            let post_root = batch_roots[batch_idx].1;
 
             let act_post_root = identity_tree
                 .append_updates(pre_root, LeafUpdates::Insert(leaf_updates))?;
@@ -1133,12 +1132,21 @@ mod test {
         install_batch(&mut identity_tree, 2)?;
 
         // Apply updates up to root 1
-        identity_tree.apply_updates_to_root(&precalc_batches[1].1);
+        identity_tree.apply_updates_to_root(&batch_roots[1].1);
+
+        assert_eq!(identity_tree.tree.root(), batch_roots[1].1);
+        assert_eq!(identity_tree.latest_root(), batch_roots[2].1);
 
         install_batch(&mut identity_tree, 3)?;
 
+        assert_eq!(identity_tree.tree.root(), batch_roots[1].1);
+        assert_eq!(identity_tree.latest_root(), batch_roots[3].1);
+
         // Apply updates up to root 3
-        identity_tree.apply_updates_to_root(&precalc_batches[3].1);
+        identity_tree.apply_updates_to_root(&batch_roots[3].1);
+
+        assert_eq!(identity_tree.tree.root(), batch_roots[3].1);
+        assert_eq!(identity_tree.latest_root(), batch_roots[3].1);
 
         // Verify all the inserted leaves
         for batch_idx in 0..=3 {
