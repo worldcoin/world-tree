@@ -51,13 +51,23 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 /// Periodically fetches the latest common root from the database and realigns the identity tree
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let Some(latest_common_root) =
+        let latest_root = world_tree.identity_tree.read().await.latest_root();
+
+        let latest_root_id = world_tree.db.fetch_root_id(latest_root).await?;
+
+        let Some((latest_common_root_id, mut latest_common_root)) =
             world_tree.db.fetch_latest_common_root().await?
         else {
             tracing::debug!("No latest common root found");
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         };
+
+        if let Some(latest_root_id) = latest_root_id {
+            if latest_common_root_id > latest_root_id {
+                latest_common_root = latest_root;
+            }
+        }
 
         let latest_alligned_root =
             world_tree.identity_tree.read().await.tree.root();
@@ -75,8 +85,23 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
         );
 
         let mut identity_tree = world_tree.identity_tree.write().await;
+
+        let now = std::time::Instant::now();
+        let num_updates_before = identity_tree.tree_updates.len();
+
         identity_tree.apply_updates_to_root(&latest_common_root);
 
-        tracing::info!(?latest_common_root, "Identity tree realigned");
+        let elapsed = now.elapsed();
+        let elapsed_ms = elapsed.as_millis();
+        let num_updates_after = identity_tree.tree_updates.len();
+
+        tracing::info!(
+            ?latest_common_root,
+            ?elapsed,
+            elapsed_ms,
+            num_updates_before,
+            num_updates_after,
+            "Identity tree realigned"
+        );
     }
 }

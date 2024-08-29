@@ -260,34 +260,56 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             .collect())
     }
 
-    async fn fetch_latest_common_root(self) -> sqlx::Result<Option<Hash>> {
+    async fn fetch_root_id(self, root: Hash) -> sqlx::Result<Option<i64>> {
         let mut conn = self.acquire().await?;
 
-        let Some((latest_hash,)): Option<(Vec<u8>,)> = sqlx::query_as(
+        let row: Option<(i64,)> = sqlx::query_as(
             r#"
-            WITH latest AS (
-                SELECT tx.chain_id, MAX(updates.id) as id
-                FROM roots
-                JOIN updates ON roots.root = updates.post_root
-                JOIN tx ON roots.tx_id = tx.id
-                GROUP BY tx.chain_id
-            ),
-            latest_common AS (
-                SELECT MIN(latest.id) as id
-                FROM latest
-            )
-            SELECT updates.post_root
-            FROM latest_common
-            JOIN updates ON latest_common.id = updates.id
+            SELECT updates.id
+            FROM updates
+            WHERE updates.post_root = $1
             "#,
         )
+        .bind(root.as_le_bytes().as_ref())
         .fetch_optional(&mut *conn)
-        .await?
+        .await?;
+
+        Ok(row.map(|(tx_id,)| tx_id))
+    }
+
+    async fn fetch_latest_common_root(
+        self,
+    ) -> sqlx::Result<Option<(i64, Hash)>> {
+        let mut conn = self.acquire().await?;
+
+        let Some((latest_id, latest_hash)): Option<(i64, Vec<u8>)> =
+            sqlx::query_as(
+                r#"
+                WITH latest AS (
+                    SELECT tx.chain_id, MAX(updates.id) as id
+                    FROM roots
+                    JOIN updates ON roots.root = updates.post_root
+                    JOIN tx ON roots.tx_id = tx.id
+                    GROUP BY tx.chain_id
+                ),
+                latest_common AS (
+                    SELECT MIN(latest.id) as id
+                    FROM latest
+                )
+                SELECT updates.id, updates.post_root
+                FROM latest_common
+                JOIN updates ON latest_common.id = updates.id
+                "#,
+            )
+            .fetch_optional(&mut *conn)
+            .await?
         else {
             return Ok(None);
         };
 
-        Ok(Some(Hash::try_from_le_slice(&latest_hash).unwrap()))
+        let latest_root = Hash::try_from_le_slice(&latest_hash).unwrap();
+
+        Ok(Some((latest_id, latest_root)))
     }
 
     async fn leaf_index(self, leaf: Hash) -> sqlx::Result<Option<u32>> {
