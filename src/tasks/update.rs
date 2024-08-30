@@ -46,10 +46,16 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
         let post_root = identity_tree.append_updates(latest_root, updates)?;
 
         if next_root.is_some() && post_root != next_root.unwrap() {
+            let next_root = next_root.unwrap();
+            tracing::error!(
+                ?post_root,
+                ?next_root,
+                "Computed post root does not match next root"
+            );
+
             panic!(
                 "Computed post root ({}) does not match next root ({})",
-                post_root,
-                next_root.unwrap()
+                post_root, next_root,
             );
         }
 
