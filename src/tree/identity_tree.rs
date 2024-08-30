@@ -45,8 +45,10 @@ impl IdentityTree<MmapVec<Hash>> {
     /// The underlying Merkle Tree is unverified
     pub fn new_with_cache_unchecked(
         depth: usize,
-        file_path: &Path,
+        file_path: impl AsRef<Path>,
     ) -> WorldTreeResult<Self> {
+        let file_path = file_path.as_ref();
+
         let mmap_vec: MmapVec<Hash> =
             match unsafe { MmapVec::restore_from_path(file_path) } {
                 Ok(mmap_vec) => mmap_vec,

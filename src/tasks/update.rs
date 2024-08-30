@@ -14,6 +14,7 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
         let next_updates =
             world_tree.db.fetch_next_updates(latest_root).await?;
+        let next_root = world_tree.db.fetch_next_root(latest_root).await?;
 
         if next_updates.is_empty() {
             // TODO: Configureable & maybe listen/notify?
@@ -44,6 +45,14 @@ pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
         let post_root = identity_tree.append_updates(latest_root, updates)?;
 
+        if next_root.is_some() && post_root != next_root.unwrap() {
+            panic!(
+                "Computed post root ({}) does not match next root ({})",
+                post_root,
+                next_root.unwrap()
+            );
+        }
+
         tracing::info!(?post_root, "Appended updates to identity tree");
     }
 }
@@ -65,7 +74,21 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
         if let Some(latest_root_id) = latest_root_id {
             if latest_common_root_id > latest_root_id {
+                tracing::warn!(
+                    latest_common_root_id,
+                    latest_root_id,
+                    ?latest_root_id,
+                    "Cache is behind db"
+                );
                 latest_common_root = latest_root;
+            }
+
+            if latest_common_root_id < latest_root_id {
+                tracing::warn!(
+                    latest_common_root_id,
+                    latest_root_id,
+                    "Common root is behind latest root"
+                );
             }
         }
 
@@ -78,13 +101,19 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
             continue;
         }
 
+        let mut identity_tree = world_tree.identity_tree.write().await;
+
+        if identity_tree.tree_updates.is_empty() {
+            drop(identity_tree);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        }
+
         tracing::info!(
             ?latest_alligned_root,
             ?latest_common_root,
             "Realigning identity tree"
         );
-
-        let mut identity_tree = world_tree.identity_tree.write().await;
 
         let now = std::time::Instant::now();
         let num_updates_before = identity_tree.tree_updates.len();

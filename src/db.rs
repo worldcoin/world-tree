@@ -230,6 +230,23 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(row.map(|r| U64::from(r.0 as u64)))
     }
 
+    async fn fetch_next_root(self, root: Hash) -> sqlx::Result<Option<Hash>> {
+        let mut conn = self.acquire().await?;
+
+        let row: Option<(Vec<u8>,)> = sqlx::query_as(
+            r#"
+            SELECT post_root
+            FROM updates
+            WHERE pre_root = $1
+            "#,
+        )
+        .bind(root.as_le_bytes().as_ref())
+        .fetch_optional(&mut *conn)
+        .await?;
+
+        Ok(row.map(|(root,)| Hash::try_from_le_slice(&root).unwrap()))
+    }
+
     async fn fetch_next_updates(
         self,
         root: Hash,
@@ -555,7 +572,7 @@ mod tests {
         db.insert_root(roots[1], tx_3_id).await?;
 
         // LCR == root[1]
-        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[1]);
 
         // Chain 3 -> root[2]
@@ -563,7 +580,7 @@ mod tests {
         db.insert_root(roots[2], tx_4_id).await?;
 
         // LCR == root[2]
-        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[2]);
 
         // Chain 2 -> root[3]
@@ -575,7 +592,7 @@ mod tests {
         db.insert_root(roots[3], tx_6_id).await?;
 
         // LCR == root[3]
-        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
         assert_eq!(lcr, roots[3]);
 
         Ok(())
