@@ -65,9 +65,17 @@ async fn append_chain_updates(
             continue;
         }
 
+        let num_updates = updates.len();
+        tracing::info!(num_updates, "Updating tree");
+
+        let start = std::time::Instant::now();
+
         apply_updates_to_tree(&mut tree_lock, &updates)?;
 
-        tracing::info!(%chain_id, prev_root = ?current_root, root = ?latest_root, "Tree updated");
+        let elapsed = start.elapsed();
+        let elapsed_ms = elapsed.as_millis();
+
+        tracing::info!(%chain_id, ?elapsed, elapsed_ms, prev_root = ?current_root, root = ?latest_root, "Tree updated");
     }
 }
 
@@ -99,9 +107,19 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
             continue;
         }
 
+        let num_updates = updates.len();
+        tracing::info!(num_updates, "Updatign canonical tree");
+
+        let start = std::time::Instant::now();
+
         apply_updates_to_tree(&mut canonical_lock, &updates)?;
 
+        let elapsed = start.elapsed();
+        let elapsed_ms = elapsed.as_millis();
+
         tracing::info!(
+            ?elapsed,
+            elapsed_ms,
             prev_root = ?canonical_tree_root,
             root = ?latest_common_root,
             "Canonical tree updated"
