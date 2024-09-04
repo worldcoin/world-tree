@@ -150,6 +150,10 @@ impl WorldTree {
             self.cache.canonical.read().await
         };
 
+        if leaf_idx as usize >= tree_lock.num_leaves() {
+            return Ok(None);
+        }
+
         let proof = tree_lock.proof(leaf_idx as usize);
         let root = tree_lock.root();
 
@@ -157,28 +161,6 @@ impl WorldTree {
 
         Ok(Some(inclusion_proof))
     }
-
-    // /// Computes the updated root given a set of identity commitments.
-    // /// If a chain ID is provided, the updated root is calculated from the latest root on the specified chain.
-    // /// If no chain ID is provided, the updated root is calculated from the latest root bridged to all chains.
-    // pub async fn compute_root(
-    //     &self,
-    //     identity_commitements: &[Hash],
-    //     chain_id: Option<ChainId>,
-    // ) -> WorldTreeResult<Hash> {
-    //     let identity_tree = self.identity_tree.read().await;
-
-    //     let root = if let Some(chain_id) = chain_id {
-    //         self.db.root_by_chain(chain_id.0).await?
-    //     } else {
-    //         None
-    //     };
-
-    //     let updated_root =
-    //         identity_tree.compute_root(identity_commitements, root.as_ref())?;
-
-    //     Ok(updated_root)
-    // }
 }
 
 pub async fn provider(

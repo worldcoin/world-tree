@@ -3,11 +3,14 @@ use std::time::Duration;
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+use semaphore::generic_storage::GenericStorage;
+use semaphore::poseidon_tree::PoseidonHash;
 
 use crate::db::DbMethods;
 use crate::tree::error::WorldTreeResult;
 use crate::tree::identity_tree::{LeafUpdates, Leaves};
-use crate::tree::{ChainId, LeafIndex, WorldTree};
+use crate::tree::{ChainId, Hash, LeafIndex, WorldTree};
 
 pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     let mut handles = FuturesUnordered::new();
@@ -49,22 +52,19 @@ async fn append_chain_updates(
 
         let mut tree_lock = tree.write().await;
 
-        let next_updates = world_tree
+        let updates = world_tree
             .db
             .fetch_updates_between(tree_lock.root(), latest_root)
             .await?;
 
         // No new batches, no need to update
-        if next_updates.is_empty() {
+        if updates.is_empty() {
             drop(tree_lock);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
 
-        // TODO: Optimize to use extend_from_slice
-        for (leaf_idx, update) in next_updates {
-            tree_lock.set_leaf(leaf_idx as usize, update);
-        }
+        apply_updates_to_tree(&mut tree_lock, &updates)?;
     }
 }
 
@@ -99,8 +99,25 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
             continue;
         }
 
-        for (leaf_idx, update) in updates {
-            canonical_lock.set_leaf(leaf_idx as usize, update);
+        apply_updates_to_tree(&mut canonical_lock, &updates)?;
+    }
+}
+
+fn apply_updates_to_tree<S: GenericStorage<Hash>>(
+    tree: &mut CascadingMerkleTree<PoseidonHash, S>,
+    updates: &[(u64, Hash)],
+) -> WorldTreeResult<()> {
+    for (leaf_idx, leaf) in updates {
+        let leaf_idx = *leaf_idx as usize;
+
+        if leaf_idx < tree.num_leaves() {
+            tree.set_leaf(leaf_idx, *leaf);
+        } else if leaf_idx == tree.num_leaves() {
+            tree.push(*leaf)?;
+        } else {
+            return Err(eyre::format_err!("Leaf index out of bounds").into());
         }
     }
+
+    Ok(())
 }

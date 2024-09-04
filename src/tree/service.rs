@@ -52,7 +52,6 @@ impl InclusionProofService {
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            // .route("/computeRoot", axum::routing::post(compute_root))
             .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
@@ -154,17 +153,3 @@ struct HealthResponse {
 pub async fn health() -> WorldTreeResult<Json<()>> {
     Ok(Json(()))
 }
-
-// #[tracing::instrument(level = "debug", skip(world_tree))]
-// pub async fn compute_root(
-//     State(world_tree): State<Arc<WorldTree>>,
-//     Query(query_params): Query<ChainIdQueryParams>,
-//     Json(req): Json<ComputeRootRequest>,
-// ) -> WorldTreeResult<(StatusCode, Json<Hash>)> {
-//     let chain_id = query_params.chain_id;
-//     let updated_root = world_tree
-//         .compute_root(&req.identity_commitments, chain_id)
-//         .await?;
-
-//     Ok((StatusCode::OK, Json(updated_root)))
-// }
