@@ -230,42 +230,41 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(row.map(|r| U64::from(r.0 as u64)))
     }
 
-    async fn fetch_next_root(self, root: Hash) -> sqlx::Result<Option<Hash>> {
-        let mut conn = self.acquire().await?;
-
-        let row: Option<(Vec<u8>,)> = sqlx::query_as(
-            r#"
-            SELECT post_root
-            FROM updates
-            WHERE pre_root = $1
-            "#,
-        )
-        .bind(root.as_le_bytes().as_ref())
-        .fetch_optional(&mut *conn)
-        .await?;
-
-        Ok(row.map(|(root,)| Hash::try_from_le_slice(&root).unwrap()))
-    }
-
-    async fn fetch_next_updates(
+    async fn fetch_updates_between(
         self,
-        root: Hash,
+        prev_root: Hash,
+        next_root: Hash,
     ) -> sqlx::Result<Vec<(u64, Hash)>> {
         let mut conn = self.acquire().await?;
 
         let updates: Vec<(i64, Vec<u8>)> = sqlx::query_as(
             r#"
+            WITH start_id AS (
+                SELECT leaf_batches.start_id as id
+                FROM updates
+                INNER JOIN leaf_batches ON leaf_batches.update_id = updates.id
+                WHERE updates.pre_root = $1
+                LIMIT 1
+            ),
+            end_id AS (
+                SELECT leaf_batches.end_id as id
+                FROM updates
+                INNER JOIN leaf_batches ON leaf_batches.update_id = updates.id
+                WHERE updates.post_root = $2
+                LIMIT 1
+            )
             SELECT
-                leaf_updates.leaf_idx,
-                leaf_updates.leaf
-            FROM updates
-            JOIN leaf_batches ON updates.id = leaf_batches.update_id
-            JOIN leaf_updates ON leaf_updates.id BETWEEN leaf_batches.start_id AND leaf_batches.end_id
-            WHERE updates.pre_root = $1
-            ORDER BY leaf_updates.id ASC
+                leaf_updates.leaf_idx, leaf_updates.leaf
+            FROM
+                leaf_updates
+            WHERE
+                leaf_updates.id BETWEEN (SELECT id FROM start_id) AND (SELECT id FROM end_id)
+            ORDER BY
+                leaf_updates.id ASC;
             "#,
         )
-        .bind(root.as_le_bytes().as_ref())
+        .bind(prev_root.as_le_bytes().as_ref())
+        .bind(next_root.as_le_bytes().as_ref())
         .fetch_all(&mut *conn)
         .await?;
 
@@ -294,14 +293,11 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         Ok(row.map(|(tx_id,)| tx_id))
     }
 
-    async fn fetch_latest_common_root(
-        self,
-    ) -> sqlx::Result<Option<(i64, Hash)>> {
+    async fn fetch_latest_common_root(self) -> sqlx::Result<Option<Hash>> {
         let mut conn = self.acquire().await?;
 
-        let Some((latest_id, latest_hash)): Option<(i64, Vec<u8>)> =
-            sqlx::query_as(
-                r#"
+        let Some((latest_hash,)): Option<(Vec<u8>,)> = sqlx::query_as(
+            r#"
                 WITH latest AS (
                     SELECT tx.chain_id, MAX(updates.id) as id
                     FROM roots
@@ -313,20 +309,20 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
                     SELECT MIN(latest.id) as id
                     FROM latest
                 )
-                SELECT updates.id, updates.post_root
+                SELECT updates.post_root
                 FROM latest_common
                 JOIN updates ON latest_common.id = updates.id
                 "#,
-            )
-            .fetch_optional(&mut *conn)
-            .await?
+        )
+        .fetch_optional(&mut *conn)
+        .await?
         else {
             return Ok(None);
         };
 
         let latest_root = Hash::try_from_le_slice(&latest_hash).unwrap();
 
-        Ok(Some((latest_id, latest_root)))
+        Ok(Some(latest_root))
     }
 
     async fn leaf_index(self, leaf: Hash) -> sqlx::Result<Option<u32>> {
@@ -458,7 +454,82 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fetch_next_updates() -> eyre::Result<()> {
+    async fn latest_common_root() -> eyre::Result<()> {
+        let (db, _container) = setup().await?;
+
+        let chain_1_id = 1;
+        let chain_2_id = 2;
+        let chain_3_id = 3;
+
+        let roots = [
+            Hash::from(0u64),
+            Hash::from(1u64),
+            Hash::from(2u64),
+            Hash::from(3u64),
+            Hash::from(4u64),
+        ];
+
+        let canonical_tx_1_id =
+            db.insert_tx(chain_1_id, 1.into(), rand_tx()).await?;
+
+        let canonical_tx_2_id =
+            db.insert_tx(chain_1_id, 2.into(), rand_tx()).await?;
+
+        let canonical_tx_3_id =
+            db.insert_tx(chain_1_id, 3.into(), rand_tx()).await?;
+
+        // Canonical updates
+        let _update_1 = db
+            .insert_update(roots[0], roots[1], canonical_tx_1_id)
+            .await?;
+        let _update_2 = db
+            .insert_update(roots[1], roots[2], canonical_tx_2_id)
+            .await?;
+        let _update_3 = db
+            .insert_update(roots[2], roots[3], canonical_tx_3_id)
+            .await?;
+
+        db.insert_root(roots[1], canonical_tx_1_id).await?;
+        db.insert_root(roots[2], canonical_tx_2_id).await?;
+        db.insert_root(roots[3], canonical_tx_3_id).await?;
+
+        // Chain 2 -> root[2]
+        let tx_2_id = db.insert_tx(chain_2_id, 2.into(), rand_tx()).await?;
+        db.insert_root(roots[2], tx_2_id).await?;
+
+        // Chain 3 -> root[1]
+        let tx_3_id = db.insert_tx(chain_3_id, 3.into(), rand_tx()).await?;
+        db.insert_root(roots[1], tx_3_id).await?;
+
+        // LCR == root[1]
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        assert_eq!(lcr, roots[1]);
+
+        // Chain 3 -> root[2]
+        let tx_4_id = db.insert_tx(chain_3_id, 4.into(), rand_tx()).await?;
+        db.insert_root(roots[2], tx_4_id).await?;
+
+        // LCR == root[2]
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        assert_eq!(lcr, roots[2]);
+
+        // Chain 2 -> root[3]
+        let tx_5_id = db.insert_tx(chain_2_id, 5.into(), rand_tx()).await?;
+        db.insert_root(roots[3], tx_5_id).await?;
+
+        // Chain 3 -> root[3]
+        let tx_6_id = db.insert_tx(chain_3_id, 6.into(), rand_tx()).await?;
+        db.insert_root(roots[3], tx_6_id).await?;
+
+        // LCR == root[3]
+        let lcr = db.fetch_latest_common_root().await?.unwrap();
+        assert_eq!(lcr, roots[3]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn updates_between() -> eyre::Result<()> {
         let (db, _container) = setup().await?;
 
         let chain_id = 1;
@@ -511,89 +582,22 @@ mod tests {
         db.insert_leaf_updates(10, &batches[2]).await?;
         db.insert_leaf_batch(update_3_id, 10, 14).await?;
 
-        let nu_1 = db.fetch_next_updates(roots[0]).await?;
-        assert_eq!(batches[0], nu_1);
+        let updates_1 = db.fetch_updates_between(roots[0], roots[1]).await?;
+        assert_eq!(batches[0], updates_1);
 
-        let nu_2 = db.fetch_next_updates(roots[1]).await?;
-        assert_eq!(batches[1], nu_2);
+        let updates_2 = db.fetch_updates_between(roots[1], roots[2]).await?;
+        assert_eq!(batches[1], updates_2);
 
-        let nu_3 = db.fetch_next_updates(roots[2]).await?;
-        assert_eq!(batches[2], nu_3);
+        let updates_3 = db.fetch_updates_between(roots[2], roots[3]).await?;
+        assert_eq!(batches[2], updates_3);
 
-        Ok(())
-    }
+        let empty_updates = db.fetch_updates_between(roots[2], roots[0]).await?;
+        assert!(empty_updates.is_empty());
 
-    #[tokio::test]
-    async fn latest_common_root() -> eyre::Result<()> {
-        let (db, _container) = setup().await?;
+        let all_updates = db.fetch_updates_between(roots[0], roots[3]).await?;
+        let all_batches: Vec<_> = batches.iter().flat_map(|b| b.clone()).collect();
 
-        let chain_1_id = 1;
-        let chain_2_id = 2;
-        let chain_3_id = 3;
-
-        let roots = [
-            Hash::from(0u64),
-            Hash::from(1u64),
-            Hash::from(2u64),
-            Hash::from(3u64),
-            Hash::from(4u64),
-        ];
-
-        let canonical_tx_1_id =
-            db.insert_tx(chain_1_id, 1.into(), rand_tx()).await?;
-
-        let canonical_tx_2_id =
-            db.insert_tx(chain_1_id, 2.into(), rand_tx()).await?;
-
-        let canonical_tx_3_id =
-            db.insert_tx(chain_1_id, 3.into(), rand_tx()).await?;
-
-        // Canonical updates
-        let _update_1 = db
-            .insert_update(roots[0], roots[1], canonical_tx_1_id)
-            .await?;
-        let _update_2 = db
-            .insert_update(roots[1], roots[2], canonical_tx_2_id)
-            .await?;
-        let _update_3 = db
-            .insert_update(roots[2], roots[3], canonical_tx_3_id)
-            .await?;
-
-        db.insert_root(roots[1], canonical_tx_1_id).await?;
-        db.insert_root(roots[2], canonical_tx_2_id).await?;
-        db.insert_root(roots[3], canonical_tx_3_id).await?;
-
-        // Chain 2 -> root[2]
-        let tx_2_id = db.insert_tx(chain_2_id, 2.into(), rand_tx()).await?;
-        db.insert_root(roots[2], tx_2_id).await?;
-
-        // Chain 3 -> root[1]
-        let tx_3_id = db.insert_tx(chain_3_id, 3.into(), rand_tx()).await?;
-        db.insert_root(roots[1], tx_3_id).await?;
-
-        // LCR == root[1]
-        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
-        assert_eq!(lcr, roots[1]);
-
-        // Chain 3 -> root[2]
-        let tx_4_id = db.insert_tx(chain_3_id, 4.into(), rand_tx()).await?;
-        db.insert_root(roots[2], tx_4_id).await?;
-
-        // LCR == root[2]
-        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
-        assert_eq!(lcr, roots[2]);
-
-        // Chain 2 -> root[3]
-        let tx_5_id = db.insert_tx(chain_2_id, 5.into(), rand_tx()).await?;
-        db.insert_root(roots[3], tx_5_id).await?;
-
-        // Chain 3 -> root[3]
-        let tx_6_id = db.insert_tx(chain_3_id, 6.into(), rand_tx()).await?;
-        db.insert_root(roots[3], tx_6_id).await?;
-
-        // LCR == root[3]
-        let (_, lcr) = db.fetch_latest_common_root().await?.unwrap();
-        assert_eq!(lcr, roots[3]);
+        assert_eq!(all_batches, all_updates);
 
         Ok(())
     }

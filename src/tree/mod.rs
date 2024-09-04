@@ -43,6 +43,8 @@ pub struct WorldTree {
     pub cache: Arc<MultiTreeCache<MmapVec<Hash>>>,
 
     pub canonical_chain_id: ChainId,
+
+    pub chain_ids: Vec<ChainId>,
 }
 
 impl WorldTree {
@@ -65,6 +67,7 @@ impl WorldTree {
             db,
             cache: cache.clone(),
             canonical_chain_id,
+            chain_ids: chain_ids.clone(),
         };
 
         // TODO: Move to a higher level? A task handler of sorts?
@@ -203,7 +206,7 @@ pub async fn fetch_chain_ids(
         providers.push(provider);
     }
 
-    let mut chain_ids = vec![];
+    let mut chain_ids = vec![canonical_chain_id];
     for provider in providers {
         let chain_id = provider.get_chainid().await?;
         chain_ids.push(ChainId(chain_id.as_u64()));
