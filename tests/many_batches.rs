@@ -11,7 +11,7 @@ use rand::Rng;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
@@ -31,7 +31,7 @@ const BATCH_SIZE: usize = 10;
 async fn many_batches() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let cache_file = NamedTempFile::new()?;
+    let cache_dir = TempDir::new()?;
 
     let (db_config, _db_container) = setup_db().await?;
 
@@ -106,8 +106,8 @@ async fn many_batches() -> WorldTreeResult<()> {
             },
         },
         cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: true,
+            dir: cache_dir.path().to_path_buf(),
+            purge: true,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,

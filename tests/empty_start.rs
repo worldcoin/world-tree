@@ -102,8 +102,8 @@ async fn empty_start() -> WorldTreeResult<()> {
             },
         },
         cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: true,
+            dir: cache_file.path().to_path_buf(),
+            purge: true,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,

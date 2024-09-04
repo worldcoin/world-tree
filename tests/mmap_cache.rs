@@ -91,8 +91,8 @@ async fn mmap_cache() -> WorldTreeResult<()> {
             },
         },
         cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: false,
+            dir: cache_file.path().to_path_buf(),
+            purge: false,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,
