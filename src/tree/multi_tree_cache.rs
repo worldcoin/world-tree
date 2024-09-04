@@ -98,8 +98,8 @@ impl MultiTreeCache<MmapVec<Hash>> {
                 Ok(tree) => tree,
                 Err(e) => {
                     tracing::error!(
-                    "Error to restoring tree from cache {e:?}, purging cache and creating new tree"
-                );
+                        "Error to restoring tree from cache {e:?}, purging cache and creating new tree"
+                    );
 
                     // Remove the existing cache and create a new cache file
                     std::fs::remove_file(path)?;

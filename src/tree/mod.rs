@@ -1,12 +1,12 @@
 pub mod block_scanner;
 pub mod config;
 pub mod error;
-pub mod identity_tree;
+pub mod inclusion_proof;
+pub mod leaf_updates;
 pub mod multi_tree_cache;
 pub mod newtypes;
 pub mod service;
 
-use std::path::Path;
 use std::process;
 use std::sync::Arc;
 
@@ -19,11 +19,10 @@ use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-use tokio::sync::RwLock;
 use tracing::info;
 
 use self::error::WorldTreeResult;
-use self::identity_tree::{IdentityTree, InclusionProof};
+use self::inclusion_proof::InclusionProof;
 pub use self::newtypes::{ChainId, LeafIndex, NodeIndex};
 use crate::db::{Db, DbMethods};
 

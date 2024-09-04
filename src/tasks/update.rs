@@ -9,8 +9,7 @@ use semaphore::poseidon_tree::PoseidonHash;
 
 use crate::db::DbMethods;
 use crate::tree::error::WorldTreeResult;
-use crate::tree::identity_tree::{LeafUpdates, Leaves};
-use crate::tree::{ChainId, Hash, LeafIndex, WorldTree};
+use crate::tree::{ChainId, Hash, WorldTree};
 
 pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     let mut handles = FuturesUnordered::new();
@@ -51,10 +50,11 @@ async fn append_chain_updates(
         };
 
         let mut tree_lock = tree.write().await;
+        let current_root = tree_lock.root();
 
         let updates = world_tree
             .db
-            .fetch_updates_between(tree_lock.root(), latest_root)
+            .fetch_updates_between(current_root, latest_root)
             .await?;
 
         // No new batches, no need to update
@@ -65,13 +65,15 @@ async fn append_chain_updates(
         }
 
         apply_updates_to_tree(&mut tree_lock, &updates)?;
+
+        tracing::info!(%chain_id, prev_root = ?current_root, root = ?latest_root, "Tree updated");
     }
 }
 
 /// Periodically fetches the latest common root from the database and realigns the identity tree
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let latest_cached_canonical_root =
+        let canonical_tree_root =
             world_tree.cache.canonical.read().await.root();
 
         let common = world_tree.db.fetch_latest_common_root().await?;
@@ -86,10 +88,7 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
 
         let updates = world_tree
             .db
-            .fetch_updates_between(
-                latest_cached_canonical_root,
-                latest_common_root,
-            )
+            .fetch_updates_between(canonical_tree_root, latest_common_root)
             .await?;
 
         // No new batches, no need to reallign
@@ -100,6 +99,12 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
         }
 
         apply_updates_to_tree(&mut canonical_lock, &updates)?;
+
+        tracing::info!(
+            prev_root = ?canonical_tree_root,
+            root = ?latest_common_root,
+            "Canonical tree updated"
+        );
     }
 }
 

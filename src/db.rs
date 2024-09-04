@@ -591,11 +591,13 @@ mod tests {
         let updates_3 = db.fetch_updates_between(roots[2], roots[3]).await?;
         assert_eq!(batches[2], updates_3);
 
-        let empty_updates = db.fetch_updates_between(roots[2], roots[0]).await?;
+        let empty_updates =
+            db.fetch_updates_between(roots[2], roots[0]).await?;
         assert!(empty_updates.is_empty());
 
         let all_updates = db.fetch_updates_between(roots[0], roots[3]).await?;
-        let all_batches: Vec<_> = batches.iter().flat_map(|b| b.clone()).collect();
+        let all_batches: Vec<_> =
+            batches.iter().flat_map(|b| b.clone()).collect();
 
         assert_eq!(all_batches, all_updates);
 

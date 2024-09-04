@@ -22,7 +22,7 @@ use crate::abi::{
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
 use crate::tree::error::{WorldTreeError, WorldTreeResult};
-use crate::tree::identity_tree::{LeafUpdates, Leaves};
+use crate::tree::leaf_updates::{LeafUpdates, Leaves};
 use crate::tree::{Hash, LeafIndex, WorldTree};
 
 /// Ingests the canonical logs from the mainnet contract

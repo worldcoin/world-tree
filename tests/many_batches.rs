@@ -11,7 +11,7 @@ use rand::Rng;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
