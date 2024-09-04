@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -115,12 +116,18 @@ fn apply_updates_to_tree<S: GenericStorage<Hash>>(
     for (leaf_idx, leaf) in updates {
         let leaf_idx = *leaf_idx as usize;
 
-        if leaf_idx < tree.num_leaves() {
-            tree.set_leaf(leaf_idx, *leaf);
-        } else if leaf_idx == tree.num_leaves() {
-            tree.push(*leaf)?;
-        } else {
-            return Err(eyre::format_err!("Leaf index out of bounds").into());
+        match leaf_idx.cmp(&tree.num_leaves()) {
+            Ordering::Less => {
+                tree.set_leaf(leaf_idx, *leaf);
+            }
+            Ordering::Equal => {
+                tree.push(*leaf)?;
+            }
+            Ordering::Greater => {
+                return Err(
+                    eyre::format_err!("Leaf index out of bounds").into()
+                );
+            }
         }
     }
 

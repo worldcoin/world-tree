@@ -70,12 +70,12 @@ impl MultiTreeCache<MmapVec<Hash>> {
         let path = path.as_ref();
 
         let mmap_vec: MmapVec<Hash> =
-            match unsafe { MmapVec::restore_from_path(&path) } {
+            match unsafe { MmapVec::restore_from_path(path) } {
                 Ok(mmap_vec) => mmap_vec,
 
                 Err(e) => unsafe {
                     tracing::error!("Cache restore error: {:?}", e);
-                    MmapVec::create_from_path(&path)?
+                    MmapVec::create_from_path(path)?
                 },
             };
 
