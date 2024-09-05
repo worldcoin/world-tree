@@ -156,7 +156,9 @@ async fn extract_identity_updates<M: Middleware + 'static>(
                 let tx_hash = log
                     .transaction_hash
                     .ok_or(WorldTreeError::TransactionHashNotFound)?;
+
                 tracing::debug!(?tx_hash, "Getting transaction");
+
                 middleware
                     .get_transaction(tx_hash)
                     .await

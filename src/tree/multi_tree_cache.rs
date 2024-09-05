@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::generic_storage::MmapVec;
@@ -9,9 +10,11 @@ use tokio::sync::RwLock;
 use super::error::WorldTreeResult;
 use super::{ChainId, Hash};
 
+pub type TreeCache<S> = Arc<RwLock<CascadingMerkleTree<PoseidonHash, S>>>;
+
 pub struct MultiTreeCache<S> {
-    pub canonical: RwLock<CascadingMerkleTree<PoseidonHash, S>>,
-    pub trees: HashMap<ChainId, RwLock<CascadingMerkleTree<PoseidonHash, S>>>,
+    pub canonical: TreeCache<S>,
+    pub trees: HashMap<ChainId, TreeCache<S>>,
 }
 
 impl MultiTreeCache<MmapVec<Hash>> {
@@ -33,16 +36,11 @@ impl MultiTreeCache<MmapVec<Hash>> {
             })
             .collect::<Result<_, _>>()?;
 
-        let trees: HashMap<
-            ChainId,
-            RwLock<CascadingMerkleTree<PoseidonHash, MmapVec<Hash>>>,
-        > = mmap_vecs
+        let trees: HashMap<ChainId, TreeCache<MmapVec<Hash>>> = mmap_vecs
             .into_iter()
             .map(|(chain_id, mmap_vec)| {
                 let path = Self::tree_cache_path(cache_dir, chain_id);
                 let tree = Self::init_tree(depth, path, mmap_vec)?;
-
-                let tree = RwLock::new(tree);
 
                 WorldTreeResult::Ok((chain_id, tree))
             })
@@ -53,10 +51,7 @@ impl MultiTreeCache<MmapVec<Hash>> {
         let canonical =
             Self::init_tree(depth, canonical_cache_path, canonical_storage)?;
 
-        Ok(Self {
-            canonical: RwLock::new(canonical),
-            trees,
-        })
+        Ok(Self { canonical, trees })
     }
 
     fn tree_cache_path(
@@ -86,7 +81,7 @@ impl MultiTreeCache<MmapVec<Hash>> {
         depth: usize,
         path: impl AsRef<Path>,
         mmap_vec: MmapVec<Hash>,
-    ) -> WorldTreeResult<CascadingMerkleTree<PoseidonHash, MmapVec<Hash>>> {
+    ) -> WorldTreeResult<TreeCache<MmapVec<Hash>>> {
         let path = path.as_ref();
 
         let tree =
@@ -112,6 +107,7 @@ impl MultiTreeCache<MmapVec<Hash>> {
                     )
                 }
             };
-        Ok(tree)
+
+        Ok(Arc::new(RwLock::new(tree)))
     }
 }

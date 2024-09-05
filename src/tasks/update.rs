@@ -39,7 +39,8 @@ async fn append_chain_updates(
         .cache
         .trees
         .get(&chain_id)
-        .expect("Missing cache for chain id");
+        .expect("Missing cache for chain id")
+        .clone();
 
     loop {
         let latest_root = world_tree.db.root_by_chain(chain_id.0).await?;
@@ -50,8 +51,7 @@ async fn append_chain_updates(
             continue;
         };
 
-        let mut tree_lock = tree.write().await;
-        let current_root = tree_lock.root();
+        let current_root = tree.read().await.root();
 
         let updates = world_tree
             .db
@@ -60,7 +60,6 @@ async fn append_chain_updates(
 
         // No new batches, no need to update
         if updates.is_empty() {
-            drop(tree_lock);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
@@ -70,7 +69,18 @@ async fn append_chain_updates(
 
         let start = std::time::Instant::now();
 
-        apply_updates_to_tree(&mut tree_lock, &updates)?;
+        {
+            let tree = tree.clone();
+
+            tokio::task::spawn_blocking(move || {
+                let mut tree_lock = tree.blocking_write();
+
+                apply_updates_to_tree(&mut tree_lock, &updates)?;
+
+                WorldTreeResult::Ok(())
+            })
+            .await??;
+        }
 
         let elapsed = start.elapsed();
         let elapsed_ms = elapsed.as_millis();
