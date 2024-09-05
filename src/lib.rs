@@ -19,24 +19,16 @@ pub mod util;
 pub async fn init_world_tree(
     config: &ServiceConfig,
 ) -> WorldTreeResult<Arc<WorldTree>> {
-    if config.cache.purge_cache {
+    if config.cache.purge {
         tracing::info!("Purging tree cache");
-        if config.cache.cache_file.exists() {
-            fs::remove_file(&config.cache.cache_file)?;
+        if config.cache.dir.exists() {
+            fs::remove_dir_all(&config.cache.dir)?;
         }
     }
 
     let db = Arc::new(Db::init(&config.db).await?);
 
-    let world_tree = Arc::new(
-        WorldTree::new(
-            config.clone(),
-            db,
-            config.tree_depth,
-            &config.cache.cache_file,
-        )
-        .await?,
-    );
+    let world_tree = Arc::new(WorldTree::new(config.clone(), db).await?);
 
     Ok(world_tree)
 }

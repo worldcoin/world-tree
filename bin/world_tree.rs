@@ -80,7 +80,7 @@ pub async fn main() -> WorldTreeResult<()> {
     let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
     while let Some(result) = handles.next().await {
         tracing::error!("TreeAvailabilityError: {:?}", result);
-        result??;
+        result?;
     }
 
     Ok(())

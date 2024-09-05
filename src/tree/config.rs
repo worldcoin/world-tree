@@ -42,10 +42,11 @@ pub struct DbConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CacheConfig {
-    /// Path to mmap file responsible for caching the state of the canonical tree
-    pub cache_file: PathBuf,
+    /// Path to the directory containing all cache files
+    pub dir: PathBuf,
+
     #[serde(default)]
-    pub purge_cache: bool,
+    pub purge: bool,
 }
 
 impl ServiceConfig {
@@ -188,8 +189,8 @@ mod tests {
             window_size = 10
 
             [cache]
-            cache_file = "cache.mmap"
-            purge_cache = true
+            dir = ".world-tree.cache/"
+            purge = true
 
             [bridged_trees.0]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
@@ -222,8 +223,8 @@ mod tests {
                 },
             },
             cache: CacheConfig {
-                cache_file: PathBuf::from("cache.mmap"),
-                purge_cache: true,
+                dir: PathBuf::from(".world-tree.cache/"),
+                purge: true,
             },
             bridged_trees: vec![TreeConfig {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"

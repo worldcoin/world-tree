@@ -6,7 +6,6 @@ use axum::http::StatusCode;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeResult;
@@ -17,17 +16,11 @@ use super::{ChainId, Hash, InclusionProof, WorldTree};
 pub struct InclusionProofService {
     /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree>,
-    pub cancel_tx: broadcast::Sender<()>,
 }
 
 impl InclusionProofService {
     pub fn new(world_tree: Arc<WorldTree>) -> Self {
-        let (cancel_tx, _) = broadcast::channel(1);
-
-        Self {
-            world_tree,
-            cancel_tx,
-        }
+        Self { world_tree }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
@@ -43,16 +36,12 @@ impl InclusionProofService {
     pub async fn serve(
         self,
         addr: Option<SocketAddr>,
-    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<WorldTreeResult<()>>>)>
-    {
-        let mut handles = vec![];
-
+    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<()>>)> {
         // Initialize a new router and spawn the server
         tracing::info!(?addr, "Initializing axum server");
 
         let router = axum::Router::new()
             .route("/inclusionProof", axum::routing::post(inclusion_proof))
-            .route("/computeRoot", axum::routing::post(compute_root))
             .route("/health", axum::routing::get(health))
             .layer(middleware::from_fn(logging::middleware))
             .with_state(self.world_tree.clone());
@@ -67,9 +56,11 @@ impl InclusionProofService {
 
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            bound_server.serve(router.into_make_service()).await?;
 
-            Ok(())
+            bound_server
+                .serve(router.into_make_service())
+                .await
+                .expect("Server failed");
         });
 
         // Spawn a task to sync and maintain the state of the world tree
@@ -77,20 +68,16 @@ impl InclusionProofService {
 
         // TODO: Decouple InclusionProofService (API layer) from spawning tasks
         let world_tree = self.world_tree.clone();
-        handles.push(tokio::spawn(crate::tasks::observe::observe(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::ingest::ingest_canonical(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::update::append_updates(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::update::reallign(
-            world_tree.clone(),
-        )));
 
-        handles.push(server_handle);
+        let runner = app_task::TaskRunner::new(world_tree);
+
+        let handles = vec![
+            runner.spawn_task("Observe", crate::tasks::observe::observe),
+            runner.spawn_task("Ingest", crate::tasks::ingest::ingest_canonical),
+            runner.spawn_task("Update", crate::tasks::update::append_updates),
+            runner.spawn_task("Reallign", crate::tasks::update::reallign),
+            server_handle,
+        ];
 
         Ok((local_addr, handles))
     }
@@ -149,29 +136,8 @@ struct HealthResponse {
     pub canonical_root: Hash,
 }
 
-#[tracing::instrument(level = "debug", skip(world_tree))]
+#[tracing::instrument(level = "debug")]
 #[allow(clippy::complexity)]
-pub async fn health(
-    State(world_tree): State<Arc<WorldTree>>,
-) -> WorldTreeResult<Json<HealthResponse>> {
-    let identity_tree = world_tree.identity_tree.read().await;
-    let cascading_tree_root = identity_tree.tree.root();
-
-    Ok(Json(HealthResponse {
-        canonical_root: cascading_tree_root,
-    }))
-}
-
-#[tracing::instrument(level = "debug", skip(world_tree))]
-pub async fn compute_root(
-    State(world_tree): State<Arc<WorldTree>>,
-    Query(query_params): Query<ChainIdQueryParams>,
-    Json(req): Json<ComputeRootRequest>,
-) -> WorldTreeResult<(StatusCode, Json<Hash>)> {
-    let chain_id = query_params.chain_id;
-    let updated_root = world_tree
-        .compute_root(&req.identity_commitments, chain_id)
-        .await?;
-
-    Ok((StatusCode::OK, Json(updated_root)))
+pub async fn health() -> WorldTreeResult<Json<()>> {
+    Ok(Json(()))
 }

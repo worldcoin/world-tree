@@ -22,7 +22,7 @@ use crate::abi::{
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
 use crate::tree::error::{WorldTreeError, WorldTreeResult};
-use crate::tree::identity_tree::{LeafUpdates, Leaves};
+use crate::tree::leaf_updates::{LeafUpdates, Leaves};
 use crate::tree::{Hash, LeafIndex, WorldTree};
 
 /// Ingests the canonical logs from the mainnet contract
@@ -156,7 +156,9 @@ async fn extract_identity_updates<M: Middleware + 'static>(
                 let tx_hash = log
                     .transaction_hash
                     .ok_or(WorldTreeError::TransactionHashNotFound)?;
+
                 tracing::debug!(?tx_hash, "Getting transaction");
+
                 middleware
                     .get_transaction(tx_hash)
                     .await

@@ -1,142 +1,165 @@
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use semaphore::cascading_merkle_tree::CascadingMerkleTree;
+use semaphore::generic_storage::GenericStorage;
+use semaphore::poseidon_tree::PoseidonHash;
+
 use crate::db::DbMethods;
 use crate::tree::error::WorldTreeResult;
-use crate::tree::identity_tree::{LeafUpdates, Leaves};
-use crate::tree::{LeafIndex, WorldTree};
+use crate::tree::{ChainId, Hash, WorldTree};
 
-/// Periodically fetches the next batch of updates from the database and appends them to the identity tree
 pub async fn append_updates(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
+    let mut handles = FuturesUnordered::new();
+
+    for chain_id in world_tree.chain_ids.iter() {
+        let world_tree = world_tree.clone();
+        let chain_id = *chain_id;
+
+        handles.push(tokio::spawn(async move {
+            append_chain_updates(world_tree, chain_id).await
+        }));
+    }
+
+    while let Some(result) = handles.next().await {
+        result??;
+    }
+
+    Ok(())
+}
+
+async fn append_chain_updates(
+    world_tree: Arc<WorldTree>,
+    chain_id: ChainId,
+) -> WorldTreeResult<()> {
+    let tree = world_tree
+        .cache
+        .trees
+        .get(&chain_id)
+        .expect("Missing cache for chain id")
+        .clone();
+
     loop {
-        let mut identity_tree = world_tree.identity_tree.write().await;
-        let latest_root = identity_tree.latest_root();
+        let latest_root = world_tree.db.root_by_chain(chain_id.0).await?;
 
-        let next_updates =
-            world_tree.db.fetch_next_updates(latest_root).await?;
-        let next_root = world_tree.db.fetch_next_root(latest_root).await?;
+        // No updates for this chain id yet, no need to update
+        let Some(latest_root) = latest_root else {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        };
 
-        if next_updates.is_empty() {
-            // TODO: Configureable & maybe listen/notify?
-            drop(identity_tree);
+        let mut tree_lock = tree.clone().write_owned().await;
+
+        let current_root = tree_lock.root();
+
+        let updates = world_tree
+            .db
+            .fetch_updates_between(current_root, latest_root)
+            .await?;
+
+        // No new batches, no need to update
+        if updates.is_empty() {
+            drop(tree_lock);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
 
-        tracing::info!(
-            n = next_updates.len(),
-            ?latest_root,
-            "Fetched next batch of updates"
-        );
+        let num_updates = updates.len();
+        tracing::info!(%chain_id, num_updates, "Updating tree");
 
-        let is_deletion_batch =
-            next_updates.iter().all(|(_, value)| value.is_zero());
+        let start = std::time::Instant::now();
 
-        let leaves: Leaves = next_updates
-            .into_iter()
-            .map(|(leaf_idx, value)| (LeafIndex::from(leaf_idx as u32), value))
-            .collect();
+        tokio::task::spawn_blocking(move || {
+            apply_updates_to_tree(&mut tree_lock, &updates)?;
 
-        let updates = if is_deletion_batch {
-            LeafUpdates::Delete(leaves)
-        } else {
-            LeafUpdates::Insert(leaves)
-        };
+            WorldTreeResult::Ok(())
+        })
+        .await??;
 
-        let post_root = identity_tree.append_updates(latest_root, updates)?;
+        let elapsed = start.elapsed();
+        let elapsed_ms = elapsed.as_millis();
 
-        if next_root.is_some() && post_root != next_root.unwrap() {
-            let next_root = next_root.unwrap();
-            tracing::error!(
-                ?post_root,
-                ?next_root,
-                "Computed post root does not match next root"
-            );
-
-            panic!(
-                "Computed post root ({}) does not match next root ({})",
-                post_root, next_root,
-            );
-        }
-
-        tracing::info!(?post_root, "Appended updates to identity tree");
+        tracing::info!(%chain_id, ?elapsed, elapsed_ms, prev_root = ?current_root, root = ?latest_root, "Tree updated");
     }
 }
 
 /// Periodically fetches the latest common root from the database and realigns the identity tree
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let latest_root = world_tree.identity_tree.read().await.latest_root();
+        let common = world_tree.db.fetch_latest_common_root().await?;
 
-        let latest_root_id = world_tree.db.fetch_root_id(latest_root).await?;
-
-        let Some((latest_common_root_id, mut latest_common_root)) =
-            world_tree.db.fetch_latest_common_root().await?
-        else {
-            tracing::debug!("No latest common root found");
+        // No common root yet, no need to reallign
+        let Some(latest_common_root) = common else {
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         };
 
-        if let Some(latest_root_id) = latest_root_id {
-            if latest_common_root_id > latest_root_id {
-                tracing::warn!(
-                    latest_common_root_id,
-                    latest_root_id,
-                    ?latest_root_id,
-                    "Cache is behind db"
-                );
-                latest_common_root = latest_root;
-            }
+        let mut canonical_lock =
+            world_tree.cache.canonical.clone().write_owned().await;
 
-            if latest_common_root_id < latest_root_id {
-                tracing::warn!(
-                    latest_common_root_id,
-                    latest_root_id,
-                    "Common root is behind latest root"
-                );
-            }
-        }
+        let canonical_tree_root = canonical_lock.root();
 
-        let latest_alligned_root =
-            world_tree.identity_tree.read().await.tree.root();
+        let updates = world_tree
+            .db
+            .fetch_updates_between(canonical_tree_root, latest_common_root)
+            .await?;
 
-        if latest_alligned_root == latest_common_root {
-            // TODO: Configureable & maybe listen/notify?
+        // No new batches, no need to reallign
+        if updates.is_empty() {
+            drop(canonical_lock);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
 
-        let mut identity_tree = world_tree.identity_tree.write().await;
+        let num_updates = updates.len();
+        tracing::info!(num_updates, "Updating canonical tree");
 
-        if identity_tree.tree_updates.is_empty() {
-            drop(identity_tree);
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            continue;
-        }
+        let start = std::time::Instant::now();
 
-        tracing::info!(
-            ?latest_alligned_root,
-            ?latest_common_root,
-            "Realigning identity tree"
-        );
+        tokio::task::spawn_blocking(move || {
+            apply_updates_to_tree(&mut canonical_lock, &updates)?;
 
-        let now = std::time::Instant::now();
-        let num_updates_before = identity_tree.tree_updates.len();
+            WorldTreeResult::Ok(())
+        })
+        .await??;
 
-        identity_tree.apply_updates_to_root(&latest_common_root);
-
-        let elapsed = now.elapsed();
+        let elapsed = start.elapsed();
         let elapsed_ms = elapsed.as_millis();
-        let num_updates_after = identity_tree.tree_updates.len();
 
         tracing::info!(
-            ?latest_common_root,
             ?elapsed,
             elapsed_ms,
-            num_updates_before,
-            num_updates_after,
-            "Identity tree realigned"
+            prev_root = ?canonical_tree_root,
+            root = ?latest_common_root,
+            "Canonical tree updated"
         );
     }
+}
+
+fn apply_updates_to_tree<S: GenericStorage<Hash>>(
+    tree: &mut CascadingMerkleTree<PoseidonHash, S>,
+    updates: &[(u64, Hash)],
+) -> WorldTreeResult<()> {
+    for (leaf_idx, leaf) in updates {
+        let leaf_idx = *leaf_idx as usize;
+
+        match leaf_idx.cmp(&tree.num_leaves()) {
+            Ordering::Less => {
+                tree.set_leaf(leaf_idx, *leaf);
+            }
+            Ordering::Equal => {
+                tree.push(*leaf)?;
+            }
+            Ordering::Greater => {
+                return Err(
+                    eyre::format_err!("Leaf index out of bounds").into()
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
