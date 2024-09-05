@@ -51,7 +51,9 @@ async fn append_chain_updates(
             continue;
         };
 
-        let current_root = tree.read().await.root();
+        let mut tree_lock = tree.clone().write_owned().await;
+
+        let current_root = tree_lock.root();
 
         let updates = world_tree
             .db
@@ -60,27 +62,22 @@ async fn append_chain_updates(
 
         // No new batches, no need to update
         if updates.is_empty() {
+            drop(tree_lock);
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
         }
 
         let num_updates = updates.len();
-        tracing::info!(num_updates, "Updating tree");
+        tracing::info!(%chain_id, num_updates, "Updating tree");
 
         let start = std::time::Instant::now();
 
-        {
-            let tree = tree.clone();
+        tokio::task::spawn_blocking(move || {
+            apply_updates_to_tree(&mut tree_lock, &updates)?;
 
-            tokio::task::spawn_blocking(move || {
-                let mut tree_lock = tree.blocking_write();
-
-                apply_updates_to_tree(&mut tree_lock, &updates)?;
-
-                WorldTreeResult::Ok(())
-            })
-            .await??;
-        }
+            WorldTreeResult::Ok(())
+        })
+        .await??;
 
         let elapsed = start.elapsed();
         let elapsed_ms = elapsed.as_millis();
@@ -92,9 +89,6 @@ async fn append_chain_updates(
 /// Periodically fetches the latest common root from the database and realigns the identity tree
 pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     loop {
-        let canonical_tree_root =
-            world_tree.cache.canonical.read().await.root();
-
         let common = world_tree.db.fetch_latest_common_root().await?;
 
         // No common root yet, no need to reallign
@@ -103,7 +97,10 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
             continue;
         };
 
-        let mut canonical_lock = world_tree.cache.canonical.write().await;
+        let mut canonical_lock =
+            world_tree.cache.canonical.clone().write_owned().await;
+
+        let canonical_tree_root = canonical_lock.root();
 
         let updates = world_tree
             .db
@@ -118,11 +115,16 @@ pub async fn reallign(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
         }
 
         let num_updates = updates.len();
-        tracing::info!(num_updates, "Updatign canonical tree");
+        tracing::info!(num_updates, "Updating canonical tree");
 
         let start = std::time::Instant::now();
 
-        apply_updates_to_tree(&mut canonical_lock, &updates)?;
+        tokio::task::spawn_blocking(move || {
+            apply_updates_to_tree(&mut canonical_lock, &updates)?;
+
+            WorldTreeResult::Ok(())
+        })
+        .await??;
 
         let elapsed = start.elapsed();
         let elapsed_ms = elapsed.as_millis();
