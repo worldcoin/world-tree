@@ -1,12 +1,16 @@
 use std::ops::{Deref, DerefMut};
 
 use async_trait::async_trait;
+use data::h256::H256Wrapper;
+use data::hash::HashWrapper;
 use ethers::types::{H256, U64};
 use sqlx::migrate::MigrateDatabase;
 use sqlx::{Acquire, PgPool, Postgres};
 
 use crate::tree::config::DbConfig;
 use crate::tree::Hash;
+
+pub mod data;
 
 pub struct Db {
     pool: PgPool,
@@ -74,7 +78,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         )
         .bind(chain_id as i64)
         .bind(block_number.as_u64() as i64)
-        .bind(tx_hash.as_bytes())
+        .bind(H256Wrapper(tx_hash))
         .fetch_one(&mut *conn)
         .await?;
 
@@ -96,8 +100,8 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             RETURNING id
             "#,
         )
-        .bind(pre_root.as_le_bytes().as_ref())
-        .bind(post_root.as_le_bytes().as_ref())
+        .bind(HashWrapper(pre_root))
+        .bind(HashWrapper(post_root))
         .bind(tx_id)
         .fetch_one(&mut *conn)
         .await?;
@@ -117,7 +121,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             )
             "#,
         )
-        .bind(root.as_le_bytes().as_ref())
+        .bind(HashWrapper(root))
         .fetch_one(&mut *conn)
         .await?;
 
@@ -133,7 +137,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             VALUES ($1, $2)
             "#,
         )
-        .bind(root.as_le_bytes().as_ref())
+        .bind(HashWrapper(root))
         .bind(tx_id)
         .execute(&mut *conn)
         .await?;
@@ -160,7 +164,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             )
             .bind(id as i64)
             .bind(*leaf_idx as i64)
-            .bind(leaf.as_le_bytes().as_ref())
+            .bind(HashWrapper(*leaf))
             .execute(&mut *conn)
             .await?;
         }
@@ -237,7 +241,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     ) -> sqlx::Result<Vec<(u64, Hash)>> {
         let mut conn = self.acquire().await?;
 
-        let updates: Vec<(i64, Vec<u8>)> = sqlx::query_as(
+        let updates: Vec<(i64, HashWrapper)> = sqlx::query_as(
             r#"
             WITH start_id AS (
                 SELECT leaf_batches.start_id as id
@@ -263,16 +267,14 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
                 leaf_updates.id ASC;
             "#,
         )
-        .bind(prev_root.as_le_bytes().as_ref())
-        .bind(next_root.as_le_bytes().as_ref())
+        .bind(HashWrapper(prev_root))
+        .bind(HashWrapper(next_root))
         .fetch_all(&mut *conn)
         .await?;
 
         Ok(updates
             .into_iter()
-            .map(|(idx, leaf)| {
-                (idx as u64, Hash::try_from_le_slice(&leaf).unwrap())
-            })
+            .map(|(idx, leaf)| (idx as u64, leaf.0))
             .collect())
     }
 
@@ -286,7 +288,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             WHERE updates.post_root = $1
             "#,
         )
-        .bind(root.as_le_bytes().as_ref())
+        .bind(HashWrapper(root))
         .fetch_optional(&mut *conn)
         .await?;
 
@@ -296,7 +298,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn fetch_latest_common_root(self) -> sqlx::Result<Option<Hash>> {
         let mut conn = self.acquire().await?;
 
-        let Some((latest_hash,)): Option<(Vec<u8>,)> = sqlx::query_as(
+        let Some((latest_hash,)): Option<(HashWrapper,)> = sqlx::query_as(
             r#"
                 WITH latest AS (
                     SELECT tx.chain_id, MAX(updates.id) as id
@@ -320,9 +322,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             return Ok(None);
         };
 
-        let latest_root = Hash::try_from_le_slice(&latest_hash).unwrap();
-
-        Ok(Some(latest_root))
+        Ok(Some(latest_hash.0))
     }
 
     async fn leaf_index(self, leaf: Hash) -> sqlx::Result<Option<u32>> {
@@ -337,7 +337,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             LIMIT 1
             "#,
         )
-        .bind(leaf.as_le_bytes().as_ref())
+        .bind(HashWrapper(leaf))
         .fetch_optional(&mut *conn)
         .await?;
 
@@ -347,7 +347,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn root_by_chain(self, chain_id: u64) -> sqlx::Result<Option<Hash>> {
         let mut conn = self.acquire().await?;
 
-        let Some((root,)): Option<(Vec<u8>,)> = sqlx::query_as(
+        let Some((root,)): Option<(HashWrapper,)> = sqlx::query_as(
             r#"
             SELECT roots.root
             FROM roots
@@ -364,7 +364,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             return Ok(None);
         };
 
-        Ok(Some(Hash::try_from_le_slice(&root).unwrap()))
+        Ok(Some(root.0))
     }
 }
 
