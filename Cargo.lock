@@ -157,6 +157,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "app-task"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b575d3e1866c7c9eab278156007eb5817f10d66cc47df220a82733731f96c7"
+dependencies = [
+ "futures",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ark-bn254"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7293,6 +7304,7 @@ dependencies = [
 name = "world-tree"
 version = "0.1.0"
 dependencies = [
+ "app-task",
  "async-trait",
  "axum",
  "axum-middleware",

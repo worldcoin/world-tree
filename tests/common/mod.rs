@@ -56,7 +56,7 @@ macro_rules! attempt_async {
 
 pub async fn setup_world_tree(
     config: &ServiceConfig,
-) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<WorldTreeResult<()>>>)> {
+) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<()>>)> {
     let world_tree = init_world_tree(config).await?;
 
     let service = InclusionProofService::new(world_tree);

@@ -6,7 +6,6 @@ use axum::http::StatusCode;
 use axum::{middleware, Json};
 use axum_middleware::logging;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 use super::error::WorldTreeResult;
@@ -17,17 +16,11 @@ use super::{ChainId, Hash, InclusionProof, WorldTree};
 pub struct InclusionProofService {
     /// In-memory representation of the merkle tree containing all verified World IDs.
     pub world_tree: Arc<WorldTree>,
-    pub cancel_tx: broadcast::Sender<()>,
 }
 
 impl InclusionProofService {
     pub fn new(world_tree: Arc<WorldTree>) -> Self {
-        let (cancel_tx, _) = broadcast::channel(1);
-
-        Self {
-            world_tree,
-            cancel_tx,
-        }
+        Self { world_tree }
     }
 
     /// Spawns an axum server and exposes an API endpoint to serve inclusion proofs for requested identity commitments.
@@ -43,10 +36,7 @@ impl InclusionProofService {
     pub async fn serve(
         self,
         addr: Option<SocketAddr>,
-    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<WorldTreeResult<()>>>)>
-    {
-        let mut handles = vec![];
-
+    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<()>>)> {
         // Initialize a new router and spawn the server
         tracing::info!(?addr, "Initializing axum server");
 
@@ -66,9 +56,11 @@ impl InclusionProofService {
 
         let server_handle = tokio::spawn(async move {
             tracing::info!("Spawning server");
-            bound_server.serve(router.into_make_service()).await?;
 
-            Ok(())
+            bound_server
+                .serve(router.into_make_service())
+                .await
+                .expect("Server failed");
         });
 
         // Spawn a task to sync and maintain the state of the world tree
@@ -76,20 +68,16 @@ impl InclusionProofService {
 
         // TODO: Decouple InclusionProofService (API layer) from spawning tasks
         let world_tree = self.world_tree.clone();
-        handles.push(tokio::spawn(crate::tasks::observe::observe(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::ingest::ingest_canonical(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::update::append_updates(
-            world_tree.clone(),
-        )));
-        handles.push(tokio::spawn(crate::tasks::update::reallign(
-            world_tree.clone(),
-        )));
 
-        handles.push(server_handle);
+        let runner = app_task::TaskRunner::new(world_tree);
+
+        let handles = vec![
+            runner.spawn_task("Observe", crate::tasks::observe::observe),
+            runner.spawn_task("Ingest", crate::tasks::ingest::ingest_canonical),
+            runner.spawn_task("Update", crate::tasks::update::append_updates),
+            runner.spawn_task("Reallign", crate::tasks::update::reallign),
+            server_handle,
+        ];
 
         Ok((local_addr, handles))
     }

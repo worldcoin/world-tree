@@ -11,6 +11,7 @@ members = ["crates/*"]
 color-eyre = "0.6"
 axum = "0.6"
 axum-middleware = { path = "crates/axum-middleware" }
+app-task = "0.4.0"
 clap = { version = "4.4.8", features = ["derive", "env"] }
 config = "0.14.0"
 criterion = { version = "0.5.1", features = ["async", "async_futures"] }
