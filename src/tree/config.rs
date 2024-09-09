@@ -10,6 +10,7 @@ pub const CONFIG_PREFIX: &str = "WLD";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceConfig {
     pub tree_depth: usize,
+    pub db: DbConfig,
     /// Configuration for the canonical tree on mainnet
     pub canonical_tree: TreeConfig,
     /// Configuration for tree cache
@@ -25,11 +26,27 @@ pub struct ServiceConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DbConfig {
+    /// The db connection string
+    /// i.e. postgresql://user:password@localhost:5432/dbname
+    pub connection_string: String,
+
+    /// Whether to create the database if it does not exist
+    #[serde(default = "default::bool_true")]
+    pub create: bool,
+
+    /// Whether to run migrations
+    #[serde(default = "default::bool_true")]
+    pub migrate: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CacheConfig {
-    /// Path to mmap file responsible for caching the state of the canonical tree
-    pub cache_file: PathBuf,
+    /// Path to the directory containing all cache files
+    pub dir: PathBuf,
+
     #[serde(default)]
-    pub purge_cache: bool,
+    pub purge: bool,
 }
 
 impl ServiceConfig {
@@ -57,10 +74,9 @@ impl ServiceConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TreeConfig {
+    /// The address of the tree contract
     pub address: Address,
-    #[serde(default = "default::window_size")]
-    pub window_size: u64,
-    #[serde(default)]
+    /// The block number at which the tree was created
     pub creation_block: u64,
     pub provider: ProviderConfig,
 }
@@ -72,6 +88,8 @@ pub struct ProviderConfig {
     pub rpc_endpoint: Url,
     #[serde(default = "default::provider_throttle")]
     pub throttle: u32,
+    #[serde(default = "default::window_size")]
+    pub window_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,12 +118,16 @@ mod default {
         Some(([127, 0, 0, 1], 8080).into())
     }
 
-    pub fn window_size() -> u64 {
+    pub const fn window_size() -> u64 {
         1000
     }
 
-    pub fn provider_throttle() -> u32 {
+    pub const fn provider_throttle() -> u32 {
         150
+    }
+
+    pub const fn bool_true() -> bool {
+        true
     }
 }
 
@@ -152,55 +174,67 @@ mod tests {
             tree_depth = 10
             socket_address = "127.0.0.1:8080"
 
+            [db]
+            connection_string = "postgresql://user:password@localhost:5432/dbname"
+            create = true
+            migrate = true
+
             [canonical_tree]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
-            window_size = 10
             creation_block = 0
 
             [canonical_tree.provider]
             rpc_endpoint = "http://localhost:8545/"
             throttle = 150
+            window_size = 10
 
             [cache]
-            cache_file = "cache.mmap"
-            purge_cache = true
+            dir = ".world-tree.cache/"
+            purge = true
 
             [bridged_trees.0]
             address = "0xb3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"
-            window_size = 10
             creation_block = 0
 
             [bridged_trees.0.provider]
             rpc_endpoint = "http://localhost:8546/"
             throttle = 150
+            window_size = 10
         "#};
 
         let config = ServiceConfig {
             tree_depth: 10,
+            db: DbConfig {
+                connection_string:
+                    "postgresql://user:password@localhost:5432/dbname"
+                        .to_string(),
+                migrate: true,
+                create: true,
+            },
             canonical_tree: TreeConfig {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
                     .parse()
                     .unwrap(),
-                window_size: 10,
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
                     throttle: 150,
+                    window_size: 10,
                 },
             },
             cache: CacheConfig {
-                cache_file: PathBuf::from("cache.mmap"),
-                purge_cache: true,
+                dir: PathBuf::from(".world-tree.cache/"),
+                purge: true,
             },
             bridged_trees: vec![TreeConfig {
                 address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
                     .parse()
                     .unwrap(),
-                window_size: 10,
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
                     throttle: 150,
+                    window_size: 10,
                 },
             }],
             socket_address: Some(([127, 0, 0, 1], 8080).into()),

@@ -1,13 +1,16 @@
-use super::error::WorldTreeResult;
-use crate::tree::tree_manager::BLOCK_SCANNER_SLEEP_TIME;
-use crate::util::retry;
-use ethers::providers::Middleware;
-use ethers::types::{BlockNumber, Filter, Log};
-use futures::{stream, Stream};
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+
+use ethers::providers::Middleware;
+use ethers::types::{BlockNumber, Filter, Log};
+use futures::{stream, Stream};
+
+use super::error::WorldTreeResult;
+use crate::util::retry;
+
+pub const BLOCK_SCANNER_SLEEP_TIME: u64 = 5;
 
 /// The `BlockScanner` utility tool enables allows parsing arbitrary onchain events
 #[derive(Debug)]

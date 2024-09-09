@@ -6,3 +6,7 @@ tree-cache
 
 config.mainnet.toml
 config.staging.toml
+
+cache.mainnet
+cache.staging
+cache.local

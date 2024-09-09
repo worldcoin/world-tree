@@ -10,7 +10,7 @@ use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
-use tempfile::NamedTempFile;
+use tempfile::TempDir;
 use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
@@ -27,7 +27,9 @@ use world_tree::tree::error::WorldTreeResult;
 async fn full_flow() -> WorldTreeResult<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let cache_file = NamedTempFile::new()?;
+    let cache_dir = TempDir::new()?;
+
+    let (db_config, _db_container) = setup_db().await?;
 
     let mainnet_container = setup_mainnet().await?;
     let mainnet_rpc_port = mainnet_container.get_host_port_ipv4(8545).await?;
@@ -114,26 +116,27 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     let service_config = ServiceConfig {
         tree_depth: TREE_DEPTH,
+        db: db_config,
         canonical_tree: TreeConfig {
             address: id_manager_address,
-            window_size: 10,
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: mainnet_rpc_url.parse()?,
                 throttle: 150,
+                window_size: 10,
             },
         },
         cache: CacheConfig {
-            cache_file: cache_file.path().to_path_buf(),
-            purge_cache: true,
+            dir: cache_dir.path().to_path_buf(),
+            purge: true,
         },
         bridged_trees: vec![TreeConfig {
             address: bridged_address,
-            window_size: 10,
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: rollup_rpc_url.parse()?,
                 throttle: 150,
+                window_size: 10,
             },
         }],
         socket_address: None,
@@ -222,7 +225,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     let ip = client.inclusion_proof(&second_batch[0]).await?;
 
-    assert!(ip.is_none(), "The inclusion proof endpoint should return only roots finalized on chains (unless chain id is specified)");
+    assert!(ip.is_none(), "The inclusion proof endpoint should return only roots finalized on all chains (unless chain id is specified)");
 
     let ip = client
         .inclusion_proof(&first_batch[0])

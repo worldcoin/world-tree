@@ -1,6 +1,6 @@
 use hyper::StatusCode;
 use semaphore::Field;
-use world_tree::tree::identity_tree::InclusionProof;
+use world_tree::tree::inclusion_proof::InclusionProof;
 use world_tree::tree::service::InclusionProofRequest;
 
 pub struct TestClient {
