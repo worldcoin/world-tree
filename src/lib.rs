@@ -22,7 +22,11 @@ pub async fn init_world_tree(
     if config.cache.purge {
         tracing::info!("Purging tree cache");
         if config.cache.dir.exists() {
-            fs::remove_dir_all(&config.cache.dir)?;
+            if config.cache.dir.is_dir() {
+                fs::remove_dir_all(&config.cache.dir)?;
+            } else {
+                fs::remove_file(&config.cache.dir)?;
+            }
         }
     }
 
