@@ -1,9 +1,9 @@
 # world-tree
 
-WorldId is one of the core pillars of the [Worldcoin Protocol](https://whitepaper.worldcoin.org/technical-implementation#worldcoin-protocol), providing a privacy preserving identity primitive which enables a robust mechanism for [proof of personhood](https://whitepaper.worldcoin.org/proof-of-personhood). The protocol works by maintaining an onchain representation of a [Semaphore](https://semaphore.pse.dev/docs/introduction) set, with each identity in the set representing a verified human. With WorldId, users can create Zero Knowledge proofs proving that they are a unique member of the set. In order to create a ZKP, users need to generate a merkle proof for their identity in the set. 
+WorldId is one of the core pillars of the [Worldcoin Protocol](https://whitepaper.worldcoin.org/technical-implementation#worldcoin-protocol), providing a privacy preserving identity primitive which enables a robust mechanism for [proof of personhood](https://whitepaper.worldcoin.org/proof-of-personhood). The protocol works by maintaining an onchain representation of a [Semaphore](https://semaphore.pse.dev/docs/introduction) set, with each identity in the set representing a verified human. With WorldId, users can create Zero Knowledge proofs proving that they are a unique member of the set. In order to create a ZKP, users need to generate a merkle proof for their identity in the set.
 
 
-The `world-tree` is a service that syncs the state of the onchain merkle tree and delivers inclusion proofs for any given identity. 
+The `world-tree` is a service that syncs the state of the onchain merkle tree and delivers inclusion proofs for any given identity.
 
 
 ## Installation
@@ -21,7 +21,7 @@ To run the `world-tree`, you can run the following command.
 world-tree --config <path_to_config.toml>
 ```
 
-To see an example configuration file, see `bin/world_tree.toml`. You can also specify the necessary configuration variables via environment variables.
+To see an example configuration file, see `config.local.toml`. You can also specify the necessary configuration variables via environment variables.
 
 
 ## Docker usage & local testing
