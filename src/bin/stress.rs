@@ -104,8 +104,7 @@ async fn main() -> eyre::Result<()> {
     let times: Arc<std::sync::Mutex<Vec<f64>>> =
         Arc::new(std::sync::Mutex::new(Vec::new()));
 
-    let (tx, mut rx) =
-        tokio::sync::mpsc::channel(args.max_simultaneous_requests);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(args.max_simultaneous_requests);
 
     let spawner_task = async {
         for _ in 0..args.num_requests {
