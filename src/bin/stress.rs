@@ -64,11 +64,11 @@ const IDENTITIES: &[Hash] = &[
 #[derive(Debug, Clone, Parser)]
 struct Args {
     /// Max number of simultaneous requests
-    #[clap(short, long, default_value = "10")]
+    #[clap(short = 'J', long, default_value = "10")]
     max_simultaneous_requests: usize,
 
     /// Total number of requests to make
-    #[clap(short, long, default_value = "100")]
+    #[clap(short = 'N', long, default_value = "100")]
     num_requests: usize,
 
     /// Service URL to call
