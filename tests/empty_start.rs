@@ -1,17 +1,18 @@
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::middleware::SignerMiddleware;
-use ethers::providers::{Http, Middleware, Provider};
-use ethers::signers::{LocalWallet, Signer};
-use ethers::types::{Address, U256};
+use alloy::network::EthereumWallet;
+use alloy::primitives::{address, U256};
+use alloy::providers::ProviderBuilder;
+use alloy::signers::local::LocalSigner;
+use ethers::core::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
 use semaphore::Field;
 use tempfile::TempDir;
-use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
+use world_tree::abi::IBridgedWorldID;
+use world_tree::abi::IWorldIDIdentityManager::IWorldIDIdentityManagerInstance;
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
 };
@@ -22,6 +23,7 @@ mod common;
 
 use common::*;
 use world_tree::tree::error::WorldTreeResult;
+use world_tree::tree::provider;
 
 #[tokio::test]
 async fn empty_start() -> WorldTreeResult<()> {
@@ -49,37 +51,49 @@ async fn empty_start() -> WorldTreeResult<()> {
     tracing::info!(?initial_root, "Initial root",);
 
     // The addresses are the same since we use the same account on both networks
-    let id_manager_address: Address =
-        "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
-    let bridged_address: Address =
-        "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
+    let id_manager_address =
+        address!("5FbDB2315678afecb367f032d93F642f64180aa3");
+    let bridged_address = address!("5FbDB2315678afecb367f032d93F642f64180aa3");
 
-    let mainnet_provider = Provider::<Http>::new(mainnet_rpc_url.parse()?);
-    let rollup_provider = Provider::<Http>::new(rollup_rpc_url.parse()?);
+    let mainnet_provider = provider(&ProviderConfig {
+        rpc_endpoint: mainnet_rpc_url.parse()?,
+        max_rate_limit_retries: 1,
+        compute_units_per_second: 10000,
+        initial_backoff: 100,
+        window_size: 10,
+    })
+    .await?;
+
+    let rollup_provider = provider(&ProviderConfig {
+        rpc_endpoint: rollup_rpc_url.parse()?,
+        max_rate_limit_retries: 1,
+        compute_units_per_second: 10000,
+        initial_backoff: 100,
+        window_size: 10,
+    })
+    .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
     wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
         .await?;
     wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
 
-    let mainnet_chain_id = mainnet_provider.get_chainid().await?;
-    let rollup_chain_id = rollup_provider.get_chainid().await?;
+    let wallet = EthereumWallet::from(
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+            .parse::<LocalSigner<SigningKey>>()?,
+    );
 
-    let wallet = LocalWallet::from_str(
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    )?;
-    let mainnet_wallet =
-        wallet.clone().with_chain_id(mainnet_chain_id.as_u64());
-    let rollup_wallet = wallet.with_chain_id(rollup_chain_id.as_u64());
-
-    let mainnet_signer =
-        SignerMiddleware::new(mainnet_provider, mainnet_wallet);
+    let mainnet_signer = ProviderBuilder::new()
+        .wallet(wallet.clone())
+        .on_http(mainnet_rpc_url.parse()?);
     let mainnet_signer = Arc::new(mainnet_signer);
 
-    let rollup_signer = SignerMiddleware::new(rollup_provider, rollup_wallet);
+    let rollup_signer = ProviderBuilder::new()
+        .wallet(wallet)
+        .on_http(rollup_rpc_url.parse()?);
     let rollup_signer = Arc::new(rollup_signer);
 
-    let world_id_manager = IWorldIDIdentityManager::new(
+    let world_id_manager = IWorldIDIdentityManagerInstance::new(
         id_manager_address,
         mainnet_signer.clone(),
     );
@@ -97,7 +111,9 @@ async fn empty_start() -> WorldTreeResult<()> {
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: mainnet_rpc_url.parse()?,
-                throttle: 150,
+                max_rate_limit_retries: 1,
+                compute_units_per_second: 10000,
+                initial_backoff: 100,
                 window_size: 10,
             },
         },
@@ -110,7 +126,9 @@ async fn empty_start() -> WorldTreeResult<()> {
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: rollup_rpc_url.parse()?,
-                throttle: 150,
+                max_rate_limit_retries: 1,
+                compute_units_per_second: 10000,
+                initial_backoff: 100,
                 window_size: 10,
             },
         }],
@@ -128,19 +146,23 @@ async fn empty_start() -> WorldTreeResult<()> {
 
     // We need some initial test data to start
     world_id_manager
-        .register_identities(
-            [U256::zero(); 8],
+        .registerIdentities(
+            [U256::ZERO.into(); 8],
             f2ethers(initial_root), // pre root,
             0,                      // start index
             first_batch.iter().cloned().map(f2ethers).collect(), // commitments
             f2ethers(first_batch_root), // post root
         )
         .send()
+        .await?
+        .get_receipt()
         .await?;
 
     bridged_world_id
-        .receive_root(f2ethers(first_batch_root))
+        .receiveRoot(f2ethers(first_batch_root))
         .send()
+        .await?
+        .get_receipt()
         .await?;
 
     let ip = attempt_async! {

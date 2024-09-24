@@ -9,9 +9,9 @@ use sqlx::Database;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct H256Wrapper(pub B256);
+pub struct B256Wrapper(pub B256);
 
-impl<'r, DB> sqlx::Decode<'r, DB> for H256Wrapper
+impl<'r, DB> sqlx::Decode<'r, DB> for B256Wrapper
 where
     DB: Database,
     [u8; 32]: sqlx::Decode<'r, DB>,
@@ -27,7 +27,7 @@ where
     }
 }
 
-impl<'q, DB> sqlx::Encode<'q, DB> for H256Wrapper
+impl<'q, DB> sqlx::Encode<'q, DB> for B256Wrapper
 where
     DB: Database,
     [u8; 32]: sqlx::Encode<'q, DB>,
@@ -41,13 +41,13 @@ where
     }
 }
 
-impl PgHasArrayType for H256Wrapper {
+impl PgHasArrayType for B256Wrapper {
     fn array_type_info() -> PgTypeInfo {
         <[u8; 32] as PgHasArrayType>::array_type_info()
     }
 }
 
-impl<DB: Database> sqlx::Type<DB> for H256Wrapper
+impl<DB: Database> sqlx::Type<DB> for B256Wrapper
 where
     [u8; 32]: sqlx::Type<DB>,
 {

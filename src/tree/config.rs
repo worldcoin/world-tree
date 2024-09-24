@@ -135,15 +135,11 @@ mod default {
     }
 
     pub const fn initial_backoff() -> u64 {
-        10
+        100
     }
 
     pub const fn compute_units_per_second() -> u64 {
-        1000000
-    }
-
-    pub const fn retry_backoff() -> RetryBackoffLayer {
-        RetryBackoffLayer::new(1, 100, 1000)
+        10000
     }
 
     pub const fn bool_true() -> bool {
@@ -186,6 +182,7 @@ mod map_vec {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::address;
     use serde::de;
 
     use super::*;
@@ -207,7 +204,9 @@ mod tests {
 
             [canonical_tree.provider]
             rpc_endpoint = "http://localhost:8545/"
-            throttle = 150
+            max_rate_limit_retries = 1
+            initial_backoff = 100
+            compute_units_per_second = 10000
             window_size = 10
 
             [cache]
@@ -220,7 +219,9 @@ mod tests {
 
             [bridged_trees.0.provider]
             rpc_endpoint = "http://localhost:8546/"
-            throttle = 150
+            max_rate_limit_retries = 1
+            initial_backoff = 100
+            compute_units_per_second = 10000
             window_size = 10
         "#};
 
@@ -234,16 +235,13 @@ mod tests {
                 create: true,
             },
             canonical_tree: TreeConfig {
-                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
-                    .parse()
-                    .unwrap(),
+                address: address!("b3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"),
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
-                    compute_units_per_second: default::compute_units_per_second(
-                    ),
-                    max_rate_limit_retries: default::max_rate_limit_retries(),
-                    initial_backoff: default::initial_backoff(),
+                    max_rate_limit_retries: 1,
+                    initial_backoff: 100,
+                    compute_units_per_second: 10000,
                     window_size: 10,
                 },
             },
@@ -252,16 +250,13 @@ mod tests {
                 purge: true,
             },
             bridged_trees: vec![TreeConfig {
-                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
-                    .parse()
-                    .unwrap(),
+                address: address!("b3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"),
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
-                    compute_units_per_second: default::compute_units_per_second(
-                    ),
-                    max_rate_limit_retries: default::max_rate_limit_retries(),
-                    initial_backoff: default::initial_backoff(),
+                    max_rate_limit_retries: 1,
+                    initial_backoff: 100,
+                    compute_units_per_second: 10000,
                     window_size: 10,
                 },
             }],
@@ -270,7 +265,6 @@ mod tests {
         };
 
         let serialized = toml::to_string(&config).unwrap();
-
         assert_eq!(serialized.trim(), S.trim());
     }
 }

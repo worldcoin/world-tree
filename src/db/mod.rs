@@ -2,9 +2,8 @@ use std::ops::{Deref, DerefMut};
 
 use alloy::primitives::TxHash;
 use async_trait::async_trait;
-use data::h256::H256Wrapper;
+use data::b256::B256Wrapper;
 use data::hash::HashWrapper;
-use ethers::types::{H256, U64};
 use sqlx::migrate::MigrateDatabase;
 use sqlx::{Acquire, PgPool, Postgres};
 
@@ -79,7 +78,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         )
         .bind(chain_id as i64)
         .bind(block_number as i64)
-        .bind(H256Wrapper(tx_hash))
+        .bind(B256Wrapper(tx_hash))
         .fetch_one(&mut *conn)
         .await?;
 

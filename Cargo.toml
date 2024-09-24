@@ -31,6 +31,7 @@ alloy = { version = "0.3", features = [
     "rpc-types-eth",
     "transports",
     "hyper",
+    "signer-local"
 ] }
 ethers-throttle = { git = "https://github.com/0xKitsune/ethers-throttle.git" }
 eyre = "0.6"

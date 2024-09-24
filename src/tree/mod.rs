@@ -8,26 +8,15 @@ pub mod newtypes;
 pub mod service;
 
 use alloy::{
-    network::Ethereum,
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill,
-            NonceFiller, RecommendedFiller, RecommendedFillers,
-        },
-        Identity, Provider, ProviderBuilder, RootProvider,
-    },
-    rpc::client::{ClientBuilder, RpcClient},
+    providers::{Provider, ProviderBuilder, RootProvider},
+    rpc::client::ClientBuilder,
     transports::{
-        http::{hyper_util::rt::TokioExecutor, Client, Http, HyperClient},
-        layers::{
-            RateLimitRetryPolicy, RetryBackoffLayer, RetryBackoffService,
-        },
-        BoxTransport, Transport,
+        http::{Client, Http},
+        layers::{RetryBackoffLayer, RetryBackoffService},
     },
 };
 use config::{ProviderConfig, ServiceConfig};
 use eyre::ContextCompat;
-use http_body_util::Full;
 use multi_tree_cache::MultiTreeCache;
 use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
@@ -35,7 +24,6 @@ use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
 use std::process;
 use std::sync::Arc;
-use tower_layer::Layer;
 use tracing::info;
 
 use self::error::WorldTreeResult;

@@ -2,10 +2,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::middleware::SignerMiddleware;
-use ethers::providers::{Http, Middleware, Provider};
-use ethers::signers::{LocalWallet, Signer};
-use ethers::types::{Address, U256};
+use alloy::network::EthereumWallet;
+use alloy::primitives::{address, U256};
+use alloy::providers::{Provider, ProviderBuilder};
+use alloy::signers::local::LocalSigner;
+use ethers::core::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -22,6 +23,7 @@ mod common;
 
 use common::*;
 use world_tree::tree::error::WorldTreeResult;
+use world_tree::tree::provider;
 
 #[tokio::test]
 async fn missing_event_on_bridged() -> WorldTreeResult<()> {
@@ -49,34 +51,52 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
     tracing::info!(?initial_root, "Initial root",);
 
     // The addresses are the same since we use the same account on both networks
-    let id_manager_address: Address =
-        "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
-    let bridged_address: Address =
-        "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
+    // let id_manager_address: Address =
+    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
+    // let bridged_address: Address =
+    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
+    let id_manager_address =
+        address!("5FbDB2315678afecb367f032d93F642f64180aa3");
+    let bridged_address = address!("5FbDB2315678afecb367f032d93F642f64180aa3");
+    let mainnet_provider = provider(&ProviderConfig {
+        rpc_endpoint: mainnet_rpc_url.parse()?,
+        max_rate_limit_retries: 1,
+        compute_units_per_second: 10000,
+        initial_backoff: 100,
+        window_size: 10,
+    })
+    .await?;
 
-    let mainnet_provider = Provider::<Http>::new(mainnet_rpc_url.parse()?);
-    let rollup_provider = Provider::<Http>::new(rollup_rpc_url.parse()?);
+    let rollup_provider = provider(&ProviderConfig {
+        rpc_endpoint: rollup_rpc_url.parse()?,
+        max_rate_limit_retries: 1,
+        compute_units_per_second: 10000,
+        initial_backoff: 100,
+        window_size: 10,
+    })
+    .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
     wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
         .await?;
     wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
 
-    let mainnet_chain_id = mainnet_provider.get_chainid().await?;
-    let rollup_chain_id = rollup_provider.get_chainid().await?;
+    let mainnet_chain_id = mainnet_provider.get_chain_id().await?;
+    let rollup_chain_id = rollup_provider.get_chain_id().await?;
 
-    let wallet = LocalWallet::from_str(
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-    )?;
-    let mainnet_wallet =
-        wallet.clone().with_chain_id(mainnet_chain_id.as_u64());
-    let rollup_wallet = wallet.with_chain_id(rollup_chain_id.as_u64());
+    let wallet = EthereumWallet::from(
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+            .parse::<LocalSigner<SigningKey>>()?,
+    );
 
-    let mainnet_signer =
-        SignerMiddleware::new(mainnet_provider, mainnet_wallet);
+    let mainnet_signer = ProviderBuilder::new()
+        .wallet(wallet.clone())
+        .on_http(mainnet_rpc_url.parse()?);
     let mainnet_signer = Arc::new(mainnet_signer);
 
-    let rollup_signer = SignerMiddleware::new(rollup_provider, rollup_wallet);
+    let rollup_signer = ProviderBuilder::new()
+        .wallet(wallet)
+        .on_http(rollup_rpc_url.parse()?);
     let rollup_signer = Arc::new(rollup_signer);
 
     let first_batch = random_leaves(5);
@@ -104,7 +124,9 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: mainnet_rpc_url.parse()?,
-                throttle: 150,
+                max_rate_limit_retries: 1,
+                compute_units_per_second: 10000,
+                initial_backoff: 100,
                 window_size: 10,
             },
         },
@@ -117,7 +139,9 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
             creation_block: 0,
             provider: ProviderConfig {
                 rpc_endpoint: rollup_rpc_url.parse()?,
-                throttle: 150,
+                max_rate_limit_retries: 1,
+                compute_units_per_second: 10000,
+                initial_backoff: 100,
                 window_size: 10,
             },
         }],
@@ -131,8 +155,8 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
 
     // Publish the first batch on mainnet
     world_id_manager
-        .register_identities(
-            [U256::zero(); 8],
+        .registerIdentities(
+            [U256::ZERO; 8],
             f2ethers(initial_root), // pre root,
             0,                      // start index
             first_batch.iter().cloned().map(f2ethers).collect(), // commitments
@@ -145,33 +169,37 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
 
     // Publish the second batch on mainnet
     world_id_manager
-        .register_identities(
-            [U256::zero(); 8],
+        .registerIdentities(
+            [U256::ZERO; 8],
             f2ethers(first_batch_root), // pre root,
             first_batch.len() as u32,   // start index
             second_batch.iter().cloned().map(f2ethers).collect(), // commitments
             f2ethers(second_batch_root), // post root
         )
         .send()
+        .await?
+        .get_receipt()
         .await?;
 
     // Publish the second batch on bridged network
     bridged_world_id
-        .receive_root(f2ethers(second_batch_root))
+        .receiveRoot(f2ethers(second_batch_root))
         .send()
+        .await?
+        .get_receipt()
         .await?;
 
     let ip_bridged = attempt_async! {
         async {
             client
-                .inclusion_proof_by_chain_id(&first_batch[0], rollup_chain_id.as_u64())
+                .inclusion_proof_by_chain_id(&first_batch[0], rollup_chain_id)
                 .await
                 .and_then(|maybe_proof| maybe_proof.context("Missing inclusion proof"))
         }
     };
 
     let ip = client
-        .inclusion_proof_by_chain_id(&first_batch[0], rollup_chain_id.as_u64())
+        .inclusion_proof_by_chain_id(&first_batch[0], rollup_chain_id)
         .await?
         .context("Missing inclusion proof")?;
 
