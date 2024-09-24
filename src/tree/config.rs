@@ -1,7 +1,8 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use ethers::types::Address;
+use alloy::primitives::Address;
+use alloy::transports::layers::RetryBackoffLayer;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -86,8 +87,15 @@ pub struct ProviderConfig {
     /// Ethereum RPC endpoint
     #[serde(with = "crate::serde_utils::url")]
     pub rpc_endpoint: Url,
-    #[serde(default = "default::provider_throttle")]
-    pub throttle: u32,
+    /// The maximum number of retries for rate limit errors
+    #[serde(default = "default::max_rate_limit_retries")]
+    pub max_rate_limit_retries: u32,
+    /// The initial backoff in milliseconds
+    #[serde(default = "default::initial_backoff")]
+    pub initial_backoff: u64,
+    /// The number of compute units per second for this provider
+    #[serde(default = "default::compute_units_per_second")]
+    pub compute_units_per_second: u64,
     #[serde(default = "default::window_size")]
     pub window_size: u64,
 }
@@ -122,8 +130,20 @@ mod default {
         1000
     }
 
-    pub const fn provider_throttle() -> u32 {
-        150
+    pub const fn max_rate_limit_retries() -> u32 {
+        1
+    }
+
+    pub const fn initial_backoff() -> u64 {
+        10
+    }
+
+    pub const fn compute_units_per_second() -> u64 {
+        1000000
+    }
+
+    pub const fn retry_backoff() -> RetryBackoffLayer {
+        RetryBackoffLayer::new(1, 100, 1000)
     }
 
     pub const fn bool_true() -> bool {
@@ -166,6 +186,8 @@ mod map_vec {
 
 #[cfg(test)]
 mod tests {
+    use serde::de;
+
     use super::*;
 
     #[test]
@@ -218,7 +240,10 @@ mod tests {
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
-                    throttle: 150,
+                    compute_units_per_second: default::compute_units_per_second(
+                    ),
+                    max_rate_limit_retries: default::max_rate_limit_retries(),
+                    initial_backoff: default::initial_backoff(),
                     window_size: 10,
                 },
             },
@@ -233,7 +258,10 @@ mod tests {
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
-                    throttle: 150,
+                    compute_units_per_second: default::compute_units_per_second(
+                    ),
+                    max_rate_limit_retries: default::max_rate_limit_retries(),
+                    initial_backoff: default::initial_backoff(),
                     window_size: 10,
                 },
             }],
