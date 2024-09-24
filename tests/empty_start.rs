@@ -5,7 +5,7 @@ use alloy::network::EthereumWallet;
 use alloy::primitives::{address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::signers::local::LocalSigner;
-use ethers::core::k256::ecdsa::SigningKey;
+use alloy::signers::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -147,7 +147,7 @@ async fn empty_start() -> WorldTreeResult<()> {
     // We need some initial test data to start
     world_id_manager
         .registerIdentities(
-            [U256::ZERO.into(); 8],
+            [U256::ZERO; 8],
             f2ethers(initial_root), // pre root,
             0,                      // start index
             first_batch.iter().cloned().map(f2ethers).collect(), // commitments

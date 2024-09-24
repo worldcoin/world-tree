@@ -4,7 +4,6 @@
 //! ingesting them into the database
 
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy::primitives::{TxHash, U256};

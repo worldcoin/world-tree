@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,7 +5,7 @@ use alloy::network::EthereumWallet;
 use alloy::primitives::{address, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::signers::local::LocalSigner;
-use ethers::core::k256::ecdsa::SigningKey;
+use alloy::signers::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use rand::Rng;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
@@ -15,7 +14,6 @@ use semaphore::Field;
 use tempfile::TempDir;
 use world_tree::abi::IBridgedWorldID::IBridgedWorldIDInstance;
 use world_tree::abi::IWorldIDIdentityManager::IWorldIDIdentityManagerInstance;
-use world_tree::abi::{IBridgedWorldID, IWorldIDIdentityManager};
 use world_tree::tree::config::{
     CacheConfig, ProviderConfig, ServiceConfig, TreeConfig,
 };
@@ -181,6 +179,8 @@ async fn many_batches() -> WorldTreeResult<()> {
                     f2ethers(*post_root),                           // post root
                 )
                 .send()
+                .await?
+                .get_receipt()
                 .await?;
 
             let wait_offset: f32 = rng.gen();
@@ -206,7 +206,9 @@ async fn many_batches() -> WorldTreeResult<()> {
             bridged_world_id
                 .receiveRoot(f2ethers(*post_root))
                 .send()
-                .await?.get_receipt().await?;
+                .await?
+                .get_receipt()
+                .await?;
 
             let wait_offset: f32 = rng.gen();
             tokio::time::sleep(Duration::from_secs_f32(2.0 + wait_offset))

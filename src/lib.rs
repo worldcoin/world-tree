@@ -1,5 +1,4 @@
 #![cfg_attr(test, allow(clippy::needless_range_loop))]
-#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 use std::fs;
 use std::sync::Arc;

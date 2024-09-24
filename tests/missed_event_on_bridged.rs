@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,7 +5,7 @@ use alloy::network::EthereumWallet;
 use alloy::primitives::{address, U256};
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::signers::local::LocalSigner;
-use ethers::core::k256::ecdsa::SigningKey;
+use alloy::signers::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -81,7 +80,6 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
         .await?;
     wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
 
-    let mainnet_chain_id = mainnet_provider.get_chain_id().await?;
     let rollup_chain_id = rollup_provider.get_chain_id().await?;
 
     let wallet = EthereumWallet::from(
@@ -163,6 +161,8 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
             f2ethers(first_batch_root), // post root
         )
         .send()
+        .await?
+        .get_receipt()
         .await?;
 
     tokio::time::sleep(Duration::from_secs(2)).await;

@@ -377,7 +377,6 @@ impl<'c, T> DbMethods<'c> for T where
 #[cfg(test)]
 mod tests {
     use alloy::primitives::B256;
-    use hex::FromHex;
     use rand::{Rng, SeedableRng};
     use testcontainers::runners::AsyncRunner;
     use testcontainers::ContainerAsync;
@@ -426,7 +425,7 @@ mod tests {
 
         let chain_id = 1;
         let block_number = 11;
-        let tx_hash = B256::from_hex("0x1").unwrap();
+        let tx_hash = TxHash::with_last_byte(1);
 
         let pre_root = Hash::from(1u64);
         let post_root = Hash::from(2u64);

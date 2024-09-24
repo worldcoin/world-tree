@@ -79,7 +79,8 @@ pub async fn setup_chain(
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
     let mount_dir = mount_dir.canonicalize()?;
     let mount_dir = mount_dir.to_str().context("Invalid path")?;
-
+    let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest");
+    println!("{:?}", container);
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
         .with_entrypoint("/bin/sh")
         .with_exposed_port(ContainerPort::Tcp(8545))

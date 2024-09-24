@@ -1,7 +1,6 @@
 use std::error::Error;
 
 use alloy::primitives::B256;
-use ethers::types::H256;
 use serde::{Deserialize, Serialize};
 use sqlx::encode::IsNull;
 use sqlx::postgres::{PgHasArrayType, PgTypeInfo};

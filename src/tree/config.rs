@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use alloy::primitives::Address;
-use alloy::transports::layers::RetryBackoffLayer;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -183,7 +182,7 @@ mod map_vec {
 #[cfg(test)]
 mod tests {
     use alloy::primitives::address;
-    use serde::de;
+    
 
     use super::*;
 

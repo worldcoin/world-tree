@@ -7,14 +7,11 @@ use std::time::Duration;
 
 use alloy::providers::Provider;
 use alloy::sol_types::SolEvent;
-use ethers::abi::RawLog;
-use ethers::providers::Middleware;
-// use ethers::types::{Filter, Log, ValueOrArray};
-use crate::abi::IBridgedWorldID::{self, RootAdded};
+use crate::abi::IBridgedWorldID::RootAdded;
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
 use crate::tree::error::WorldTreeResult;
-use crate::tree::{provider, Hash, WorldTree};
+use crate::tree::{provider, WorldTree};
 use alloy::rpc::types::{Filter, Log};
 use eyre::ContextCompat;
 use futures::stream::FuturesUnordered;

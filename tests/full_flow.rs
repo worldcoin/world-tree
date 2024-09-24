@@ -5,7 +5,7 @@ use alloy::network::EthereumWallet;
 use alloy::primitives::{address, U256};
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::signers::local::LocalSigner;
-use ethers::core::k256::ecdsa::SigningKey;
+use alloy::signers::k256::ecdsa::SigningKey;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
