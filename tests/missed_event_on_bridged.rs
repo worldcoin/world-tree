@@ -4,8 +4,8 @@ use std::time::Duration;
 use alloy::network::EthereumWallet;
 use alloy::primitives::{address, U256};
 use alloy::providers::{Provider, ProviderBuilder};
-use alloy::signers::local::LocalSigner;
 use alloy::signers::k256::ecdsa::SigningKey;
+use alloy::signers::local::LocalSigner;
 use eyre::ContextCompat;
 use semaphore::cascading_merkle_tree::CascadingMerkleTree;
 use semaphore::poseidon_tree::PoseidonHash;
@@ -50,10 +50,6 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
     tracing::info!(?initial_root, "Initial root",);
 
     // The addresses are the same since we use the same account on both networks
-    // let id_manager_address: Address =
-    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
-    // let bridged_address: Address =
-    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
     let id_manager_address =
         address!("5FbDB2315678afecb367f032d93F642f64180aa3");
     let bridged_address = address!("5FbDB2315678afecb367f032d93F642f64180aa3");

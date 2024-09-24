@@ -182,7 +182,6 @@ mod map_vec {
 #[cfg(test)]
 mod tests {
     use alloy::primitives::address;
-    
 
     use super::*;
 

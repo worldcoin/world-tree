@@ -6,17 +6,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use alloy::providers::Provider;
+use alloy::rpc::types::{Filter, Log};
 use alloy::sol_types::SolEvent;
+use eyre::ContextCompat;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use tokio::pin;
+
 use crate::abi::IBridgedWorldID::RootAdded;
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
 use crate::tree::error::WorldTreeResult;
 use crate::tree::{provider, WorldTree};
-use alloy::rpc::types::{Filter, Log};
-use eyre::ContextCompat;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-use tokio::pin;
 
 pub async fn observe(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     let mut handles = FuturesUnordered::new();

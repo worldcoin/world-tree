@@ -1,16 +1,14 @@
+use std::fmt::Debug;
 use std::future::Future;
-
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fmt::Debug, marker::PhantomData};
 
 use alloy::eips::BlockNumberOrTag;
-use alloy::rpc::types::Log;
-use alloy::{
-    network::Ethereum, providers::Provider, rpc::types::Filter,
-    transports::Transport,
-};
-
+use alloy::network::Ethereum;
+use alloy::providers::Provider;
+use alloy::rpc::types::{Filter, Log};
+use alloy::transports::Transport;
 use futures::{stream, Stream};
 
 use super::error::WorldTreeResult;

@@ -7,14 +7,13 @@ pub mod multi_tree_cache;
 pub mod newtypes;
 pub mod service;
 
-use alloy::{
-    providers::{Provider, ProviderBuilder, RootProvider},
-    rpc::client::ClientBuilder,
-    transports::{
-        http::{Client, Http},
-        layers::{RetryBackoffLayer, RetryBackoffService},
-    },
-};
+use std::process;
+use std::sync::Arc;
+
+use alloy::providers::{Provider, ProviderBuilder, RootProvider};
+use alloy::rpc::client::ClientBuilder;
+use alloy::transports::http::{Client, Http};
+use alloy::transports::layers::{RetryBackoffLayer, RetryBackoffService};
 use config::{ProviderConfig, ServiceConfig};
 use eyre::ContextCompat;
 use multi_tree_cache::MultiTreeCache;
@@ -22,8 +21,6 @@ use semaphore::generic_storage::MmapVec;
 use semaphore::lazy_merkle_tree::LazyMerkleTree;
 use semaphore::merkle_tree::Hasher;
 use semaphore::poseidon_tree::PoseidonHash;
-use std::process;
-use std::sync::Arc;
 use tracing::info;
 
 use self::error::WorldTreeResult;
