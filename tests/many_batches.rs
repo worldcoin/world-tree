@@ -55,10 +55,6 @@ async fn many_batches() -> WorldTreeResult<()> {
     tracing::info!(?initial_root, "Initial root",);
 
     // The addresses are the same since we use the same account on both networks
-    // let id_manager_address: Address =
-    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
-    // let bridged_address: Address =
-    //     "0x5FbDB2315678afecb367f032d93F642f64180aa3".parse()?;
     let id_manager_address =
         address!("5FbDB2315678afecb367f032d93F642f64180aa3");
     let bridged_address = address!("5FbDB2315678afecb367f032d93F642f64180aa3");
@@ -91,11 +87,13 @@ async fn many_batches() -> WorldTreeResult<()> {
     );
 
     let mainnet_signer = ProviderBuilder::new()
+        .with_recommended_fillers()
         .wallet(wallet.clone())
         .on_http(mainnet_rpc_url.parse()?);
     let mainnet_signer = Arc::new(mainnet_signer);
 
     let rollup_signer = ProviderBuilder::new()
+        .with_recommended_fillers()
         .wallet(wallet)
         .on_http(rollup_rpc_url.parse()?);
     let rollup_signer = Arc::new(rollup_signer);
@@ -173,10 +171,10 @@ async fn many_batches() -> WorldTreeResult<()> {
             world_id_manager
                 .registerIdentities(
                     [U256::ZERO; 8],
-                    f2ethers(*pre_root),     // pre root,
+                    f2u256(*pre_root),       // pre root,
                     (BATCH_SIZE * i) as u32, // start index
-                    leaves.iter().cloned().map(f2ethers).collect(), // commitments
-                    f2ethers(*post_root),                           // post root
+                    leaves.iter().cloned().map(f2u256).collect(), // commitments
+                    f2u256(*post_root),      // post root
                 )
                 .send()
                 .await?
@@ -204,7 +202,7 @@ async fn many_batches() -> WorldTreeResult<()> {
 
             // Receive root on bridged network first
             bridged_world_id
-                .receiveRoot(f2ethers(*post_root))
+                .receiveRoot(f2u256(*post_root))
                 .send()
                 .await?
                 .get_receipt()

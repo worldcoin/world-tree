@@ -79,8 +79,6 @@ pub async fn setup_chain(
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
     let mount_dir = mount_dir.canonicalize()?;
     let mount_dir = mount_dir.to_str().context("Invalid path")?;
-    let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest");
-    println!("{:?}", container);
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
         .with_entrypoint("/bin/sh")
         .with_exposed_port(ContainerPort::Tcp(8545))
@@ -152,6 +150,6 @@ pub fn random_leaves(n: usize) -> Vec<Field> {
         .collect()
 }
 
-pub fn f2ethers(f: Field) -> U256 {
+pub fn f2u256(f: Field) -> U256 {
     U256::from_le_slice(&f.as_le_bytes())
 }

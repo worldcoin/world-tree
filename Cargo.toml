@@ -26,7 +26,6 @@ alloy = { version = "0.3", features = [
     "signer-local",
     "signers"
 ] }
-ethers-throttle = { git = "https://github.com/0xKitsune/ethers-throttle.git" }
 eyre = "0.6"
 futures = "0.3"
 governor = "0.6.0"

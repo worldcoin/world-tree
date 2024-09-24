@@ -84,11 +84,13 @@ async fn empty_start() -> WorldTreeResult<()> {
     );
 
     let mainnet_signer = ProviderBuilder::new()
+        .with_recommended_fillers()
         .wallet(wallet.clone())
         .on_http(mainnet_rpc_url.parse()?);
     let mainnet_signer = Arc::new(mainnet_signer);
 
     let rollup_signer = ProviderBuilder::new()
+        .with_recommended_fillers()
         .wallet(wallet)
         .on_http(rollup_rpc_url.parse()?);
     let rollup_signer = Arc::new(rollup_signer);
@@ -148,10 +150,10 @@ async fn empty_start() -> WorldTreeResult<()> {
     world_id_manager
         .registerIdentities(
             [U256::ZERO; 8],
-            f2ethers(initial_root), // pre root,
-            0,                      // start index
-            first_batch.iter().cloned().map(f2ethers).collect(), // commitments
-            f2ethers(first_batch_root), // post root
+            f2u256(initial_root), // pre root,
+            0,                    // start index
+            first_batch.iter().cloned().map(f2u256).collect(), // commitments
+            f2u256(first_batch_root), // post root
         )
         .send()
         .await?
@@ -159,7 +161,7 @@ async fn empty_start() -> WorldTreeResult<()> {
         .await?;
 
     bridged_world_id
-        .receiveRoot(f2ethers(first_batch_root))
+        .receiveRoot(f2u256(first_batch_root))
         .send()
         .await?
         .get_receipt()
