@@ -1,6 +1,9 @@
+use std::path::{Path, PathBuf};
+
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
+use ruint::aliases::U256;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use world_tree::tree::Hash;
@@ -70,6 +73,12 @@ struct Args {
         default_value = "https://signup-orb-ethereum.crypto.worldcoin.org/inclusionProof"
     )]
     sequencer_endpoint: String,
+
+    /// Path to a file containing a list of identity commitments to check
+    ///
+    /// If not set the default embedded list of identity commitments will be used
+    #[clap(short, long)]
+    identities_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,14 +92,20 @@ async fn main() -> eyre::Result<()> {
     let args = Args::parse();
     let client = Client::new();
 
-    let progress_bar = ProgressBar::new(IDENTITIES.len() as u64);
+    let identities = if let Some(identities_file) = args.identities_file {
+        load_identities_file(identities_file)?
+    } else {
+        IDENTITIES.to_vec()
+    };
+
+    let progress_bar = ProgressBar::new(identities.len() as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("{wide_bar} {pos}/{len} [{elapsed_precise}]")?
             .progress_chars("=> "),
     );
 
-    for identity in IDENTITIES {
+    for identity in identities {
         let world_tree_response = client
             .post(&args.world_tree_endpoint)
             .json(&json!({
@@ -124,4 +139,21 @@ async fn main() -> eyre::Result<()> {
     progress_bar.finish_with_message("Done!");
 
     Ok(())
+}
+
+fn load_identities_file(
+    identities_file: impl AsRef<Path>,
+) -> eyre::Result<Vec<Hash>> {
+    let identities_file = std::fs::read_to_string(identities_file)?;
+
+    let identities: Vec<Hash> = identities_file
+        .lines()
+        .map(|line| {
+            let identity = U256::from_str_radix(line, 16)?;
+            // let identity = line.parse()?;
+            Ok(identity)
+        })
+        .collect::<eyre::Result<_>>()?;
+
+    Ok(identities)
 }

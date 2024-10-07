@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [ "$RELEASE" == "true" ]; then
+    cargo run --release --bin consistency -- "$@"
+else
+    cargo run --bin consistency -- "$@"
+fi
