@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [ "$RELEASE" == "true" ]; then
+    cargo run --release --bin utils -- "$@"
+else
+    cargo run --bin utils -- "$@"
+fi

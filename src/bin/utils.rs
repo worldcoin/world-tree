@@ -1,12 +1,15 @@
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use reqwest::Client;
+use ruint::aliases::U256;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use statrs::statistics::Statistics;
 use world_tree::tree::Hash;
@@ -62,36 +65,107 @@ const IDENTITIES: &[Hash] = &[
 ];
 
 #[derive(Debug, Clone, Parser)]
-struct Args {
-    /// Max number of simultaneous requests
-    #[clap(short = 'J', long, default_value = "10")]
-    max_simultaneous_requests: usize,
+struct Opt {
+    #[clap(flatten)]
+    common: Common,
 
-    /// Total number of requests to make
-    #[clap(short = 'N', long, default_value = "100")]
-    num_requests: usize,
+    #[clap(subcommand)]
+    command: Command,
+}
 
-    /// Service URL to call
+#[derive(Debug, Clone, Args)]
+struct Common {
+    /// Path to a file containing a list of identity commitments to check
+    ///
+    /// If not set the default embedded list of identity commitments will be used
+    #[clap(short, long)]
+    identities_file: Option<PathBuf>,
+
+    /// Endpoint for the World Tree service
     #[clap(
         short,
         long,
         default_value = "https://world-tree.crypto.worldcoin.org/inclusionProof"
     )]
-    endpoint: String,
+    world_tree_endpoint: String,
+}
 
-    /// Chain IDs to use (comma-separated)
-    #[clap(short, long)]
-    chain_ids: Vec<u64>,
+#[derive(Debug, Clone, Subcommand)]
+enum Command {
+    /// Stress tests the service by executing a large number of inclusion proofs
+    Stress {
+        /// Max number of simultaneous requests
+        #[clap(short = 'J', long, default_value = "10")]
+        max_simultaneous_requests: usize,
+
+        /// Total number of requests to make
+        #[clap(short = 'N', long, default_value = "100")]
+        num_requests: usize,
+
+        /// Chain IDs to use (comma-separated)
+        #[clap(short, long)]
+        chain_ids: Vec<u64>,
+    },
+
+    /// Validates consistency between the sequencer and world-tree
+    Consistency {
+        #[clap(
+            short,
+            long,
+            default_value = "https://signup-orb-ethereum.crypto.worldcoin.org/inclusionProof"
+        )]
+        sequencer_endpoint: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InclusionProof {
+    root: String,
+    proof: serde_json::Value,
 }
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    let args = Args::parse();
+    let args = Opt::parse();
+
+    let identities = args.common.identities();
+
+    match args.command {
+        Command::Stress {
+            max_simultaneous_requests,
+            num_requests,
+            chain_ids,
+        } => {
+            run_stress_test(
+                max_simultaneous_requests,
+                num_requests,
+                args.common.world_tree_endpoint,
+                chain_ids,
+                &identities,
+            )
+            .await
+        }
+        Command::Consistency { sequencer_endpoint } => {
+            run_consistency_check(
+                args.common.world_tree_endpoint,
+                sequencer_endpoint,
+                &identities,
+            )
+            .await
+        }
+    }
+}
+
+async fn run_stress_test(
+    max_simultaneous_requests: usize,
+    num_requests: usize,
+    endpoint: String,
+    chain_ids: Vec<u64>,
+    identities: &[Hash],
+) -> eyre::Result<()> {
     let client = Client::new();
 
-    let chain_ids = args.chain_ids.clone();
-
-    let progress_bar = ProgressBar::new(args.num_requests as u64);
+    let progress_bar = ProgressBar::new(num_requests as u64);
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("{wide_bar} {pos}/{len} [{elapsed_precise}]")?
@@ -104,14 +178,13 @@ async fn main() -> eyre::Result<()> {
     let times: Arc<std::sync::Mutex<Vec<f64>>> =
         Arc::new(std::sync::Mutex::new(Vec::new()));
 
-    let (tx, mut rx) =
-        tokio::sync::mpsc::channel(args.max_simultaneous_requests);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(max_simultaneous_requests);
 
     let spawner_task = async {
-        for _ in 0..args.num_requests {
+        for _ in 0..num_requests {
             let mut rng = thread_rng();
 
-            let identity = IDENTITIES.choose(&mut rng).unwrap();
+            let identity = *identities.choose(&mut rng).unwrap();
 
             let chain_id_choice = rng.gen::<usize>() % (1 + chain_ids.len());
             let chain_id = if chain_id_choice < chain_ids.len() {
@@ -120,7 +193,7 @@ async fn main() -> eyre::Result<()> {
                 None
             };
 
-            let args = args.clone();
+            let endpoint = endpoint.clone();
             let client = client.clone();
             let success_count = success_count.clone();
             let failure_count = failure_count.clone();
@@ -132,7 +205,7 @@ async fn main() -> eyre::Result<()> {
                     "identityCommitment": identity.to_string(),
                 });
 
-                let mut url = args.endpoint.clone();
+                let mut url = endpoint.clone();
                 if let Some(chain_id) = chain_id {
                     url = format!("{}?chainId={}", url, chain_id);
                 }
@@ -201,4 +274,81 @@ async fn main() -> eyre::Result<()> {
     );
 
     Ok(())
+}
+
+async fn run_consistency_check(
+    world_tree_endpoint: String,
+    sequencer_endpoint: String,
+    identities: &[Hash],
+) -> eyre::Result<()> {
+    let client = Client::new();
+
+    let progress_bar = ProgressBar::new(identities.len() as u64);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{wide_bar} {pos}/{len} [{elapsed_precise}]")?
+            .progress_chars("=> "),
+    );
+
+    for identity in identities {
+        let world_tree_response = client
+            .post(&world_tree_endpoint)
+            .json(&json!({
+                "identityCommitment": identity.to_string(),
+            }))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let world_tree_response: InclusionProof =
+            world_tree_response.json().await?;
+
+        let sequencer_response = client
+            .post(&sequencer_endpoint)
+            .json(&json!({
+                "identityCommitment": identity.to_string(),
+            }))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let sequencer_response: InclusionProof =
+            sequencer_response.json().await?;
+
+        assert_eq!(world_tree_response.root, sequencer_response.root);
+        assert_eq!(world_tree_response.proof, sequencer_response.proof);
+
+        progress_bar.inc(1);
+    }
+
+    progress_bar.finish_with_message("Done!");
+
+    Ok(())
+}
+
+impl Common {
+    fn identities(&self) -> Vec<Hash> {
+        if let Some(identities_file) = &self.identities_file {
+            load_identities_file(identities_file).unwrap()
+        } else {
+            IDENTITIES.to_vec()
+        }
+    }
+}
+
+fn load_identities_file(
+    identities_file: impl AsRef<Path>,
+) -> eyre::Result<Vec<Hash>> {
+    let identities_file = std::fs::read_to_string(identities_file)?;
+
+    let identities: Vec<Hash> = identities_file
+        .lines()
+        .map(|line| {
+            let identity = U256::from_str_radix(line, 16)?;
+            // let identity = line.parse()?;
+            Ok(identity)
+        })
+        .collect::<eyre::Result<_>>()?;
+
+    Ok(identities)
 }
