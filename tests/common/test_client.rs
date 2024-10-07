@@ -59,7 +59,11 @@ impl TestClient {
             .send()
             .await?;
 
-        response.error_for_status_ref()?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        } else {
+            response.error_for_status_ref()?;
+        }
 
         Ok(response.json().await?)
     }

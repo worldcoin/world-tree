@@ -128,7 +128,12 @@ pub async fn inclusion_proof(
         .inclusion_proof(req.identity_commitment, chain_id)
         .await?;
 
-    Ok((StatusCode::OK, Json(inclusion_proof)))
+    match inclusion_proof {
+        Some(inclusion_proof) => {
+            Ok((StatusCode::OK, Json(Some(inclusion_proof))))
+        }
+        None => Ok((StatusCode::NOT_FOUND, Json(None))),
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
