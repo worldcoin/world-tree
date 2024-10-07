@@ -132,11 +132,10 @@ impl WorldTree {
         identity_commitment: Hash,
         chain_id: Option<ChainId>,
     ) -> WorldTreeResult<Option<InclusionProof>> {
-        let leaf_idx = self
-            .db
-            .leaf_index(identity_commitment)
-            .await?
-            .context("Missing leaf index")?;
+        let Some(leaf_idx) = self.db.leaf_index(identity_commitment).await?
+        else {
+            return Ok(None);
+        };
 
         let tree_lock = if let Some(chain_id) = chain_id {
             self.cache
