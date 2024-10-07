@@ -129,7 +129,9 @@ pub async fn inclusion_proof(
         .await?;
 
     match inclusion_proof {
-        Some(inclusion_proof) => Ok((StatusCode::OK, Json(Some(inclusion_proof)))),
+        Some(inclusion_proof) => {
+            Ok((StatusCode::OK, Json(Some(inclusion_proof))))
+        }
         None => Ok((StatusCode::NOT_FOUND, Json(None))),
     }
 }
