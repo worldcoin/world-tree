@@ -356,7 +356,7 @@ async fn run_consistency_check(
                             Err(_) => {
                                 failures_count.fetch_add(1, Ordering::SeqCst);
 
-                                failures.lock().await.push(identity.clone());
+                                failures.lock().await.push(identity);
                             }
                         }
                     }
@@ -364,12 +364,12 @@ async fn run_consistency_check(
                         // Identity missing on world-tree
                         missing_count.fetch_add(1, Ordering::SeqCst);
 
-                        missing_identities.lock().await.push(identity.clone());
+                        missing_identities.lock().await.push(identity);
                     }
                     Err(_) => {
                         failures_count.fetch_add(1, Ordering::SeqCst);
 
-                        failures.lock().await.push(identity.clone());
+                        failures.lock().await.push(identity);
                     }
                 }
                 total_progress_bar.inc(1);
