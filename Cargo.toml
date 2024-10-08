@@ -59,7 +59,7 @@ hex-literal = "0.4.1"
 indicatif = "0.17.8"
 reqwest = { version = "0.11.22", features = ["json"] }
 statrs = "0.17.1"
-
+tokio-retry = "0.3.0"
 
 [dev-dependencies]
 indoc = "2.0.5"

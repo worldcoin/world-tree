@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand};
+use futures::stream::{self, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
@@ -12,6 +13,9 @@ use ruint::aliases::U256;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use statrs::statistics::Statistics;
+use tokio::sync::Mutex;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::RetryIf;
 use world_tree::tree::Hash;
 
 macro_rules! hash {
@@ -88,6 +92,10 @@ struct Common {
         default_value = "https://world-tree.crypto.worldcoin.org/inclusionProof"
     )]
     world_tree_endpoint: String,
+
+    /// Number of concurrent jobs to run
+    #[clap(short, long, default_value = "10")]
+    jobs: usize,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -150,6 +158,7 @@ async fn main() -> eyre::Result<()> {
                 args.common.world_tree_endpoint,
                 sequencer_endpoint,
                 &identities,
+                args.common.jobs,
             )
             .await
         }
@@ -280,50 +289,184 @@ async fn run_consistency_check(
     world_tree_endpoint: String,
     sequencer_endpoint: String,
     identities: &[Hash],
+    jobs: usize,
 ) -> eyre::Result<()> {
     let client = Client::new();
 
-    let progress_bar = ProgressBar::new(identities.len() as u64);
-    progress_bar.set_style(
+    let total_progress_bar = ProgressBar::new(identities.len() as u64);
+    total_progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("{wide_bar} {pos}/{len} [{elapsed_precise}]")?
             .progress_chars("=> "),
     );
 
-    for identity in identities {
-        let world_tree_response = client
-            .post(&world_tree_endpoint)
-            .json(&json!({
-                "identityCommitment": identity.to_string(),
-            }))
-            .send()
-            .await?
-            .error_for_status()?;
+    let matches_count = Arc::new(AtomicU64::new(0));
+    let mismatches_count = Arc::new(AtomicU64::new(0));
+    let missing_count = Arc::new(AtomicU64::new(0));
+    let failures_count = Arc::new(AtomicU64::new(0));
 
-        let world_tree_response: InclusionProof =
-            world_tree_response.json().await?;
+    let missing_identities: Arc<Mutex<Vec<Hash>>> =
+        Arc::new(Mutex::new(Vec::new()));
+    let failures: Arc<Mutex<Vec<Hash>>> = Arc::new(Mutex::new(Vec::new()));
 
-        let sequencer_response = client
-            .post(&sequencer_endpoint)
-            .json(&json!({
-                "identityCommitment": identity.to_string(),
-            }))
-            .send()
-            .await?
-            .error_for_status()?;
+    let concurrency_limit = jobs; // Adjust as needed
 
-        let sequencer_response: InclusionProof =
-            sequencer_response.json().await?;
+    stream::iter(identities.iter().cloned())
+        .map(|identity| {
+            let client = client.clone();
+            let world_tree_endpoint = world_tree_endpoint.clone();
+            let sequencer_endpoint = sequencer_endpoint.clone();
+            let matches_count = matches_count.clone();
+            let mismatches_count = mismatches_count.clone();
+            let missing_count = missing_count.clone();
+            let failures_count = failures_count.clone();
+            let total_progress_bar = total_progress_bar.clone();
+            let missing_identities = missing_identities.clone();
+            let failures = failures.clone();
 
-        assert_eq!(world_tree_response.root, sequencer_response.root);
-        assert_eq!(world_tree_response.proof, sequencer_response.proof);
+            async move {
+                match get_world_tree_inclusion_proof(
+                    &client,
+                    &world_tree_endpoint,
+                    &identity,
+                )
+                .await
+                {
+                    Ok(Some(world_tree_response)) => {
+                        match get_sequencer_inclusion_proof(
+                            &client,
+                            &sequencer_endpoint,
+                            &identity,
+                        )
+                        .await
+                        {
+                            Ok(sequencer_response) => {
+                                if world_tree_response.root
+                                    == sequencer_response.root
+                                    && world_tree_response.proof
+                                        == sequencer_response.proof
+                                {
+                                    matches_count
+                                        .fetch_add(1, Ordering::SeqCst);
+                                } else {
+                                    mismatches_count
+                                        .fetch_add(1, Ordering::SeqCst);
+                                }
+                            }
+                            Err(_) => {
+                                failures_count.fetch_add(1, Ordering::SeqCst);
 
-        progress_bar.inc(1);
+                                failures.lock().await.push(identity.clone());
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        // Identity missing on world-tree
+                        missing_count.fetch_add(1, Ordering::SeqCst);
+
+                        missing_identities.lock().await.push(identity.clone());
+                    }
+                    Err(_) => {
+                        failures_count.fetch_add(1, Ordering::SeqCst);
+
+                        failures.lock().await.push(identity.clone());
+                    }
+                }
+                total_progress_bar.inc(1);
+            }
+        })
+        .buffer_unordered(concurrency_limit)
+        .collect::<()>()
+        .await;
+
+    total_progress_bar.finish_with_message("Done!");
+
+    println!("Matches: {}", matches_count.load(Ordering::SeqCst));
+    println!("Mismatches: {}", mismatches_count.load(Ordering::SeqCst));
+    println!("Missing: {}", missing_count.load(Ordering::SeqCst));
+    println!("Failures: {}", failures_count.load(Ordering::SeqCst));
+
+    let missing_identities = missing_identities.lock().await;
+    if !missing_identities.is_empty() {
+        println!("Missing identities:");
+        for identity in missing_identities.iter() {
+            println!("{}", identity);
+        }
     }
 
-    progress_bar.finish_with_message("Done!");
+    let failures = failures.lock().await;
+    if !failures.is_empty() {
+        println!("Failures:");
+        for identity in failures.iter() {
+            println!("{}", identity);
+        }
+    }
 
     Ok(())
+}
+
+async fn get_world_tree_inclusion_proof(
+    client: &Client,
+    endpoint: &str,
+    identity: &Hash,
+) -> Result<Option<InclusionProof>, reqwest::Error> {
+    let retry_strategy =
+        ExponentialBackoff::from_millis(10).map(jitter).take(5);
+
+    RetryIf::spawn(
+        retry_strategy,
+        || async {
+            let response = client
+                .post(endpoint)
+                .json(&json!({
+                    "identityCommitment": identity.to_string(),
+                }))
+                .send()
+                .await?;
+
+            if response.status() == 404 {
+                Ok(None)
+            } else {
+                let response = response.error_for_status()?;
+                let inclusion_proof = response.json().await?;
+                Ok(Some(inclusion_proof))
+            }
+        },
+        is_retryable_error,
+    )
+    .await
+}
+
+async fn get_sequencer_inclusion_proof(
+    client: &Client,
+    endpoint: &str,
+    identity: &Hash,
+) -> Result<InclusionProof, reqwest::Error> {
+    let retry_strategy =
+        ExponentialBackoff::from_millis(10).map(jitter).take(5);
+
+    RetryIf::spawn(
+        retry_strategy,
+        || async {
+            let response = client
+                .post(endpoint)
+                .json(&json!({
+                    "identityCommitment": identity.to_string(),
+                }))
+                .send()
+                .await?;
+
+            let response = response.error_for_status()?;
+            let inclusion_proof = response.json().await?;
+            Ok(inclusion_proof)
+        },
+        is_retryable_error,
+    )
+    .await
+}
+
+fn is_retryable_error(err: &reqwest::Error) -> bool {
+    err.is_timeout() || err.is_connect() || err.is_request()
 }
 
 impl Common {
