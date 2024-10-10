@@ -568,7 +568,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "hyper 0.14.30",
- "telemetry-batteries",
+ "telemetry-batteries 0.1.0 (git+https://github.com/worldcoin/telemetry-batteries.git?rev=802a4f39f358e077b11c8429b4c65f3e45b85959)",
  "tracing",
 ]
 
@@ -6065,6 +6065,34 @@ checksum = "4873307b7c257eddcb50c9bedf158eb669578359fb28428bef438fec8e6ba7c2"
 [[package]]
 name = "telemetry-batteries"
 version = "0.1.0"
+source = "git+https://github.com/worldcoin/telemetry-batteries.git?rev=12cc036234b4e9b86f22ff7e35d499e2ff1e6304#12cc036234b4e9b86f22ff7e35d499e2ff1e6304"
+dependencies = [
+ "chrono",
+ "dirs",
+ "http 0.2.12",
+ "metrics 0.22.3",
+ "metrics-exporter-prometheus",
+ "metrics-exporter-statsd",
+ "opentelemetry",
+ "opentelemetry-datadog",
+ "opentelemetry-http",
+ "opentelemetry_sdk",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-opentelemetry",
+ "tracing-serde",
+ "tracing-subscriber 0.3.18",
+]
+
+[[package]]
+name = "telemetry-batteries"
+version = "0.1.0"
 source = "git+https://github.com/worldcoin/telemetry-batteries.git?rev=802a4f39f358e077b11c8429b4c65f3e45b85959#802a4f39f358e077b11c8429b4c65f3e45b85959"
 dependencies = [
  "chrono",
@@ -7483,8 +7511,6 @@ dependencies = [
  "indoc",
  "maplit",
  "metrics 0.21.1",
- "opentelemetry",
- "opentelemetry-datadog",
  "rand",
  "rayon",
  "reqwest",
@@ -7496,7 +7522,7 @@ dependencies = [
  "sqlx",
  "statrs",
  "take_mut",
- "telemetry-batteries",
+ "telemetry-batteries 0.1.0 (git+https://github.com/worldcoin/telemetry-batteries.git?rev=12cc036234b4e9b86f22ff7e35d499e2ff1e6304)",
  "tempfile",
  "testcontainers",
  "testcontainers-modules",
