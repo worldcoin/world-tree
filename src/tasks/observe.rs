@@ -5,20 +5,19 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ethers::abi::RawLog;
-use ethers::contract::EthEvent;
-use ethers::providers::Middleware;
-use ethers::types::{Filter, Log, ValueOrArray};
+use alloy::providers::Provider;
+use alloy::rpc::types::{Filter, Log};
+use alloy::sol_types::SolEvent;
 use eyre::ContextCompat;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::pin;
 
-use crate::abi::RootAddedFilter;
+use crate::abi::IBridgedWorldID::RootAdded;
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
 use crate::tree::error::WorldTreeResult;
-use crate::tree::{provider, Hash, WorldTree};
+use crate::tree::{provider, WorldTree};
 
 pub async fn observe(world_tree: Arc<WorldTree>) -> WorldTreeResult<()> {
     let mut handles = FuturesUnordered::new();
@@ -44,18 +43,18 @@ pub async fn observe_bridged(
 ) -> WorldTreeResult<()> {
     let provider =
         provider(&world_tree.config.bridged_trees[idx].provider).await?;
-    let chain_id = provider.get_chainid().await?.as_u64();
+    let chain_id = provider.get_chain_id().await?;
 
     let latest_block_number =
         world_tree.db.fetch_latest_block_number(chain_id).await?;
 
     let latest_block_number = latest_block_number
-        .map(|x| x.as_u64() + 1)
+        .map(|x| x + 1)
         .unwrap_or(world_tree.config.bridged_trees[idx].creation_block);
 
     let filter = Filter::new()
         .address(world_tree.config.bridged_trees[idx].address)
-        .topic0(ValueOrArray::Value(RootAddedFilter::signature()));
+        .event_signature(RootAdded::SIGNATURE_HASH);
 
     let scanner = BlockScanner::new(
         provider.clone(),
@@ -79,8 +78,8 @@ pub async fn observe_bridged(
                 log.block_number.context("Missing block_number")?;
             let tx_hash = log.transaction_hash.context("Missing tx_hash")?;
 
-            let data = RootAddedFilter::decode_log(&RawLog::from(log))?;
-            let root = Hash::from_limbs(data.root.0);
+            let data = RootAdded::decode_log(&log.inner, true)?;
+            let root = data.root;
 
             // Wait until the root has been observed on the canonical chain
             // this satisfies the DB constraints and provides a backpressure

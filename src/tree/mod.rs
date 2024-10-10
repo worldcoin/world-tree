@@ -10,9 +10,11 @@ pub mod service;
 use std::process;
 use std::sync::Arc;
 
+use alloy::providers::{Provider, ProviderBuilder, RootProvider};
+use alloy::rpc::client::ClientBuilder;
+use alloy::transports::http::{Client, Http};
+use alloy::transports::layers::{RetryBackoffLayer, RetryBackoffService};
 use config::{ProviderConfig, ServiceConfig};
-use ethers::providers::{Http, Middleware, Provider};
-use ethers_throttle::ThrottledJsonRpcClient;
 use eyre::ContextCompat;
 use multi_tree_cache::MultiTreeCache;
 use semaphore::generic_storage::MmapVec;
@@ -29,7 +31,8 @@ use crate::db::{Db, DbMethods};
 pub type PoseidonTree<Version> = LazyMerkleTree<PoseidonHash, Version>;
 pub type Hash = <PoseidonHash as Hasher>::Hash;
 
-pub type WorldTreeProvider = Arc<Provider<ThrottledJsonRpcClient<Http>>>;
+pub type WorldTreeProvider =
+    Arc<RootProvider<RetryBackoffService<Http<Client>>>>;
 
 /// The main state struct of this service
 ///
@@ -164,21 +167,23 @@ impl WorldTree {
 pub async fn provider(
     config: &ProviderConfig,
 ) -> WorldTreeResult<WorldTreeProvider> {
-    let http_provider = Http::new(config.rpc_endpoint.clone());
-    let throttled_provider =
-        ThrottledJsonRpcClient::new(http_provider, config.throttle, None);
-
-    let middleware = Arc::new(Provider::new(throttled_provider));
-
-    Ok(middleware)
+    let client = ClientBuilder::default()
+        .layer(RetryBackoffLayer::new(
+            config.max_rate_limit_retries,
+            config.initial_backoff,
+            config.compute_units_per_second,
+        ))
+        .http(config.rpc_endpoint.clone());
+    let provider = ProviderBuilder::new().on_client(client);
+    Ok(Arc::new(provider))
 }
 
 pub async fn fetch_chain_ids(
     config: &ServiceConfig,
 ) -> WorldTreeResult<(ChainId, Vec<ChainId>)> {
     let canonical_provider = provider(&config.canonical_tree.provider).await?;
-    let canonical_chain_id = canonical_provider.get_chainid().await?;
-    let canonical_chain_id = ChainId(canonical_chain_id.as_u64());
+    let canonical_chain_id = canonical_provider.get_chain_id().await?;
+    let canonical_chain_id = ChainId(canonical_chain_id);
 
     let mut providers = vec![];
     for tree_config in &config.bridged_trees {
@@ -188,8 +193,8 @@ pub async fn fetch_chain_ids(
 
     let mut chain_ids = vec![canonical_chain_id];
     for provider in providers {
-        let chain_id = provider.get_chainid().await?;
-        chain_ids.push(ChainId(chain_id.as_u64()));
+        let chain_id = provider.get_chain_id().await?;
+        chain_ids.push(ChainId(chain_id));
     }
 
     Ok((canonical_chain_id, chain_ids))

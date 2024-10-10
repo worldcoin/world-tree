@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use ethers::types::Address;
+use alloy::primitives::Address;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -86,8 +86,15 @@ pub struct ProviderConfig {
     /// Ethereum RPC endpoint
     #[serde(with = "crate::serde_utils::url")]
     pub rpc_endpoint: Url,
-    #[serde(default = "default::provider_throttle")]
-    pub throttle: u32,
+    /// The maximum number of retries for rate limit errors
+    #[serde(default = "default::max_rate_limit_retries")]
+    pub max_rate_limit_retries: u32,
+    /// The initial backoff in milliseconds
+    #[serde(default = "default::initial_backoff")]
+    pub initial_backoff: u64,
+    /// The number of compute units per second for this provider
+    #[serde(default = "default::compute_units_per_second")]
+    pub compute_units_per_second: u64,
     #[serde(default = "default::window_size")]
     pub window_size: u64,
 }
@@ -122,8 +129,16 @@ mod default {
         1000
     }
 
-    pub const fn provider_throttle() -> u32 {
-        150
+    pub const fn max_rate_limit_retries() -> u32 {
+        1
+    }
+
+    pub const fn initial_backoff() -> u64 {
+        100
+    }
+
+    pub const fn compute_units_per_second() -> u64 {
+        10000
     }
 
     pub const fn bool_true() -> bool {
@@ -166,6 +181,8 @@ mod map_vec {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::address;
+
     use super::*;
 
     #[test]
@@ -185,7 +202,9 @@ mod tests {
 
             [canonical_tree.provider]
             rpc_endpoint = "http://localhost:8545/"
-            throttle = 150
+            max_rate_limit_retries = 1
+            initial_backoff = 100
+            compute_units_per_second = 10000
             window_size = 10
 
             [cache]
@@ -198,7 +217,9 @@ mod tests {
 
             [bridged_trees.0.provider]
             rpc_endpoint = "http://localhost:8546/"
-            throttle = 150
+            max_rate_limit_retries = 1
+            initial_backoff = 100
+            compute_units_per_second = 10000
             window_size = 10
         "#};
 
@@ -212,13 +233,13 @@ mod tests {
                 create: true,
             },
             canonical_tree: TreeConfig {
-                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
-                    .parse()
-                    .unwrap(),
+                address: address!("b3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"),
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8545".parse().unwrap(),
-                    throttle: 150,
+                    max_rate_limit_retries: 1,
+                    initial_backoff: 100,
+                    compute_units_per_second: 10000,
                     window_size: 10,
                 },
             },
@@ -227,13 +248,13 @@ mod tests {
                 purge: true,
             },
             bridged_trees: vec![TreeConfig {
-                address: "0xB3E7771a6e2d7DD8C0666042B7a07C39b938eb7d"
-                    .parse()
-                    .unwrap(),
+                address: address!("b3e7771a6e2d7dd8c0666042b7a07c39b938eb7d"),
                 creation_block: 0,
                 provider: ProviderConfig {
                     rpc_endpoint: "http://localhost:8546".parse().unwrap(),
-                    throttle: 150,
+                    max_rate_limit_retries: 1,
+                    initial_backoff: 100,
+                    compute_units_per_second: 10000,
                     window_size: 10,
                 },
             }],
@@ -242,7 +263,6 @@ mod tests {
         };
 
         let serialized = toml::to_string(&config).unwrap();
-
         assert_eq!(serialized.trim(), S.trim());
     }
 }

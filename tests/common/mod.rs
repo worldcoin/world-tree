@@ -3,9 +3,8 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::{Address, U256};
-use ethers_throttle::ThrottledJsonRpcClient;
+use alloy::primitives::{Address, U256};
+use alloy::providers::Provider;
 use eyre::ContextCompat;
 use rand::Rng;
 use semaphore::Field;
@@ -23,6 +22,7 @@ use world_tree::tree::service::InclusionProofService;
 mod test_client;
 
 pub use test_client::TestClient;
+use world_tree::tree::WorldTreeProvider;
 
 // Attempts a given block multiple times
 // panics if the block fails (evaluates to an error) more than 10 times
@@ -79,7 +79,6 @@ pub async fn setup_chain(
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
     let mount_dir = mount_dir.canonicalize()?;
     let mount_dir = mount_dir.to_str().context("Invalid path")?;
-
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
         .with_entrypoint("/bin/sh")
         .with_exposed_port(ContainerPort::Tcp(8545))
@@ -110,14 +109,14 @@ pub async fn setup_db(
 }
 
 pub async fn wait_until_contracts_deployed(
-    provider: &Provider<Http>,
+    provider: &WorldTreeProvider,
     address: Address,
 ) -> eyre::Result<()> {
     const MAX_RETRIES: usize = 20;
     const SLEEP_DURATION: Duration = Duration::from_secs(2);
 
     for _ in 0..MAX_RETRIES {
-        let resp = provider.get_code(address, None).await;
+        let resp = provider.get_code_at(address).await;
 
         match resp {
             Ok(code) if !code.is_empty() => return Ok(()),
@@ -151,6 +150,6 @@ pub fn random_leaves(n: usize) -> Vec<Field> {
         .collect()
 }
 
-pub fn f2ethers(f: Field) -> U256 {
-    U256::from_little_endian(&f.as_le_bytes())
+pub fn f2u256(f: Field) -> U256 {
+    U256::from_le_slice(&f.as_le_bytes())
 }

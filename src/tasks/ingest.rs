@@ -6,18 +6,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ethers::abi::AbiDecode;
-use ethers::contract::{EthCall, EthEvent};
-use ethers::providers::Middleware;
-use ethers::types::{
-    Filter, Log, Selector, Transaction, ValueOrArray, H256, U256, U64,
-};
+use alloy::primitives::{TxHash, U256};
+use alloy::providers::Provider;
+use alloy::rpc::types::{Filter, Log, Transaction};
+use alloy::sol_types::{SolCall, SolEvent};
+use alloy::transports::Transport;
 use eyre::ContextCompat;
 use futures::{StreamExt, TryStreamExt};
 use tokio::pin;
 
-use crate::abi::{
-    DeleteIdentitiesCall, RegisterIdentitiesCall, TreeChangedFilter,
+use crate::abi::IWorldIDIdentityManager::{
+    deleteIdentitiesCall, registerIdentitiesCall, TreeChanged,
 };
 use crate::db::DbMethods;
 use crate::tree::block_scanner::BlockScanner;
@@ -31,18 +30,18 @@ pub async fn ingest_canonical(
     world_tree: Arc<WorldTree>,
 ) -> WorldTreeResult<()> {
     let provider = world_tree.canonical_provider().await?;
-    let chain_id = provider.get_chainid().await?.as_u64();
+    let chain_id = provider.get_chain_id().await?;
 
     let latest_block_number =
         world_tree.db.fetch_latest_block_number(chain_id).await?;
 
     let latest_block_number = latest_block_number
-        .map(|x| x.as_u64() + 1)
+        .map(|x| x + 1)
         .unwrap_or(world_tree.config.canonical_tree.creation_block);
 
     let filter = Filter::new()
         .address(world_tree.config.canonical_tree.address)
-        .topic0(ValueOrArray::Value(TreeChangedFilter::signature()));
+        .event_signature(TreeChanged::SIGNATURE_HASH);
 
     let scanner = BlockScanner::new(
         provider.clone(),
@@ -136,22 +135,26 @@ struct CanonicalChainUpdate {
     pub pre_root: Hash,
     pub post_root: Hash,
     pub leaf_updates: LeafUpdates,
-    pub tx_hash: H256,
-    pub block_number: U64,
+    pub tx_hash: TxHash,
+    pub block_number: u64,
 }
 
 /// Extract identity updates from logs emitted by the `WorldIdIdentityManager`.
-async fn extract_identity_updates<M: Middleware + 'static>(
+async fn extract_identity_updates<T, P>(
     logs: Vec<Log>,
-    middleware: Arc<M>,
-) -> WorldTreeResult<Vec<CanonicalChainUpdate>> {
+    provider: Arc<P>,
+) -> WorldTreeResult<Vec<CanonicalChainUpdate>>
+where
+    T: Transport + Clone,
+    P: Provider<T>,
+{
     let mut tree_updates = Vec::new();
 
     // Fetch the transactions for each log concurrently
     // and sort them by block number and transaction index
     let mut txs: Vec<_> = futures::stream::iter(logs)
         .map(|log| {
-            let middleware = middleware.as_ref();
+            let provider = provider.clone();
             async move {
                 let tx_hash = log
                     .transaction_hash
@@ -159,8 +162,8 @@ async fn extract_identity_updates<M: Middleware + 'static>(
 
                 tracing::debug!(?tx_hash, "Getting transaction");
 
-                middleware
-                    .get_transaction(tx_hash)
+                provider
+                    .get_transaction_by_hash(tx_hash)
                     .await
                     .map_err(|e| {
                         WorldTreeError::TransactionSearchError(e.to_string())
@@ -195,31 +198,40 @@ fn extract_identity_update(
 
     let mut identity_updates: HashMap<LeafIndex, Hash> = HashMap::new();
 
-    let function_selector = Selector::try_from(&calldata[0..4])
-        .map_err(|_| WorldTreeError::MissingFunctionSelector)?;
+    let function_selector: [u8; 4] = calldata
+        .len()
+        .gt(&3)
+        .then(|| {
+            let mut selector = [0; 4];
+            selector.copy_from_slice(&calldata[0..4]);
+            selector
+        })
+        .ok_or(WorldTreeError::MissingFunctionSelector)?;
 
-    if function_selector == RegisterIdentitiesCall::selector() {
+    if function_selector == registerIdentitiesCall::SELECTOR {
         tracing::debug!("Decoding registerIdentities calldata");
 
         let register_identities_call =
-            RegisterIdentitiesCall::decode(calldata.as_ref())?;
+            registerIdentitiesCall::abi_decode(calldata.as_ref(), true)?;
 
-        let start_index = register_identities_call.start_index;
-        let identities = register_identities_call.identity_commitments;
+        let start_index = register_identities_call.startIndex;
+        let identities = register_identities_call.identityCommitments;
 
         for (i, identity) in identities
             .into_iter()
-            .take_while(|x| *x != U256::zero())
+            .take_while(|x| *x != U256::ZERO)
             .enumerate()
         {
             identity_updates.insert(
                 (start_index + i as u32).into(),
-                Hash::from_limbs(identity.0),
+                Hash::from_limbs(*identity.as_limbs()),
             );
         }
 
-        let pre_root = Hash::from_limbs(register_identities_call.pre_root.0);
-        let post_root = Hash::from_limbs(register_identities_call.post_root.0);
+        let pre_root =
+            Hash::from_limbs(*register_identities_call.preRoot.as_limbs());
+        let post_root =
+            Hash::from_limbs(*register_identities_call.postRoot.as_limbs());
 
         tracing::debug!(?pre_root, ?post_root, "Canonical tree updated");
 
@@ -230,14 +242,14 @@ fn extract_identity_update(
             tx_hash,
             block_number,
         }))
-    } else if function_selector == DeleteIdentitiesCall::selector() {
+    } else if function_selector == deleteIdentitiesCall::SELECTOR {
         tracing::debug!("Decoding deleteIdentities calldata");
 
         let delete_identities_call =
-            DeleteIdentitiesCall::decode(calldata.as_ref())?;
+            deleteIdentitiesCall::abi_decode(calldata.as_ref(), true)?;
 
         let indices = unpack_indices(
-            delete_identities_call.packed_deletion_indices.as_ref(),
+            delete_identities_call.packedDeletionIndices.as_ref(),
         );
 
         // Note that we use 2**30 as padding for deletions in order to fill the deletion batch size
@@ -245,8 +257,10 @@ fn extract_identity_update(
             identity_updates.insert(i.into(), Hash::ZERO);
         }
 
-        let pre_root = Hash::from_limbs(delete_identities_call.pre_root.0);
-        let post_root = Hash::from_limbs(delete_identities_call.post_root.0);
+        let pre_root =
+            Hash::from_limbs(*delete_identities_call.preRoot.as_limbs());
+        let post_root =
+            Hash::from_limbs(*delete_identities_call.postRoot.as_limbs());
 
         tracing::debug!(?pre_root, ?post_root, "Canonical tree updated");
 

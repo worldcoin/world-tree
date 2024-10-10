@@ -22,7 +22,9 @@ creation_block = 0
 
 [canonical_tree.provider]
 rpc_endpoint = "http://localhost:8545/"
-throttle = 150
+max_rate_limit_retries = 1
+compute_units_per_second = 10000
+initial_backoff = 100
 
 [cache]
 cache_file = "cache.local"
@@ -35,4 +37,6 @@ creation_block = 0
 
 [bridged_trees.0.provider]
 rpc_endpoint = "http://localhost:8546/"
-throttle = 150
+max_rate_limit_retries = 1
+compute_units_per_second = 10000
+initial_backoff = 100

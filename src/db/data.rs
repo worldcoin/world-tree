@@ -1,2 +1,2 @@
-pub mod h256;
+pub mod b256;
 pub mod hash;

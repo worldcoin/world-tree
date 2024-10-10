@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use ethers::types::H256;
+use alloy::primitives::B256;
 use serde::{Deserialize, Serialize};
 use sqlx::encode::IsNull;
 use sqlx::postgres::{PgHasArrayType, PgTypeInfo};
@@ -8,9 +8,9 @@ use sqlx::Database;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct H256Wrapper(pub H256);
+pub struct B256Wrapper(pub B256);
 
-impl<'r, DB> sqlx::Decode<'r, DB> for H256Wrapper
+impl<'r, DB> sqlx::Decode<'r, DB> for B256Wrapper
 where
     DB: Database,
     [u8; 32]: sqlx::Decode<'r, DB>,
@@ -20,13 +20,13 @@ where
     ) -> Result<Self, sqlx::error::BoxDynError> {
         let bytes = <[u8; 32] as sqlx::Decode<DB>>::decode(value)?;
 
-        let value = H256::from_slice(&bytes);
+        let value = B256::from_slice(&bytes);
 
         Ok(Self(value))
     }
 }
 
-impl<'q, DB> sqlx::Encode<'q, DB> for H256Wrapper
+impl<'q, DB> sqlx::Encode<'q, DB> for B256Wrapper
 where
     DB: Database,
     [u8; 32]: sqlx::Encode<'q, DB>,
@@ -40,13 +40,13 @@ where
     }
 }
 
-impl PgHasArrayType for H256Wrapper {
+impl PgHasArrayType for B256Wrapper {
     fn array_type_info() -> PgTypeInfo {
         <[u8; 32] as PgHasArrayType>::array_type_info()
     }
 }
 
-impl<DB: Database> sqlx::Type<DB> for H256Wrapper
+impl<DB: Database> sqlx::Type<DB> for B256Wrapper
 where
     [u8; 32]: sqlx::Type<DB>,
 {

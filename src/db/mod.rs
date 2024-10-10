@@ -1,9 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
+use alloy::primitives::TxHash;
 use async_trait::async_trait;
-use data::h256::H256Wrapper;
+use data::b256::B256Wrapper;
 use data::hash::HashWrapper;
-use ethers::types::{H256, U64};
 use sqlx::migrate::MigrateDatabase;
 use sqlx::{Acquire, PgPool, Postgres};
 
@@ -64,8 +64,8 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn insert_tx(
         self,
         chain_id: u64,
-        block_number: U64,
-        tx_hash: H256,
+        block_number: u64,
+        tx_hash: TxHash,
     ) -> sqlx::Result<i64> {
         let mut conn = self.acquire().await?;
 
@@ -77,8 +77,8 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
             "#,
         )
         .bind(chain_id as i64)
-        .bind(block_number.as_u64() as i64)
-        .bind(H256Wrapper(tx_hash))
+        .bind(block_number as i64)
+        .bind(B256Wrapper(tx_hash))
         .fetch_one(&mut *conn)
         .await?;
 
@@ -215,7 +215,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
     async fn fetch_latest_block_number(
         self,
         chain_id: u64,
-    ) -> sqlx::Result<Option<U64>> {
+    ) -> sqlx::Result<Option<u64>> {
         let mut conn = self.acquire().await?;
 
         let row: Option<(i64,)> = sqlx::query_as(
@@ -231,7 +231,7 @@ pub trait DbMethods<'c>: Acquire<'c, Database = Postgres> + Sized {
         .fetch_optional(&mut *conn)
         .await?;
 
-        Ok(row.map(|r| U64::from(r.0 as u64)))
+        Ok(row.map(|r| r.0 as u64))
     }
 
     async fn fetch_updates_between(
@@ -376,6 +376,7 @@ impl<'c, T> DbMethods<'c> for T where
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::B256;
     use rand::{Rng, SeedableRng};
     use testcontainers::runners::AsyncRunner;
     use testcontainers::ContainerAsync;
@@ -412,9 +413,8 @@ mod tests {
         Ok((db, container))
     }
 
-    fn rand_tx() -> H256 {
-        let mut rng = rand::thread_rng();
-        rng.gen()
+    fn rand_tx() -> B256 {
+        B256::from_slice(&rand::thread_rng().gen::<[u8; 32]>())
     }
 
     #[tokio::test]
@@ -424,8 +424,8 @@ mod tests {
         let mut tx = db.begin().await?;
 
         let chain_id = 1;
-        let block_number = U64::from(11);
-        let tx_hash = H256::from_low_u64_be(1);
+        let block_number = 11;
+        let tx_hash = TxHash::with_last_byte(1);
 
         let pre_root = Hash::from(1u64);
         let post_root = Hash::from(2u64);
@@ -469,14 +469,11 @@ mod tests {
             Hash::from(4u64),
         ];
 
-        let canonical_tx_1_id =
-            db.insert_tx(chain_1_id, 1.into(), rand_tx()).await?;
+        let canonical_tx_1_id = db.insert_tx(chain_1_id, 1, rand_tx()).await?;
 
-        let canonical_tx_2_id =
-            db.insert_tx(chain_1_id, 2.into(), rand_tx()).await?;
+        let canonical_tx_2_id = db.insert_tx(chain_1_id, 2, rand_tx()).await?;
 
-        let canonical_tx_3_id =
-            db.insert_tx(chain_1_id, 3.into(), rand_tx()).await?;
+        let canonical_tx_3_id = db.insert_tx(chain_1_id, 3, rand_tx()).await?;
 
         // Canonical updates
         let _update_1 = db
@@ -494,11 +491,11 @@ mod tests {
         db.insert_root(roots[3], canonical_tx_3_id).await?;
 
         // Chain 2 -> root[2]
-        let tx_2_id = db.insert_tx(chain_2_id, 2.into(), rand_tx()).await?;
+        let tx_2_id = db.insert_tx(chain_2_id, 2, rand_tx()).await?;
         db.insert_root(roots[2], tx_2_id).await?;
 
         // Chain 3 -> root[1]
-        let tx_3_id = db.insert_tx(chain_3_id, 3.into(), rand_tx()).await?;
+        let tx_3_id = db.insert_tx(chain_3_id, 3, rand_tx()).await?;
         db.insert_root(roots[1], tx_3_id).await?;
 
         // LCR == root[1]
@@ -506,7 +503,7 @@ mod tests {
         assert_eq!(lcr, roots[1]);
 
         // Chain 3 -> root[2]
-        let tx_4_id = db.insert_tx(chain_3_id, 4.into(), rand_tx()).await?;
+        let tx_4_id = db.insert_tx(chain_3_id, 4, rand_tx()).await?;
         db.insert_root(roots[2], tx_4_id).await?;
 
         // LCR == root[2]
@@ -514,11 +511,11 @@ mod tests {
         assert_eq!(lcr, roots[2]);
 
         // Chain 2 -> root[3]
-        let tx_5_id = db.insert_tx(chain_2_id, 5.into(), rand_tx()).await?;
+        let tx_5_id = db.insert_tx(chain_2_id, 5, rand_tx()).await?;
         db.insert_root(roots[3], tx_5_id).await?;
 
         // Chain 3 -> root[3]
-        let tx_6_id = db.insert_tx(chain_3_id, 6.into(), rand_tx()).await?;
+        let tx_6_id = db.insert_tx(chain_3_id, 6, rand_tx()).await?;
         db.insert_root(roots[3], tx_6_id).await?;
 
         // LCR == root[3]
@@ -561,9 +558,9 @@ mod tests {
             })
             .collect();
 
-        let tx_1_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
-        let tx_2_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
-        let tx_3_id = db.insert_tx(chain_id, 1.into(), rand_tx()).await?;
+        let tx_1_id = db.insert_tx(chain_id, 1, rand_tx()).await?;
+        let tx_2_id = db.insert_tx(chain_id, 1, rand_tx()).await?;
+        let tx_3_id = db.insert_tx(chain_id, 1, rand_tx()).await?;
 
         let update_1_id = db.insert_update(roots[0], roots[1], tx_1_id).await?;
         let update_2_id = db.insert_update(roots[1], roots[2], tx_2_id).await?;
