@@ -136,6 +136,7 @@ async fn empty_start() -> WorldTreeResult<()> {
         }],
         socket_address: None,
         telemetry: None,
+        shutdown_delay: Duration::from_secs(1),
     };
 
     let (local_addr, handles) = setup_world_tree(&service_config).await?;

@@ -5,6 +5,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::{middleware, Json};
 use axum_middleware::logging;
+use futures::stream::FuturesUnordered;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
@@ -36,7 +37,7 @@ impl InclusionProofService {
     pub async fn serve(
         self,
         addr: Option<SocketAddr>,
-    ) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<()>>)> {
+    ) -> WorldTreeResult<(SocketAddr, FuturesUnordered<JoinHandle<()>>)> {
         // Initialize a new router and spawn the server
         tracing::info!(?addr, "Initializing axum server");
 
@@ -71,13 +72,13 @@ impl InclusionProofService {
 
         let runner = app_task::TaskRunner::new(world_tree);
 
-        let handles = vec![
+        let handles = FuturesUnordered::from_iter([
             runner.spawn_task("Observe", crate::tasks::observe::observe),
             runner.spawn_task("Ingest", crate::tasks::ingest::ingest_canonical),
             runner.spawn_task("Update", crate::tasks::update::append_updates),
             runner.spawn_task("Reallign", crate::tasks::update::reallign),
             server_handle,
-        ];
+        ]);
 
         Ok((local_addr, handles))
     }

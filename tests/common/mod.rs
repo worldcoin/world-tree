@@ -6,6 +6,7 @@ use std::time::Duration;
 use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
 use eyre::ContextCompat;
+use futures::stream::FuturesUnordered;
 use rand::Rng;
 use semaphore::Field;
 use testcontainers::core::{ContainerPort, Mount};
@@ -56,7 +57,7 @@ macro_rules! attempt_async {
 
 pub async fn setup_world_tree(
     config: &ServiceConfig,
-) -> WorldTreeResult<(SocketAddr, Vec<JoinHandle<()>>)> {
+) -> WorldTreeResult<(SocketAddr, FuturesUnordered<JoinHandle<()>>)> {
     let world_tree = init_world_tree(config).await?;
 
     let service = InclusionProofService::new(world_tree);

@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use alloy::primitives::Address;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,12 @@ pub struct ServiceConfig {
     pub socket_address: Option<SocketAddr>,
     #[serde(default)]
     pub telemetry: Option<TelemetryConfig>,
+    /// delay beofre shutting down the server
+    /// after a task has panicked. This is useful
+    /// to give tasks a chance to reach an await point
+    #[serde(with = "humantime_serde")]
+    #[serde(default = "default::shutdown_delay")]
+    pub shutdown_delay: Duration,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -144,6 +151,10 @@ mod default {
     pub const fn bool_true() -> bool {
         true
     }
+
+    pub const fn shutdown_delay() -> Duration {
+        Duration::from_secs(1)
+    }
 }
 
 // Utility functions to convert map to vec
@@ -190,6 +201,7 @@ mod tests {
         const S: &str = indoc::indoc! {r#"
             tree_depth = 10
             socket_address = "127.0.0.1:8080"
+            shutdown_delay = "1s"
 
             [db]
             connection_string = "postgresql://user:password@localhost:5432/dbname"
@@ -260,6 +272,7 @@ mod tests {
             }],
             socket_address: Some(([127, 0, 0, 1], 8080).into()),
             telemetry: None,
+            shutdown_delay: Duration::from_secs(1),
         };
 
         let serialized = toml::to_string(&config).unwrap();
