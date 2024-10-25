@@ -1,14 +1,13 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use telemetry_batteries::metrics::statsd::StatsdBattery;
 use telemetry_batteries::tracing::datadog::DatadogBattery;
 use telemetry_batteries::tracing::TracingShutdownHandle;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use world_tree::init_world_tree;
+use world_tree::tasks::monitor_tasks;
 use world_tree::tree::config::ServiceConfig;
 use world_tree::tree::error::WorldTreeResult;
 use world_tree::tree::service::InclusionProofService;
@@ -74,12 +73,7 @@ pub async fn main() -> WorldTreeResult<()> {
 
     let service = InclusionProofService::new(world_tree);
     let (_, handles) = service.serve(config.socket_address).await?;
-
-    let mut handles = handles.into_iter().collect::<FuturesUnordered<_>>();
-    while let Some(result) = handles.next().await {
-        tracing::error!("TreeAvailabilityError: {:?}", result);
-        result?;
-    }
+    monitor_tasks(handles, config.shutdown_delay).await?;
 
     Ok(())
 }
