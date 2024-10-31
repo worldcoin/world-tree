@@ -31,8 +31,8 @@ use world_tree::tree::WorldTreeProvider;
 macro_rules! attempt_async {
     ($e:expr) => {
         {
-            const MAX_ATTEMPTS: usize = 10;
-            const SLEEP_DURATION: Duration = Duration::from_secs(5);
+            const MAX_ATTEMPTS: usize = 20;
+            const SLEEP_DURATION: Duration = Duration::from_secs(12);
             let mut attempt = 0;
 
             loop {
