@@ -90,7 +90,7 @@ where
                         .expect("no finalized block found");
 
                         latest = finalized.header.number;
-                        
+
                         if latest < next_block {
                             tokio::time::sleep(Duration::from_secs(
                                 BLOCK_SCANNER_SLEEP_TIME,
