@@ -70,16 +70,27 @@ where
                     // Update the latest block number only if required
                     if try_to > latest {
                         let provider = self.provider.clone();
-                        latest = retry(
+                        let finalized = retry(
                             Duration::from_millis(100),
                             Some(Duration::from_secs(60)),
                             move || {
                                 let provider = provider.clone();
-                                async move { provider.get_block_number().await }
+                                async move {
+                                    provider
+                                        .get_block_by_number(
+                                            BlockNumberOrTag::Finalized,
+                                            false,
+                                        )
+                                        .await
+                                }
                             },
                         )
                         .await
-                        .expect("failed to fetch latest block after retry");
+                        .expect("failed to fetch latest block after retry")
+                        .expect("no finalized block found");
+
+                        latest = finalized.header.number;
+
                         if latest < next_block {
                             tokio::time::sleep(Duration::from_secs(
                                 BLOCK_SCANNER_SLEEP_TIME,

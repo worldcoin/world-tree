@@ -31,9 +31,11 @@ pub async fn monitor_tasks(
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::time::Instant;
+
     use tokio::time::sleep;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_monitor_tasks() {
