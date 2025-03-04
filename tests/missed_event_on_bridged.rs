@@ -72,9 +72,18 @@ async fn missing_event_on_bridged() -> WorldTreeResult<()> {
     .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
-        .await?;
-    wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
+    wait_until_contracts_deployed(
+        &mainnet_container,
+        &mainnet_provider,
+        id_manager_address,
+    )
+    .await?;
+    wait_until_contracts_deployed(
+        &rollup_container,
+        &rollup_provider,
+        bridged_address,
+    )
+    .await?;
 
     let rollup_chain_id = rollup_provider.get_chain_id().await?;
 

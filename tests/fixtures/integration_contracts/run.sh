@@ -15,25 +15,25 @@ usage() {
 # Parse command-line options
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -h)
-      HOST="$2"
-      shift 2
-      ;;
-    -p)
-      PORT="$2"
-      shift 2
-      ;;
-    -c)
-      CHAIN_ID="$2"
-      shift 2
-      ;;
-    --contract)
-      CONTRACT="$2"
-      shift 2
-      ;;
-    *)
-      usage
-      ;;
+  -h)
+    HOST="$2"
+    shift 2
+    ;;
+  -p)
+    PORT="$2"
+    shift 2
+    ;;
+  -c)
+    CHAIN_ID="$2"
+    shift 2
+    ;;
+  --contract)
+    CONTRACT="$2"
+    shift 2
+    ;;
+  *)
+    usage
+    ;;
   esac
 done
 
@@ -49,8 +49,13 @@ anvil --chain-id ${CHAIN_ID} --block-time 2 --host ${HOST} --port ${PORT} &
 ANVIL_PID=$!
 PRIV_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
+# Wait until Anvil starts in the background
+while ! bash -c "echo > /dev/tcp/${HOST}/${PORT}" 2>/dev/null; do
+  sleep 1
+done
+
 # Create contract
-forge create --private-key $PRIV_KEY ${CONTRACT}
+forge create --broadcast --private-key $PRIV_KEY ${CONTRACT}
 
 # Wait for anvil to finish
 wait $ANVIL_PID

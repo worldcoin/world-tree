@@ -134,6 +134,7 @@ struct InclusionProof {
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    tracing_subscriber::fmt::init();
     let args = Opt::parse();
 
     let identities = args.common.identities();
@@ -325,6 +326,11 @@ async fn run_consistency_check(
             let failures = failures.clone();
 
             async move {
+                tracing::info!(
+                    ?identity,
+                    "Running consistency check for identity"
+                );
+
                 match get_world_tree_inclusion_proof(
                     &client,
                     &world_tree_endpoint,

@@ -1,11 +1,12 @@
 #![allow(unused)]
 
+use std::io::Write;
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
-use eyre::ContextCompat;
+use eyre::{Context, ContextCompat};
 use futures::stream::FuturesUnordered;
 use rand::Rng;
 use semaphore::Field;
@@ -78,6 +79,17 @@ pub async fn setup_chain(
 ) -> eyre::Result<ContainerAsync<GenericImage>> {
     let current_path = std::env::current_dir()?;
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
+
+    // ls the mount dir with -alh
+    let output = std::process::Command::new("ls")
+        .arg("-alh")
+        .arg(&mount_dir)
+        .output()
+        .context("Failed to ls mount dir")?;
+
+    std::io::stdout().write_all(&output.stdout)?;
+    std::io::stderr().write_all(&output.stderr)?;
+
     let mount_dir = mount_dir.canonicalize()?;
     let mount_dir = mount_dir.to_str().context("Invalid path")?;
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
@@ -110,6 +122,7 @@ pub async fn setup_db(
 }
 
 pub async fn wait_until_contracts_deployed(
+    container: &ContainerAsync<GenericImage>,
     provider: &WorldTreeProvider,
     address: Address,
 ) -> eyre::Result<()> {
@@ -121,8 +134,8 @@ pub async fn wait_until_contracts_deployed(
 
         match resp {
             Ok(code) if !code.is_empty() => return Ok(()),
-            Ok(_) => {
-                tracing::warn!("Contracts not deployed yet");
+            Ok(code) => {
+                tracing::warn!(?code, "Contracts not deployed yet");
             }
             Err(err) => {
                 tracing::warn!(%err, err_debug = ?err, "Failed to get code");
@@ -130,6 +143,29 @@ pub async fn wait_until_contracts_deployed(
         }
 
         tokio::time::sleep(SLEEP_DURATION).await;
+    }
+
+    if let Ok(stdout) = container.stdout_to_vec().await {
+        // try & dump container stdout
+        if let Ok(stdout) = String::from_utf8(stdout) {
+            tracing::info!("Dumping container stdout");
+            for line in stdout.lines() {
+                tracing::info!("{line}");
+            }
+        } else {
+            tracing::warn!("Container stdout present, but not valid utf8");
+        }
+    }
+
+    if let Ok(stderr) = container.stderr_to_vec().await {
+        if let Ok(stderr) = String::from_utf8(stderr) {
+            tracing::error!("Dumping container stderr");
+            for line in stderr.lines() {
+                tracing::error!("{line}");
+            }
+        } else {
+            tracing::warn!("Container stderr present, but not valid utf8");
+        }
     }
 
     eyre::bail!("Contracts not deployed")
