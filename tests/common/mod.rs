@@ -1,11 +1,12 @@
 #![allow(unused)]
 
+use std::io::Write;
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
-use eyre::ContextCompat;
+use eyre::{Context, ContextCompat};
 use futures::stream::FuturesUnordered;
 use rand::Rng;
 use semaphore::Field;
@@ -78,6 +79,17 @@ pub async fn setup_chain(
 ) -> eyre::Result<ContainerAsync<GenericImage>> {
     let current_path = std::env::current_dir()?;
     let mount_dir = current_path.join("tests/fixtures/integration_contracts");
+
+    // ls the mount dir with -alh
+    let output = std::process::Command::new("ls")
+        .arg("-alh")
+        .arg(&mount_dir)
+        .output()
+        .context("Failed to ls mount dir")?;
+
+    std::io::stdout().write_all(&output.stdout)?;
+    std::io::stderr().write_all(&output.stderr)?;
+
     let mount_dir = mount_dir.canonicalize()?;
     let mount_dir = mount_dir.to_str().context("Invalid path")?;
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
