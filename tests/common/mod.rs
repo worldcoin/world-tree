@@ -121,8 +121,8 @@ pub async fn wait_until_contracts_deployed(
 
         match resp {
             Ok(code) if !code.is_empty() => return Ok(()),
-            Ok(_) => {
-                tracing::warn!("Contracts not deployed yet");
+            Ok(code) => {
+                tracing::warn!(?code, "Contracts not deployed yet");
             }
             Err(err) => {
                 tracing::warn!(%err, err_debug = ?err, "Failed to get code");

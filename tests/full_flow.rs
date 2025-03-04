@@ -188,7 +188,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip.root, first_batch_root,
-        "First inclusion proof root should batch to first batch"
+        "First inclusion proof root should match to first batch"
     );
 
     let ip_for_mainnet = client
@@ -200,7 +200,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_mainnet.root, first_batch_root,
-        "First inclusion proof root should batch to first batch"
+        "First inclusion proof root should match to first batch"
     );
 
     let ip_for_bridged = client
@@ -212,7 +212,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_bridged.root, first_batch_root,
-        "First inclusion proof bridged should batch to first batch"
+        "First inclusion proof bridged should match to first batch"
     );
 
     let second_batch = random_leaves(5);
@@ -250,7 +250,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_mainnet.root, second_batch_root,
-        "Second inclusion proof root should batch to second batch"
+        "Second inclusion proof root should match to second batch"
     );
 
     let ip = client.inclusion_proof(&second_batch[0]).await?;
@@ -301,7 +301,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_bridged.root, second_batch_root,
-        "Second inclusion proof root should batch to second batch"
+        "Second inclusion proof root should match to second batch"
     );
 
     let ip = attempt_async! {
