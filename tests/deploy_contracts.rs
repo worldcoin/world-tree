@@ -43,10 +43,19 @@ async fn deploy_contracts() -> WorldTreeResult<()> {
     .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
-        .await?;
+    wait_until_contracts_deployed(
+        &mainnet_container,
+        &mainnet_provider,
+        id_manager_address,
+    )
+    .await?;
     tracing::info!("Waiting for rollup contracts to deploy...");
-    wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
+    wait_until_contracts_deployed(
+        &rollup_container,
+        &rollup_provider,
+        bridged_address,
+    )
+    .await?;
 
     Ok(())
 }

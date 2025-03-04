@@ -110,6 +110,7 @@ pub async fn setup_db(
 }
 
 pub async fn wait_until_contracts_deployed(
+    container: &ContainerAsync<GenericImage>,
     provider: &WorldTreeProvider,
     address: Address,
 ) -> eyre::Result<()> {
@@ -130,6 +131,25 @@ pub async fn wait_until_contracts_deployed(
         }
 
         tokio::time::sleep(SLEEP_DURATION).await;
+    }
+
+    if let Ok(stdout) = container.stdout_to_vec().await {
+        // try & dump container stdout
+        if let Ok(stdout) = String::from_utf8(stdout) {
+            tracing::info!("Dumping container stdout");
+            for line in stdout.lines() {
+                tracing::info!("{line}");
+            }
+        }
+    }
+
+    if let Ok(stderr) = container.stderr_to_vec().await {
+        if let Ok(stderr) = String::from_utf8(stderr) {
+            tracing::error!("Dumping container stderr");
+            for line in stderr.lines() {
+                tracing::error!("{line}");
+            }
+        }
     }
 
     eyre::bail!("Contracts not deployed")

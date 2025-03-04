@@ -74,9 +74,9 @@ async fn full_flow() -> WorldTreeResult<()> {
     .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
+    wait_until_contracts_deployed(&mainnet_container, &mainnet_provider, id_manager_address)
         .await?;
-    wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
+    wait_until_contracts_deployed(&rollup_container, &rollup_provider, bridged_address).await?;
 
     let mainnet_chain_id = mainnet_provider.get_chain_id().await?;
     let rollup_chain_id = rollup_provider.get_chain_id().await?;
