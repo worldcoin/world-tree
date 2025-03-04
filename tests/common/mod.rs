@@ -10,7 +10,7 @@ use eyre::{Context, ContextCompat};
 use futures::stream::FuturesUnordered;
 use rand::Rng;
 use semaphore::Field;
-use testcontainers::core::{ContainerPort, Mount};
+use testcontainers::core::{AccessMode, ContainerPort, Mount};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use testcontainers_modules::postgres;
@@ -95,7 +95,10 @@ pub async fn setup_chain(
     let container = GenericImage::new("ghcr.io/foundry-rs/foundry", "latest")
         .with_entrypoint("/bin/sh")
         .with_exposed_port(ContainerPort::Tcp(8545))
-        .with_mount(Mount::bind_mount(mount_dir, "/app"))
+        .with_mount(
+            Mount::bind_mount(mount_dir, "/app")
+                .with_access_mode(AccessMode::ReadWrite),
+        )
         .with_cmd(["-c", &format!("cd /app; ./{script_file}")])
         .start()
         .await?;
