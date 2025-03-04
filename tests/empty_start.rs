@@ -74,9 +74,18 @@ async fn empty_start() -> WorldTreeResult<()> {
     .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_container, &mainnet_provider, id_manager_address)
-        .await?;
-    wait_until_contracts_deployed(&rollup_container, &rollup_provider, bridged_address).await?;
+    wait_until_contracts_deployed(
+        &mainnet_container,
+        &mainnet_provider,
+        id_manager_address,
+    )
+    .await?;
+    wait_until_contracts_deployed(
+        &rollup_container,
+        &rollup_provider,
+        bridged_address,
+    )
+    .await?;
 
     let wallet = EthereumWallet::from(
         "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
