@@ -140,6 +140,8 @@ pub async fn wait_until_contracts_deployed(
             for line in stdout.lines() {
                 tracing::info!("{line}");
             }
+        } else {
+            tracing::warn!("Container stdout present, but not valid utf8");
         }
     }
 
@@ -149,6 +151,8 @@ pub async fn wait_until_contracts_deployed(
             for line in stderr.lines() {
                 tracing::error!("{line}");
             }
+        } else {
+            tracing::warn!("Container stderr present, but not valid utf8");
         }
     }
 
