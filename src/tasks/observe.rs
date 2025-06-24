@@ -91,6 +91,7 @@ pub async fn observe_bridged(
 
                 tracing::info!(
                     ?root,
+                    ?tx_hash,
                     chain_id,
                     "Bridged root is early, waiting"
                 );

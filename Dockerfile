@@ -5,16 +5,15 @@ WORKDIR /src
 
 # Install dependencies
 RUN apt-get update && \
-    apt-get install -y \
-    curl build-essential \
-    libssl-dev texinfo \
-    libcap2-bin pkg-config
-
-# TODO: Use a specific version of rustup
-# Install rustup
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+  apt-get install -y \
+  curl build-essential \
+  libssl-dev texinfo \
+  libcap2-bin pkg-config
 
 COPY ./rust-toolchain.toml ./rust-toolchain.toml
+
+# Install rustup
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.81.0
 
 # Set environment variables
 ENV PATH="/root/.cargo/bin:${PATH}"

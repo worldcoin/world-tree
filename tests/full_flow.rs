@@ -74,9 +74,18 @@ async fn full_flow() -> WorldTreeResult<()> {
     .await?;
 
     tracing::info!("Waiting for contracts to deploy...");
-    wait_until_contracts_deployed(&mainnet_provider, id_manager_address)
-        .await?;
-    wait_until_contracts_deployed(&rollup_provider, bridged_address).await?;
+    wait_until_contracts_deployed(
+        &mainnet_container,
+        &mainnet_provider,
+        id_manager_address,
+    )
+    .await?;
+    wait_until_contracts_deployed(
+        &rollup_container,
+        &rollup_provider,
+        bridged_address,
+    )
+    .await?;
 
     let mainnet_chain_id = mainnet_provider.get_chain_id().await?;
     let rollup_chain_id = rollup_provider.get_chain_id().await?;
@@ -188,7 +197,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip.root, first_batch_root,
-        "First inclusion proof root should batch to first batch"
+        "First inclusion proof root should match to first batch"
     );
 
     let ip_for_mainnet = client
@@ -200,7 +209,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_mainnet.root, first_batch_root,
-        "First inclusion proof root should batch to first batch"
+        "First inclusion proof root should match to first batch"
     );
 
     let ip_for_bridged = client
@@ -212,7 +221,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_bridged.root, first_batch_root,
-        "First inclusion proof bridged should batch to first batch"
+        "First inclusion proof bridged should match to first batch"
     );
 
     let second_batch = random_leaves(5);
@@ -250,7 +259,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_mainnet.root, second_batch_root,
-        "Second inclusion proof root should batch to second batch"
+        "Second inclusion proof root should match to second batch"
     );
 
     let ip = client.inclusion_proof(&second_batch[0]).await?;
@@ -301,7 +310,7 @@ async fn full_flow() -> WorldTreeResult<()> {
 
     assert_eq!(
         ip_for_bridged.root, second_batch_root,
-        "Second inclusion proof root should batch to second batch"
+        "Second inclusion proof root should match to second batch"
     );
 
     let ip = attempt_async! {
