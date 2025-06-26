@@ -60,7 +60,7 @@ where
 
     pub fn block_stream(
         &self,
-    ) -> impl Stream<Item: Future<Output = WorldTreeResult<Vec<Log>>> + Send> + '_
+    ) -> impl Stream<Item = impl Future<Output = WorldTreeResult<Vec<Log>>> + Send> + '_
     {
         stream::unfold(
             (self.start_block, 0),
