@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Tree - SolveForce Global Telecommunications Network Infrastructure</title>
+    <meta name="description" content="World Tree is SolveForce's global telecommunications infrastructure mapping and network topology visualization platform connecting worldwide carrier networks, data centers, and fiber routes.">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 2rem;
+        }
+        
+        .header-content nav {
+            justify-self: end;
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .header-phone {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .header-phone:hover {
+            color: #764ba2;
+        }
+
+        nav a {
+            color: #333;
+            text-decoration: none;
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: #667eea;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 5rem 2rem 3rem;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 3rem;
+            opacity: 0.95;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 1rem 2.5rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .content {
+            background: white;
+            padding: 4rem 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            color: #333;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .service-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .service-card h3 {
+            color: #667eea;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .service-card p {
+            color: #555;
+            margin-bottom: 1rem;
+        }
+
+        .service-card ul {
+            list-style: none;
+        }
+
+        .service-card ul li {
+            padding: 0.4rem 0;
+            color: #555;
+            position: relative;
+            padding-left: 1.5rem;
+        }
+
+        .service-card ul li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .featured-section {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-radius: 20px;
+            padding: 3rem;
+            margin-bottom: 4rem;
+        }
+
+        .featured-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .featured-card {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+        }
+
+        .featured-card h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .featured-card p {
+            color: #555;
+            margin-bottom: 0.5rem;
+        }
+
+        footer {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-top: auto;
+        }
+
+        footer h3 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        footer p {
+            color: #555;
+            margin-bottom: 1.5rem;
+        }
+
+        .contact-info {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .contact-info a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .contact-info a:hover {
+            color: #764ba2;
+        }
+
+        @media (max-width: 968px) {
+            .services-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .featured-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-content {
+                grid-template-columns: 1fr;
+            }
+
+            nav {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <a href="index.html" class="logo">SolveForce World Tree</a>
+            <a href="tel:+18887658301" class="header-phone">(888) 765-8301</a>
+            <nav>
+                <a href="#infrastructure">Infrastructure</a>
+                <a href="#mapping">Mapping</a>
+                <a href="#connectivity">Connectivity</a>
+                <a href="#contact">Contact</a>
+                <a href="https://portal.solveforce.com">Portal</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <h1>Global Telecommunications Network Tree</h1>
+        <p>Comprehensive worldwide carrier infrastructure mapping, fiber route visualization, and interconnection topology for enterprise connectivity planning</p>
+        <div class="cta-buttons">
+            <a href="tel:+18887658301" class="btn btn-primary">Access Network Map</a>
+            <a href="#infrastructure" class="btn btn-secondary">Explore Infrastructure</a>
+            <a href="https://github.com/solveforceapp/world-tree" class="btn btn-secondary">GitHub Repository</a>
+        </div>
+    </section>
+
+    <section class="content">
+        <div class="container">
+            <h2 id="infrastructure">Global Infrastructure Mapping</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <h3>Submarine Cable Systems</h3>
+                    <p>Comprehensive mapping of undersea fiber optic cables connecting continents and enabling global internet backbone</p>
+                    <ul>
+                        <li>Transatlantic cable routes (US-Europe)</li>
+                        <li>Transpacific systems (US-Asia)</li>
+                        <li>Intra-regional cables (Caribbean, Mediterranean)</li>
+                        <li>Cable landing stations worldwide</li>
+                        <li>Capacity and ownership information</li>
+                        <li>Planned and upcoming systems</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Terrestrial Fiber Networks</h3>
+                    <p>Long-haul fiber optic routes across continents connecting major metropolitan areas and data centers</p>
+                    <ul>
+                        <li>Tier-1 carrier backbone networks</li>
+                        <li>Regional fiber route availability</li>
+                        <li>Dark fiber lease opportunities</li>
+                        <li>Metro fiber rings in major cities</li>
+                        <li>Right-of-way and route diversity</li>
+                        <li>Lit service providers by route</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Data Center Interconnection</h3>
+                    <p>Global data center locations and interconnection facilities enabling cloud connectivity and peering</p>
+                    <ul>
+                        <li>Colocation facility directory</li>
+                        <li>Internet exchange point (IXP) locations</li>
+                        <li>Meet-me-room cross-connect options</li>
+                        <li>Cloud on-ramps (AWS, Azure, GCP)</li>
+                        <li>Carrier-neutral facilities</li>
+                        <li>Edge data center deployments</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Carrier Point of Presence</h3>
+                    <p>Worldwide telecommunications carrier presence mapping showing service availability by geography</p>
+                    <ul>
+                        <li>Tier-1 carrier global footprint</li>
+                        <li>Regional carrier coverage maps</li>
+                        <li>Last-mile provider availability</li>
+                        <li>Building-specific carrier access</li>
+                        <li>On-net vs. near-net locations</li>
+                        <li>Service delivery timelines</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Satellite Networks</h3>
+                    <p>Geostationary and low-earth orbit satellite infrastructure for remote connectivity and backup services</p>
+                    <ul>
+                        <li>GEO satellite footprint coverage</li>
+                        <li>LEO constellation mapping (Starlink, OneWeb)</li>
+                        <li>Ground station locations</li>
+                        <li>VSAT service providers</li>
+                        <li>Maritime and aviation connectivity</li>
+                        <li>Emergency backup satellite services</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Wireless Infrastructure</h3>
+                    <p>Cellular tower locations, small cell deployments, and wireless broadband coverage for mobile connectivity</p>
+                    <ul>
+                        <li>5G network coverage maps</li>
+                        <li>LTE macro cell tower density</li>
+                        <li>Small cell and DAS deployments</li>
+                        <li>Private LTE/5G networks</li>
+                        <li>Fixed wireless access availability</li>
+                        <li>CBRS spectrum deployment zones</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="featured-section" id="mapping">
+                <h2>Network Topology Visualization</h2>
+                <div class="featured-grid">
+                    <div class="featured-card">
+                        <h3>Interactive Route Planning</h3>
+                        <p>Dynamic mapping tools for planning diverse fiber routes between enterprise locations minimizing single points of failure</p>
+                        <p>Identify physically diverse paths for redundant connectivity, calculate route distances, and evaluate carrier options for each segment</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Latency Modeling</h3>
+                        <p>Calculate estimated round-trip time between global locations based on fiber route distance and network topology</p>
+                        <p>Model application performance for real-time communications, financial trading systems, and cloud-based workloads across regions</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Carrier Diversity Analysis</h3>
+                        <p>Visualize carrier infrastructure overlap and identify truly diverse routing for mission-critical redundancy</p>
+                        <p>Prevent shared conduit, shared cable, and shared carrier risks by mapping physical infrastructure ownership and routes</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Disaster Risk Mapping</h3>
+                        <p>Overlay natural disaster zones, seismic activity, hurricane paths, and flood risk on telecommunications infrastructure</p>
+                        <p>Design resilient network architectures accounting for geographic risks and environmental threats to fiber routes</p>
+                    </div>
+                </div>
+            </div>
+
+            <h2 id="connectivity">Global Connectivity Solutions</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <h3>International Private Lines</h3>
+                    <p>Dedicated point-to-point circuits connecting offices across countries and continents</p>
+                    <ul>
+                        <li>IPLC (International Private Leased Circuit)</li>
+                        <li>Ethernet private line services</li>
+                        <li>MPLS-based international VPN</li>
+                        <li>Wavelength services for high capacity</li>
+                        <li>Managed bandwidth on demand</li>
+                        <li>Sub-10ms regional connectivity</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Global SD-WAN</h3>
+                    <p>Software-defined wide area networking across multiple countries and carriers optimizing application routing</p>
+                    <ul>
+                        <li>Multi-carrier underlay networks</li>
+                        <li>Application-aware path selection</li>
+                        <li>Internet and MPLS hybrid WAN</li>
+                        <li>Regional breakout for SaaS apps</li>
+                        <li>Centralized cloud management</li>
+                        <li>Zero-touch global deployment</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Cloud Interconnection</h3>
+                    <p>Direct connectivity to hyperscale cloud providers across all global regions</p>
+                    <ul>
+                        <li>AWS Direct Connect in 25+ regions</li>
+                        <li>Azure ExpressRoute global reach</li>
+                        <li>Google Cloud Dedicated Interconnect</li>
+                        <li>Oracle FastConnect partnerships</li>
+                        <li>Multi-cloud connectivity fabric</li>
+                        <li>Private peering to SaaS providers</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Internet Exchange Peering</h3>
+                    <p>Direct peering relationships at major internet exchange points reducing latency and improving performance</p>
+                    <ul>
+                        <li>Public peering at IXPs worldwide</li>
+                        <li>Private network interconnection (PNI)</li>
+                        <li>Content delivery network peering</li>
+                        <li>Reduced transit costs</li>
+                        <li>Improved application performance</li>
+                        <li>DDoS mitigation through peering</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Managed Global Network</h3>
+                    <p>Fully managed international telecommunications infrastructure with 24/7 NOC support</p>
+                    <ul>
+                        <li>Single vendor coordination across carriers</li>
+                        <li>Unified SLA management</li>
+                        <li>Consolidated billing and invoicing</li>
+                        <li>Proactive monitoring and alerting</li>
+                        <li>International incident management</li>
+                        <li>Capacity planning and optimization</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Regional Connectivity Hubs</h3>
+                    <p>Strategic points of presence in key global regions aggregating international traffic</p>
+                    <ul>
+                        <li>North America: New York, Los Angeles</li>
+                        <li>Europe: London, Frankfurt, Amsterdam</li>
+                        <li>Asia-Pacific: Singapore, Hong Kong, Tokyo</li>
+                        <li>Latin America: São Paulo, Miami</li>
+                        <li>Middle East: Dubai, Tel Aviv</li>
+                        <li>Africa: Johannesburg, Cairo</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="featured-section">
+                <h2>Infrastructure Intelligence Platform</h2>
+                <div class="featured-grid">
+                    <div class="featured-card">
+                        <h3>Real-Time Availability Data</h3>
+                        <p>Current fiber route availability, carrier service delivery timelines, and construction project status updates</p>
+                        <p>Integration with carrier provisioning systems providing accurate lead times for circuit installation worldwide</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Network Path Analysis</h3>
+                        <p>Automated analysis of proposed routes identifying shared conduits, common carriers, and potential single points of failure</p>
+                        <p>Generate diversity reports demonstrating truly independent routing for regulatory compliance and risk mitigation</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Cost Optimization Engine</h3>
+                        <p>Compare carrier pricing across routes, identify cost-effective path alternatives, and model total cost of ownership</p>
+                        <p>Analyze volume discounts, term commitment savings, and route aggregation opportunities for multi-location networks</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Regulatory Compliance Mapping</h3>
+                        <p>Track data sovereignty requirements, cross-border data flow regulations, and telecommunications licensing by country</p>
+                        <p>Ensure network architecture complies with GDPR, CCPA, regional data protection laws, and government security mandates</p>
+                    </div>
+                </div>
+            </div>
+
+            <h2>Regional Infrastructure Highlights</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <h3>North America</h3>
+                    <p>Dense fiber infrastructure connecting major metro areas with extensive carrier competition</p>
+                    <ul>
+                        <li>100+ Gbps backbone capacity nationwide</li>
+                        <li>Tier-1 carriers: AT&T, Verizon, Lumen</li>
+                        <li>Regional: Zayo, Crown Castle, Windstream</li>
+                        <li>50+ major internet exchange points</li>
+                        <li>Extensive last-mile fiber coverage</li>
+                        <li>Low latency cross-country routes</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Europe</h3>
+                    <p>Sophisticated pan-European networks with strong regulatory framework and carrier diversity</p>
+                    <ul>
+                        <li>GÉANT research network infrastructure</li>
+                        <li>Major carriers: BT, Deutsche Telekom, Orange</li>
+                        <li>Dense metro fiber in major cities</li>
+                        <li>Cross-border connectivity excellence</li>
+                        <li>GDPR-compliant data routing</li>
+                        <li>Competitive carrier marketplace</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Asia-Pacific</h3>
+                    <p>Rapidly expanding fiber infrastructure supporting economic growth and digital transformation</p>
+                    <ul>
+                        <li>Singapore: Regional connectivity hub</li>
+                        <li>Hong Kong: Financial services center</li>
+                        <li>Tokyo: Low-latency trading infrastructure</li>
+                        <li>Australia: Extensive submarine cable landing</li>
+                        <li>India: Massive fiber deployment projects</li>
+                        <li>China: State-owned carrier dominance</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Latin America</h3>
+                    <p>Growing telecommunications infrastructure with major investments in fiber and data center capacity</p>
+                    <ul>
+                        <li>Brazil: Largest regional market</li>
+                        <li>Mexico: NAFTA connectivity hub</li>
+                        <li>Chile: High fiber penetration rate</li>
+                        <li>Colombia: Regional carrier presence</li>
+                        <li>Submarine cables to US and Europe</li>
+                        <li>Emerging market opportunities</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Middle East</h3>
+                    <p>Strategic crossroads connecting Europe, Asia, and Africa with modern fiber infrastructure</p>
+                    <ul>
+                        <li>UAE: Dubai as regional data center hub</li>
+                        <li>Israel: Technology and innovation center</li>
+                        <li>Saudi Arabia: Smart city initiatives</li>
+                        <li>Qatar: World Cup infrastructure legacy</li>
+                        <li>Submarine cables through Red Sea</li>
+                        <li>Government-led fiber projects</li>
+                    </ul>
+                </div>
+
+                <div class="service-card">
+                    <h3>Africa</h3>
+                    <p>Expanding telecommunications infrastructure driven by mobile-first connectivity and submarine cable investments</p>
+                    <ul>
+                        <li>South Africa: Most developed market</li>
+                        <li>Kenya: Mobile money and fintech hub</li>
+                        <li>Nigeria: Largest population center</li>
+                        <li>Egypt: Mediterranean cable landing point</li>
+                        <li>Multiple submarine cable systems</li>
+                        <li>Terrestrial fiber expansion ongoing</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="featured-section">
+                <h2>Use Cases for World Tree Platform</h2>
+                <div class="featured-grid">
+                    <div class="featured-card">
+                        <h3>Multi-National Enterprise Networks</h3>
+                        <p>Corporations with offices across multiple countries use World Tree to design optimal global WAN architectures</p>
+                        <p>Identify most cost-effective routes, ensure redundancy, minimize latency for regional hubs, and maintain carrier diversity</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Financial Services Low-Latency Trading</h3>
+                        <p>Trading firms optimize routes between exchange colocation facilities and trading desks minimizing round-trip time</p>
+                        <p>Every microsecond matters: World Tree identifies shortest physical paths and calculates propagation delay accurately</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Content Delivery Network Planning</h3>
+                        <p>CDN providers plan edge node placements based on fiber infrastructure density and internet exchange proximity</p>
+                        <p>Optimize content delivery performance by understanding last-mile infrastructure and peering relationships worldwide</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Disaster Recovery Site Selection</h3>
+                        <p>Identify geographically diverse data center locations with independent fiber routes for business continuity planning</p>
+                        <p>Ensure DR sites are outside disaster zones while maintaining low enough latency for synchronous data replication</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Cloud Migration Planning</h3>
+                        <p>Enterprises planning cloud migration evaluate connectivity options from office locations to cloud regions</p>
+                        <p>Compare direct connect availability, internet circuit options, and SD-WAN deployment costs across locations</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Telecommunications Consulting</h3>
+                        <p>Network consultants and solution architects leverage World Tree data for client network design proposals</p>
+                        <p>Provide data-driven recommendations based on actual carrier availability, route diversity, and cost comparisons</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="featured-section">
+                <h2>Data Sources and Updates</h2>
+                <div class="featured-grid">
+                    <div class="featured-card">
+                        <h3>Carrier-Provided Network Maps</h3>
+                        <p>Direct integration with tier-1 and regional carrier network databases providing authoritative route information</p>
+                        <p>Quarterly updates reflecting new fiber builds, route expansions, and service availability changes from carrier partners</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Public Infrastructure Databases</h3>
+                        <p>TeleGeography submarine cable maps, PeeringDB internet exchange data, and FCC Universal Service Fund filings</p>
+                        <p>Open-source community contributions from network operators sharing infrastructure location and capacity data</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Satellite Imagery Analysis</h3>
+                        <p>Machine learning analysis of satellite imagery identifying fiber route construction and new infrastructure deployment</p>
+                        <p>Automated detection of cell tower installations, data center construction, and cable landing station projects</p>
+                    </div>
+
+                    <div class="featured-card">
+                        <h3>Crowdsourced Network Data</h3>
+                        <p>Network engineers and telecommunications professionals contribute verified infrastructure information and updates</p>
+                        <p>Community validation and quality assurance processes ensuring data accuracy and removing outdated information</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="contact">
+        <h3>Access the Global Telecommunications Infrastructure Map</h3>
+        <p>Contact our network planning team to leverage World Tree data for your global connectivity strategy</p>
+        <div class="contact-info">
+            <a href="tel:+18887658301">(888) 765-8301</a>
+            <a href="mailto:worldtree@solveforce.com">worldtree@solveforce.com</a>
+            <a href="https://portal.solveforce.com">Portal</a>
+            <a href="https://github.com/solveforceapp/world-tree">GitHub</a>
+        </div>
+        <p>&copy; 2025 SolveForce. All rights reserved.</p>
+    </footer>
+</body>
+</html>

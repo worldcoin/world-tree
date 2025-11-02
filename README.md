@@ -41,3 +41,13 @@ To test that inclusion proofs work you can execute the following curl command:
 curl -X POST http://localhost:8080/inclusionProof -H "Content-Type: application/json" -d '{ "identityCommitment": "0x3017972D13A39795AD0D1C3A670D3D36A399B4435E61A510C2D57713D4F5C3DE" }'
 ```
 
+## Scripts
+
+This repository includes a small Python helper script that demonstrates how to
+standardize variable names using a SolveForce-compliant format. Run the example
+with:
+
+```bash
+python3 scripts/solveforce_variable_unifier.py
+```
+
