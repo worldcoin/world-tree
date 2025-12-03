@@ -1,5 +1,5 @@
 ### Base stage
-FROM debian:12 as base
+FROM debian:13 as base
 
 WORKDIR /src
 
